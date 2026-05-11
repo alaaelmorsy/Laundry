@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>تسجيل الدخول - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="login.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body class="login-page" data-page-title="page-title-login">
+
+  <div class="login-shell">
+    <div class="login-scroll">
+  <div class="window-bg">
+
+    <div class="panel-shadow">
+      <div class="panel-bg"></div>
+      <div class="login-panel">
+
+        <div class="form-area" id="formArea" dir="rtl">
+          <h1 class="login-title" data-i18n="login-heading">تسجيل الدخول</h1>
+
+          <div id="errorMsg" class="error-msg" style="display:none"></div>
+
+          <div class="field-group">
+            <label class="field-label" data-i18n="label-username">اسم المستخدم</label>
+            <div class="field-wrap">
+              <input id="username" type="text" autocomplete="off"
+                     placeholder="أدخل اسم المستخدم" class="field-input"
+                     data-i18n-placeholder="placeholder-username" />
+              <span class="field-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" data-i18n="label-password">كلمة المرور</label>
+            <div class="field-wrap">
+              <input id="password" type="password" autocomplete="off"
+                     placeholder="أدخل كلمة المرور" class="field-input"
+                     data-i18n-placeholder="placeholder-password" />
+              <button id="togglePassword" class="toggle-pass-btn" tabindex="-1" type="button">
+                <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg id="eyeOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="remember-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="rememberMe" />
+              <span class="checkmark"></span>
+              <span data-i18n="remember-me">تذكرني</span>
+            </label>
+          </div>
+
+          <button type="button" id="btnLogin" class="btn-login" data-i18n="btn-login">دخول</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="welcome-panel" id="welcomePanel" dir="rtl">
+      <div class="welcome-content">
+        <h2 class="welcome-title" data-i18n-html="welcome-title-html">مرحباً<br/>بك!</h2>
+        <p class="welcome-text" data-i18n-html="welcome-text-html">
+          نظام إدارة المغسلة المتكامل<br />
+          لإدارة الطلبات والعملاء<br />
+          بكل سهولة وكفاءة.
+        </p>
+      </div>
+    </div>
+
+  </div>
+    </div>
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

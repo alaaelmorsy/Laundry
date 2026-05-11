@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-reports">التقارير - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="reports.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-reports">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="card-reports-title">التقارير</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="reports-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <div class="reports-grid">
+
+        <div class="report-card" id="cardDailyReport">
+          <div class="report-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <line x1="8" y1="14" x2="8" y2="14" stroke-width="3" stroke-linecap="round"/>
+              <line x1="12" y1="14" x2="16" y2="14"/>
+            </svg>
+          </div>
+          <h3 class="report-title" data-i18n="reports-card-daily-title">التقرير اليومي</h3>
+          <p class="report-desc" data-i18n="reports-card-daily-desc">تقرير مالي شامل لليوم الحالي يتضمن المبيعات والمصروفات والأرباح</p>
+        </div>
+
+        <div class="report-card" id="cardPeriodReport">
+          <div class="report-icon" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <path d="M7 15h4M7 19h8"/>
+            </svg>
+          </div>
+          <h3 class="report-title" data-i18n="reports-card-period-title">تقرير الفترة</h3>
+          <p class="report-desc" data-i18n="reports-card-period-desc">تقرير مالي شامل لفترة زمنية محددة من تاريخ إلى تاريخ</p>
+        </div>
+
+        <div class="report-card" id="cardAllInvoicesReport">
+          <div class="report-icon" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <path d="M8 14h8M8 18h5"/>
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <h3 class="report-title" data-i18n="reports-card-all-invoices-title">تقرير جميع الفواتير</h3>
+          <p class="report-desc" data-i18n="reports-card-all-invoices-desc">جميع الفواتير المدفوعة والآجلة والدائنة مع ملخص شامل وطرق الدفع</p>
+        </div>
+
+        <div class="report-card" id="cardSubscriptionsReport">
+          <div class="report-icon" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </div>
+          <h3 class="report-title" data-i18n="reports-card-subscriptions-title">تقرير الاشتراكات</h3>
+          <p class="report-desc" data-i18n="reports-card-subscriptions-desc">جميع فترات الاشتراكات مع فلاتر متقدمة للحالة والعميل والباقة والتاريخ</p>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="reports.js"></script>
+</body>
+</html>

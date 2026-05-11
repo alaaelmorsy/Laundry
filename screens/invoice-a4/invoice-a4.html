@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>فاتورة A4</title>
+  <link rel="stylesheet" href="invoice-a4.css" />
+</head>
+<body>
+
+  <div class="a4-actions no-print">
+    <button id="btnPrint" class="a4-btn-print">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      طباعة
+    </button>
+    <button id="btnExportPdf" class="a4-btn-pdf">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <line x1="9" y1="15" x2="12" y2="18"/>
+        <line x1="15" y1="15" x2="12" y2="18"/>
+      </svg>
+      تصدير PDF
+    </button>
+    <button id="btnClose" class="a4-btn-close">إغلاق</button>
+  </div>
+
+  <div class="a4-paper" id="a4Paper">
+
+    <header class="a4-header">
+      <div class="a4-header-ar" dir="rtl">
+        <div class="a4-brand-name" id="a4ShopNameAr"></div>
+        <div class="a4-brand-sub" id="a4ShopAddressAr"></div>
+        <div class="a4-brand-sub" id="a4ShopPhoneAr"></div>
+        <div class="a4-brand-sub" id="a4VatAr"></div>
+        <div class="a4-brand-sub" id="a4CrAr"></div>
+      </div>
+      <div class="a4-header-logo">
+        <img id="a4Logo" alt="Logo" style="display:none" />
+      </div>
+      <div class="a4-header-en" dir="ltr">
+        <div class="a4-brand-name" id="a4ShopNameEn"></div>
+        <div class="a4-brand-sub" id="a4ShopAddressEn"></div>
+        <div class="a4-brand-sub" id="a4ShopEmail"></div>
+        <div class="a4-brand-sub" id="a4VatEn"></div>
+        <div class="a4-brand-sub" id="a4CrEn"></div>
+      </div>
+    </header>
+    <div class="a4-title-band">
+      <span>فاتورة ضريبية مبسطة</span>
+      <span class="a4-title-sep">•</span>
+      <span>Simplified Tax Invoice</span>
+    </div>
+
+    <section class="a4-meta-grid">
+      <div class="a4-meta-cell">
+        <div class="a4-meta-lbl">رقم الفاتورة / Invoice #</div>
+        <div class="a4-meta-val" id="a4OrderNum" dir="ltr"></div>
+      </div>
+      <div class="a4-meta-cell">
+        <div class="a4-meta-lbl">التاريخ / Date</div>
+        <div class="a4-meta-val" id="a4Date" dir="ltr"></div>
+      </div>
+      <div class="a4-meta-cell">
+        <div class="a4-meta-lbl">طريقة الدفع / Payment</div>
+        <div class="a4-meta-val" id="a4Payment"></div>
+      </div>
+    </section>
+
+    <section class="a4-bill-to">
+      <div class="a4-card">
+        <div class="a4-kv"><span>الاسم / Name</span><b id="a4CustName"></b></div>
+        <div class="a4-kv"><span>الجوال / Mobile</span><b id="a4CustPhone" dir="ltr"></b></div>
+        <div class="a4-kv" id="a4RowSubRef" style="display:none"><span>رقم الاشتراك / Sub #</span><b id="a4SubRef"></b></div>
+        <div class="a4-kv" id="a4RowSubPackage" style="display:none"><span>الباقة / Package</span><b id="a4SubPackage"></b></div>
+        <div class="a4-kv" id="a4RowSubBalance" style="display:none"><span>الرصيد / Balance</span><b id="a4SubBalance" dir="ltr"></b></div>
+      </div>
+      <div class="a4-card">
+        <div class="a4-kv" id="a4RowPaidAt" style="display:none"><span>تاريخ السداد / Paid</span><b id="a4PaidAt" dir="ltr"></b></div>
+        <div class="a4-kv" id="a4RowCleanedAt" style="display:none"><span>تاريخ التنظيف / Cleaned</span><b id="a4CleanedAt" dir="ltr"></b></div>
+        <div class="a4-kv" id="a4RowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="a4DeliveredAt" dir="ltr"></b></div>
+        <div class="a4-kv" id="a4RowStarch" style="display:none"><span>نشا / Starch</span><b id="a4Starch"></b></div>
+        <div class="a4-kv" id="a4RowBluing" style="display:none"><span>النيلة / Bluing</span><b id="a4Bluing"></b></div>
+      </div>
+    </section>
+
+    <div class="a4-items-wrap">
+      <table class="a4-items">
+        <thead>
+          <tr>
+            <th class="a4-th-num">#</th>
+            <th class="a4-th-name">النوع / Item</th>
+            <th class="a4-th-name">العملية / Service</th>
+            <th class="a4-th-num">الكمية / Qty</th>
+            <th class="a4-th-num">سعر الوحدة / Unit Price</th>
+            <th class="a4-th-num">قبل الضريبة / Net</th>
+            <th class="a4-th-num">الضريبة / VAT</th>
+            <th class="a4-th-num">الإجمالي / Total</th>
+          </tr>
+        </thead>
+        <tbody id="a4ItemsTbody"></tbody>
+      </table>
+    </div>
+
+    <section class="a4-summary">
+      <div class="a4-qr-box">
+        <div id="a4QR" class="a4-qr"></div>
+      </div>
+      <div class="a4-totals-col">
+        <div class="a4-totals">
+          <div class="a4-trow"><span id="a4SubtotalLabel">المجموع قبل الضريبة / Subtotal</span><b id="a4Subtotal" dir="ltr"></b></div>
+          <div class="a4-trow" id="a4DiscRow" style="display:none"><span>الخصم / Discount</span><b id="a4Discount" class="a4-neg" dir="ltr"></b></div>
+          <div class="a4-trow" id="a4ExtraRow" style="display:none"><span>الإضافي / Extra</span><b id="a4Extra" dir="ltr"></b></div>
+          <div class="a4-trow" id="a4VatRow"><span id="a4VatLabel">ضريبة القيمة المضافة 15%</span><b id="a4Vat" dir="ltr"></b></div>
+          <div class="a4-trow a4-grand"><span id="a4TotalLabel">الإجمالي شامل الضريبة / Grand Total</span><b id="a4Total" dir="ltr"></b></div>
+          <div class="a4-trow a4-mixed-row" id="a4MixedCashRow" style="display:none">
+            <span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="vertical-align:middle;margin-left:4px">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              المدفوع كاش
+            </span>
+            <b id="a4MixedCash" dir="ltr"></b>
+          </div>
+          <div class="a4-trow a4-mixed-row" id="a4MixedCardRow" style="display:none">
+            <span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="vertical-align:middle;margin-left:4px">
+                <rect x="1" y="4" width="22" height="16" rx="2"/>
+                <line x1="1" y1="10" x2="23" y2="10"/>
+              </svg>
+              المدفوع شبكة
+            </span>
+            <b id="a4MixedCard" dir="ltr"></b>
+          </div>
+        </div>
+        <div id="a4FooterNotes" class="a4-notes-box" style="display:none">
+          <span class="a4-notes-title">الشروط والأحكام (Terms):</span>
+          <span class="a4-notes-content" id="a4NotesContent"></span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="a4-footer" style="display:none"></footer>
+
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/qrcode-min.js"></script>
+  <script src="invoice-a4.js?v=4"></script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-subscriptions-report">تقرير الاشتراكات - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../../assets/tailwind.css" />
+  <link rel="stylesheet" href="subscriptions-report.css" />
+  <link rel="stylesheet" href="../../../assets/screen-mobile-compact.css" />
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="sub-report-header">تقرير الاشتراكات</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="btn-action btn-excel" id="btnExcelExport" data-i18n-title="all-invoices-export-excel" title="تصدير Excel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="btn-label" data-i18n="all-invoices-export-excel">Excel</span>
+        </button>
+        <button class="btn-action btn-pdf" id="btnPdfExport" data-i18n-title="all-invoices-export-pdf" title="تصدير PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span class="btn-label" data-i18n="all-invoices-export-pdf">PDF</span>
+        </button>
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="reports-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="filter-bar no-print">
+      <div class="filter-inner">
+        <div class="filter-fields">
+
+          <!-- التاريخ من وإلى جنباً لبعض دائماً -->
+          <div class="date-pair-wrap">
+            <label class="filter-field filter-field--date">
+              <span class="filter-label" data-i18n="sub-report-from">من:</span>
+              <input type="datetime-local" id="filterDateFrom" class="filter-input" />
+            </label>
+            <label class="filter-field filter-field--date">
+              <span class="filter-label" data-i18n="sub-report-to">إلى:</span>
+              <input type="datetime-local" id="filterDateTo" class="filter-input" />
+            </label>
+          </div>
+
+          <!-- البحث عن العميل ورقم الاشتراك جنباً لبعض -->
+          <div class="filter-row-pair">
+            <div class="filter-field customer-search-wrap filter-field--customer" id="customerSearchWrap">
+              <span class="filter-label" data-i18n="sub-report-customer">العميل:</span>
+              <input type="text" id="filterCustomer" class="filter-input" data-i18n-placeholder="sub-report-customer-ph" placeholder="اسم أو جوال..." autocomplete="off" />
+              <input type="hidden" id="filterCustomerId" />
+              <div id="customerDropdown" class="customer-dropdown"></div>
+            </div>
+            <label class="filter-field filter-field--sub-num">
+              <span class="filter-label" data-i18n="sub-report-sub-num">رقم الاشتراك:</span>
+              <input type="text" id="filterSubNumber" class="filter-input" data-i18n-placeholder="sub-report-sub-num-ph" placeholder="رقم الاشتراك..." autocomplete="off" />
+            </label>
+          </div>
+
+          <!-- الحالة والباقة جنباً لبعض على الجوال -->
+          <div class="filter-row-pair">
+            <label class="filter-field filter-field--select">
+              <span class="filter-label" data-i18n="sub-report-status">الحالة:</span>
+              <select id="filterStatus" class="filter-input filter-select">
+                <option value="all" data-i18n="sub-report-status-all">📋 الكل</option>
+                <option value="active" data-i18n="sub-report-status-active">✅ نشط</option>
+                <option value="near_expiry" data-i18n="sub-report-status-near">⚠️ قريب الانتهاء</option>
+                <option value="negative" data-i18n="sub-report-status-negative">🔴 رصيد سالب</option>
+                <option value="expired" data-i18n="sub-report-status-expired">❌ منتهي</option>
+                <option value="closed" data-i18n="sub-report-status-closed">🔒 مغلق</option>
+              </select>
+            </label>
+            <label class="filter-field filter-field--select">
+              <span class="filter-label" data-i18n="sub-report-package">الباقة:</span>
+              <select id="filterPackage" class="filter-input filter-select">
+                <option value="">الكل</option>
+              </select>
+            </label>
+          </div>
+
+        </div>
+        <button id="btnApplyFilter" class="btn-apply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span data-i18n="sub-report-show">عرض التقرير</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content" id="mainContent">
+
+      <div id="emptyPrompt" class="empty-prompt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M17 1l4 4-4 4"/>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <path d="M7 23l-4-4 4-4"/>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>
+        <p data-i18n="sub-report-empty">اختر الفلاتر واضغط "عرض التقرير"</p>
+      </div>
+
+      <div id="loadingState" class="loading-state" style="display:none">
+        <div class="spinner"></div>
+        <p data-i18n="sub-report-loading">جارٍ تحميل التقرير...</p>
+      </div>
+
+      <div id="reportContent" style="display:none">
+
+        <div class="period-info-bar" id="periodInfoBar"></div>
+
+        <div class="report-section" id="sectionKpis" style="padding:10px 12px">
+          <div class="kpi-grid" id="kpiGrid"></div>
+        </div>
+
+        <!-- ── جدول / بطاقات فترات الاشتراكات (قابل للطي) ── -->
+        <div class="report-section collapsible" id="sectionPeriods">
+          <div class="section-header toggle-header" id="togglePeriods">
+            <div class="section-title-wrap">
+              <span class="toggle-arrow">▼</span>
+              <div class="section-icon-wrap sub-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                  <path d="M17 1l4 4-4 4"/>
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                  <path d="M7 23l-4-4 4-4"/>
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                </svg>
+              </div>
+              <h2 class="section-title" data-i18n="sub-report-periods">فترات الاشتراكات</h2>
+              <span class="section-badge badge-sub" id="badgePeriods">0</span>
+            </div>
+            <div class="section-totals" id="periodsTotals"></div>
+          </div>
+          <div class="collapsible-body open" id="bodyPeriods">
+
+            <!-- جدول (ديسكتوب) -->
+            <div class="table-container desktop-only">
+              <table class="report-table detail-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="sub-report-col-num">#</th>
+                    <th data-i18n="sub-report-col-sub-num">رقم الاشتراك</th>
+                    <th data-i18n="sub-report-col-customer">اسم العميل</th>
+                    <th data-i18n="sub-report-col-phone">الجوال</th>
+                    <th data-i18n="sub-report-col-package">الباقة</th>
+                    <th data-i18n="sub-report-col-from">من تاريخ</th>
+                    <th data-i18n="sub-report-col-to">إلى تاريخ</th>
+                    <th data-i18n="sub-report-col-days">الأيام المتبقية</th>
+                    <th data-i18n="sub-report-col-paid">المبلغ المدفوع</th>
+                    <th data-i18n="sub-report-col-granted">الرصيد الممنوح</th>
+                    <th data-i18n="sub-report-col-remaining">الرصيد المتبقي</th>
+                    <th data-i18n="sub-report-col-status">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody id="periodsTableBody"></tbody>
+              </table>
+            </div>
+
+            <!-- بطاقات (جوال) -->
+            <div id="mobileCardsList" class="mobile-cards-list mobile-only"></div>
+
+            <div class="pagination-bar" id="periodsPaginationBar" style="display:none">
+              <div class="pagination-info"><span id="periodsPaginationInfo"></span></div>
+              <div class="pagination-controls">
+                <button id="perBtnFirst" class="page-btn" title="أول صفحة">«</button>
+                <button id="perBtnPrev"  class="page-btn" title="السابق">‹</button>
+                <div id="perPageNumbers" class="page-numbers"></div>
+                <button id="perBtnNext"  class="page-btn" title="التالي">›</button>
+                <button id="perBtnLast"  class="page-btn" title="آخر صفحة">»</button>
+              </div>
+              <div class="page-size-selector">
+                <span data-i18n="sub-report-pagination-show">عرض</span>
+                <select id="perPageSize">
+                  <option value="25">25</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+                <span data-i18n="sub-report-pagination-period">فترة</span>
+              </div>
+            </div>
+            <div class="section-footer" id="periodsFooter"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../../../assets/web-api.js"></script>
+  <script src="../../../assets/auth-guard.js"></script>
+  <script src="../../../assets/i18n.js"></script>
+  <script src="subscriptions-report.js"></script>
+</body>
+</html>

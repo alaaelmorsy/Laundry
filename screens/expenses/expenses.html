@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>المصروفات - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="expenses.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-expenses">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="expenses-header-title">إدارة المصروفات</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="expenses-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <!-- Summary Cards -->
+      <div class="summary-cards">
+        <div class="summary-card total-before">
+          <div class="summary-icon" style="background:rgba(99,102,241,.1);color:#6366f1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="summary-info">
+            <p class="summary-label" data-i18n="expenses-summary-total-before">إجمالي المصروفات (قبل الضريبة)</p>
+            <p class="summary-value" id="summaryTotalBefore">0.00 <span class="currency"><span class="sar">&#xE900;</span></span></p>
+          </div>
+        </div>
+
+        <div class="summary-card total-tax">
+          <div class="summary-icon" style="background:rgba(245,158,11,.1);color:#f59e0b">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <div class="summary-info">
+            <p class="summary-label" data-i18n="expenses-summary-tax">إجمالي الضريبة (15%)</p>
+            <p class="summary-value" id="summaryTax">0.00 <span class="currency"><span class="sar">&#xE900;</span></span></p>
+          </div>
+        </div>
+
+        <div class="summary-card grand-total">
+          <div class="summary-icon" style="background:rgba(16,185,129,.1);color:#10b981">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="summary-info">
+            <p class="summary-label" data-i18n="expenses-summary-grand-total">الإجمالي الكلي</p>
+            <p class="summary-value" id="summaryGrandTotal">0.00 <span class="currency"><span class="sar">&#xE900;</span></span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input id="searchInput" type="text" class="search-input"
+            data-i18n-placeholder="expenses-search-placeholder"
+            placeholder="بحث بالعنوان أو الفئة..." autocomplete="off" />
+        </div>
+
+        <div class="date-filter-wrap">
+          <label class="date-filter-label" data-i18n="expenses-filter-from">من:</label>
+          <input type="date" id="filterDateFrom" class="date-filter-input" />
+          <label class="date-filter-label" data-i18n="expenses-filter-to">إلى:</label>
+          <input type="date" id="filterDateTo" class="date-filter-input" />
+          <button id="btnClearDates" class="btn-clear-dates" title="مسح الفلتر">✕</button>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btnExportExcel" class="btn-export btn-excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <span data-i18n="expenses-export-excel">Excel</span>
+          </button>
+          <button id="btnExportPdf" class="btn-export btn-pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            <span data-i18n="expenses-export-pdf">PDF</span>
+          </button>
+          <button id="btnAddExpense" class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span data-i18n="expenses-btn-add">إضافة مصروف</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-container">
+        <p class="table-scroll-hint" data-i18n="expenses-table-scroll-hint">← اسحب الجدول يميناً ويساراً لعرض كل الأعمدة →</p>
+        <table class="expenses-table">
+          <thead>
+            <tr>
+              <th class="col-index" data-i18n="expenses-col-index">#</th>
+              <th data-i18n="expenses-col-title">العنوان</th>
+              <th data-i18n="expenses-col-category">الفئة</th>
+              <th data-i18n="expenses-col-date">التاريخ</th>
+              <th data-i18n="expenses-col-amount">المبلغ</th>
+              <th data-i18n="expenses-col-taxable">خاضع للضريبة</th>
+              <th data-i18n="expenses-col-tax">الضريبة (15%)</th>
+              <th data-i18n="expenses-col-total">الإجمالي</th>
+              <th data-i18n="expenses-col-actions">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="expensesTableBody">
+            <tr id="loadingRow">
+              <td colspan="9" class="loading-cell">
+                <div class="spinner"></div>
+                <span data-i18n="expenses-loading">جارٍ التحميل...</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <p data-i18n="expenses-empty">لا توجد مصروفات مسجلة</p>
+      </div>
+
+      <!-- Pagination Bar -->
+      <div class="pagination-bar" id="paginationBar" style="display:none">
+        <div class="pagination-info">
+          <span id="paginationInfo"></span>
+        </div>
+        <div class="pagination-controls">
+          <button id="btnFirstPage" class="page-btn" title="أول صفحة">«</button>
+          <button id="btnPrevPage"  class="page-btn" title="السابق">‹</button>
+          <div id="pageNumbers" class="page-numbers"></div>
+          <button id="btnNextPage"  class="page-btn" title="التالي">›</button>
+          <button id="btnLastPage"  class="page-btn" title="آخر صفحة">»</button>
+        </div>
+        <div class="page-size-selector">
+          <span data-i18n="expenses-pagination-show">عرض</span>
+          <select id="pageSizeSelect">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+          <span data-i18n="expenses-pagination-per-page">في الصفحة</span>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Add / Edit Modal -->
+  <div id="modalOverlay" class="modal-overlay" style="display:none">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h2 id="modalTitle" class="modal-title" data-i18n="expenses-modal-add-title">إضافة مصروف جديد</h2>
+        <button class="modal-close-btn" id="btnModalClose">✕</button>
+      </div>
+
+      <div id="modalError" class="error-msg" style="display:none"></div>
+
+      <div class="modal-body">
+        <input type="hidden" id="editExpenseId" />
+
+        <div class="form-grid">
+
+          <div class="field-group">
+            <label class="field-label">
+              <span data-i18n="expenses-label-title">عنوان المصروف</span>
+              <span class="required-star"> *</span>
+            </label>
+            <div class="field-wrap">
+              <input id="inputTitle" type="text" class="field-input"
+                data-i18n-placeholder="expenses-placeholder-title"
+                placeholder="مثال: إيجار المحل" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">
+              <span data-i18n="expenses-label-category">الفئة</span>
+              <span class="required-star"> *</span>
+            </label>
+            <div class="field-wrap">
+              <input id="inputCategory" type="text" class="field-input"
+                data-i18n-placeholder="expenses-placeholder-category"
+                placeholder="مثال: إيجار، رواتب، مواد..." autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">
+              <span data-i18n="expenses-label-amount">المبلغ الإجمالي (<span class="sar">&#xE900;</span>)</span>
+              <span class="required-star"> *</span>
+            </label>
+            <div class="field-wrap">
+              <input id="inputAmount" type="number" class="field-input"
+                data-i18n-placeholder="expenses-placeholder-amount"
+                placeholder="0.00" step="0.01" min="0" />
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">
+              <span data-i18n="expenses-label-date">تاريخ المصروف</span>
+              <span class="required-star"> *</span>
+            </label>
+            <div class="field-wrap">
+              <input id="inputDate" type="date" class="field-input" />
+            </div>
+          </div>
+
+          <div class="field-group field-group-full">
+            <label class="field-label" data-i18n="expenses-label-is-taxable">خاضع لضريبة القيمة المضافة (15%)</label>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="inputIsTaxable" />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="toggle-label" data-i18n="expenses-label-is-taxable">خاضع لضريبة القيمة المضافة (15%)</span>
+            </div>
+          </div>
+
+          <div id="taxPreviewBox" class="field-group field-group-full tax-preview-box" style="display:none">
+            <div class="tax-preview-row">
+              <span class="tax-preview-label" data-i18n="expenses-pre-tax-preview">المبلغ قبل الضريبة</span>
+              <span class="tax-preview-value" id="taxPreviewValue">0.00 <span class="sar">&#xE900;</span></span>
+            </div>
+            <div class="tax-preview-row total-row">
+              <span class="tax-preview-label" data-i18n="expenses-tax-preview">قيمة الضريبة (15%)</span>
+              <span class="tax-preview-value total-value" id="totalPreviewValue">0.00 <span class="sar">&#xE900;</span></span>
+            </div>
+          </div>
+
+          <div class="field-group field-group-full">
+            <label class="field-label" data-i18n="expenses-label-notes">ملاحظات</label>
+            <div class="field-wrap">
+              <textarea id="inputNotes" class="field-input field-textarea" rows="3"
+                data-i18n-placeholder="expenses-placeholder-notes"
+                placeholder="أي ملاحظات إضافية..."></textarea>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnModalCancel" class="btn-cancel" data-i18n="expenses-btn-cancel">إلغاء</button>
+        <button id="btnModalSave" class="btn-primary" data-i18n="expenses-btn-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Confirm Delete Dialog -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none">
+    <div class="confirm-box">
+      <div class="confirm-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <h3 class="confirm-title" data-i18n="expenses-confirm-title">تأكيد الحذف</h3>
+      <p class="confirm-msg" id="confirmMsg"></p>
+      <div class="confirm-footer">
+        <button id="btnConfirmCancel" class="btn-cancel" data-i18n="expenses-btn-cancel">إلغاء</button>
+        <button id="btnConfirmOk" class="btn-danger" data-i18n="expenses-btn-delete-title">حذف</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="expenses.js"></script>
+</body>
+</html>

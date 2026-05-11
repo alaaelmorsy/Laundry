@@ -1,0 +1,272 @@
+/**
+ * تنسيق موحّد لأصغر الشاشات (حوالي 480px وأضيق).
+ * يُحمّل بعد tailwind.css وبعد ملف CSS الخاص بالشاشة.
+ */
+@media (max-width: 480px) {
+  .main-content,
+  .settings-main {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+    gap: 10px;
+  }
+
+  .header-bar {
+    min-height: 46px;
+    padding-top: max(6px, env(safe-area-inset-top, 0px));
+    padding-bottom: 6px;
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+    gap: 6px;
+  }
+
+  .header-right {
+    gap: 10px;
+  }
+
+  .header-logo {
+    gap: 8px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .logo-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .header-title {
+    font-size: 13px;
+    max-width: min(160px, 42vw);
+  }
+
+  .back-btn {
+    font-size: 12px;
+    padding: 6px 12px 6px 10px;
+    gap: 5px;
+  }
+
+  .back-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .lang-btn {
+    min-width: 36px;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .toolbar {
+    gap: 8px;
+  }
+
+  .search-wrap {
+    padding: 0 10px;
+    gap: 8px;
+    border-radius: 8px;
+  }
+
+  .search-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .search-input {
+    font-size: 13px;
+    padding: 8px 0;
+    min-height: 40px;
+  }
+
+  .toolbar-actions {
+    gap: 6px;
+  }
+
+  .toolbar-actions .btn-export {
+    padding: 8px 10px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .toolbar-actions .btn-export svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .toolbar-actions .btn-primary {
+    padding: 9px 14px;
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .toolbar-actions .btn-primary svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .toolbar > .btn-primary {
+    padding: 9px 14px;
+    font-size: 13px;
+    justify-content: center;
+  }
+
+  .table-scroll-hint {
+    font-size: 10px;
+    padding: 5px 6px;
+    line-height: 1.35;
+  }
+
+  .header-bar .text-lg {
+    font-size: 0.8125rem !important;
+    max-width: min(160px, 42vw) !important;
+  }
+
+  .tabs {
+    gap: 4px;
+  }
+
+  .tab-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .settings-sidebar {
+    padding: 6px 8px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  /* إعدادات: إلغاء padding على .card لأن التصميم الجديد يستخدم .card-hdr و .card-body */
+  body[data-page-title="settings-page-title"] .card {
+    padding: 0 !important;
+  }
+
+  body[data-page-title="settings-page-title"] .panel {
+    gap: 8px;
+  }
+
+  .btn-primary-lg {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+
+  .custom-toolbar {
+    gap: 8px;
+  }
+
+  .summary-cards {
+    gap: 8px;
+  }
+
+  .summary-card {
+    padding: 14px 12px;
+    align-items: flex-start;
+  }
+
+  .summary-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .summary-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .summary-value {
+    font-size: clamp(15px, 4.2vw, 20px);
+  }
+
+  .date-filter-wrap {
+    gap: 6px;
+  }
+
+  .date-filter-label {
+    font-size: 11px;
+  }
+
+  .date-filter-input {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .filter-select-label {
+    font-size: 11px;
+  }
+
+  .filter-select {
+    padding: 6px 8px;
+    font-size: 12px;
+    min-width: 0;
+  }
+
+  .pagination-info {
+    font-size: 11px;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .page-btn,
+  .page-num {
+    width: 30px;
+    height: 30px;
+    min-width: 28px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  body[data-page-title="settings-page-title"] .settings-main {
+    padding-left: max(6px, env(safe-area-inset-left, 0px));
+    padding-right: max(6px, env(safe-area-inset-right, 0px));
+  }
+
+  body[data-page-title="settings-page-title"] .card {
+    padding: 8px 8px;
+  }
+
+  body[data-page-title="settings-page-title"] .segmented button {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .header-title {
+    max-width: min(130px, 38vw);
+    font-size: 12px;
+  }
+
+  .header-bar .text-lg {
+    font-size: 0.75rem !important;
+    max-width: min(130px, 38vw) !important;
+  }
+
+  .back-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .search-input {
+    font-size: 12px;
+    min-height: 38px;
+  }
+
+  .toolbar-actions .btn-export span {
+    font-size: 11px;
+  }
+
+  .toolbar-actions .btn-primary {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .summary-value {
+    font-size: clamp(14px, 3.8vw, 18px);
+  }
+}

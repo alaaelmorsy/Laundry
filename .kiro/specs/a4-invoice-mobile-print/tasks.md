@@ -1,0 +1,95 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Fixed Width Overflow on Mobile Viewport
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: Scope the property to concrete failing viewports (width < 768px) — e.g., 390px, 360px, 767px
+  - Open `screens/invoice-a4/invoice-a4.html` in browser DevTools, set viewport to 390px
+  - Check: `document.querySelector('.a4-paper').getBoundingClientRect().width` returns ~794 (not 390) — confirms `.a4-paper` has fixed 210mm width
+  - Check: `document.body.scrollWidth > window.innerWidth` returns `true` — confirms horizontal scrollbar exists
+  - Check: `.a4-header` computed `grid-template-columns` shows 3 columns on 390px viewport — confirms multi-column grid not responsive
+  - Check: `.a4-meta-grid` computed `grid-template-columns` shows 3 columns on 390px viewport
+  - Check: `.a4-items` width exceeds viewport width — confirms table overflow
+  - Run on UNFIXED code
+  - **EXPECTED OUTCOME**: All checks FAIL (scrollWidth > innerWidth, a4-paper wider than viewport) — this proves the bug exists
+  - Document counterexamples found (e.g., "`.a4-paper` width = 794px on 390px viewport, scrollWidth = 794px > innerWidth = 390px")
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3, 1.4_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Desktop Layout Unchanged at ≥ 768px
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs (viewport ≥ 768px):
+    - Observe: `.a4-paper` width = 210mm (~794px) on 1280px viewport ✓
+    - Observe: `.a4-header` has 3 columns (`1fr 110px 1fr`) on 1280px viewport ✓
+    - Observe: `.a4-meta-grid` has 3 columns on 1280px viewport ✓
+    - Observe: `.a4-bill-to` has 2 columns on 1280px viewport ✓
+    - Observe: `.a4-summary` has `flex-direction: row` on 1280px viewport ✓
+    - Observe: `@media print` applies `width: 210mm !important` ✓
+  - Write property-based tests: for all viewports ≥ 768px, `.a4-paper` width remains 210mm (~794px)
+  - Write property-based tests: for all viewports ≥ 768px, `.a4-header` retains 3-column grid
+  - Write property-based tests: `@media print` styles are unaffected by any viewport width
+  - Verify tests PASS on UNFIXED code (confirms baseline behavior to preserve)
+  - **EXPECTED OUTCOME**: Tests PASS on unfixed code (confirms baseline behavior)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+- [x] 3. Fix for A4 invoice mobile responsive layout
+
+  - [x] 3.1 Add mobile responsive media query to invoice-a4.css
+    - Add `@media screen and (max-width: 767px)` block at end of `screens/invoice-a4/invoice-a4.css` (before `@media print`)
+    - Inside the block, override `.a4-paper`: set `width: 100%`, `min-height: unset`, `margin: 0`, `padding: 4mm 4mm 10mm`, `box-shadow: none`
+    - Override `.a4-header`: set `grid-template-columns: 1fr` and assign explicit grid-row positions for `.a4-header-ar` (row 1), `.a4-header-logo` (row 2), `.a4-header-en` (row 3)
+    - Override `.a4-meta-grid`: set `grid-template-columns: 1fr`; override `.a4-meta-cell`: remove `border-left`, add `border-bottom: 2px solid #000`; override `.a4-meta-cell:last-child`: `border-bottom: none`
+    - Override `.a4-bill-to`: set `grid-template-columns: 1fr`
+    - Override `.a4-summary`: set `flex-direction: column`; override `.a4-totals` and `.a4-notes-box`: set `width: 100%`
+    - Override `.a4-actions`: set `padding: 8px 12px`
+    - _Bug_Condition: isBugCondition(viewport) where viewport.width < 768 AND `.a4-paper` has fixed 210mm width AND no mobile media query exists_
+    - _Expected_Behavior: `.a4-paper` fills full screen width (width: 100%), no horizontal scrollbar, all grids single-column, items table scrollable_
+    - _Preservation: viewport.width ≥ 768px keeps existing 210mm fixed layout; `@media print` block unchanged_
+    - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4_
+
+  - [x] 3.2 Add items table horizontal scroll wrapper in invoice-a4.html
+    - Wrap `<table class="a4-items">` with `<div class="a4-items-wrap">` in `screens/invoice-a4/invoice-a4.html`
+    - Add to the mobile media query in CSS: `.a4-items-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }` and `.a4-items { min-width: 500px; }`
+    - This ensures the 8-column table scrolls horizontally within a bounded container on mobile
+    - _Bug_Condition: `.a4-items` 8-column table overflows viewport on width < 768px_
+    - _Expected_Behavior: table scrolls horizontally inside `.a4-items-wrap` without breaking page layout_
+    - _Preservation: `.a4-items-wrap` has no styles outside the mobile media query — desktop layout unaffected_
+    - _Requirements: 2.4, 3.1, 3.3_
+
+  - [x] 3.3 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Fixed Width Overflow on Mobile Viewport
+    - **IMPORTANT**: Re-run the SAME checks from task 1 - do NOT write new tests
+    - Set DevTools viewport to 390px, 360px, and 767px
+    - Check: `document.querySelector('.a4-paper').getBoundingClientRect().width` ≤ viewport.width ✓
+    - Check: `document.body.scrollWidth <= window.innerWidth` (no horizontal scrollbar) ✓
+    - Check: `.a4-header` computed `grid-template-columns` shows single column ✓
+    - Check: `.a4-meta-grid` computed `grid-template-columns` shows single column ✓
+    - Check: `.a4-items-wrap` has `overflow-x: auto` and table scrolls within it ✓
+    - **EXPECTED OUTCOME**: All checks PASS (confirms bug is fixed)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+  - [x] 3.4 Verify preservation tests still pass
+    - **Property 2: Preservation** - Desktop Layout Unchanged at ≥ 768px
+    - **IMPORTANT**: Re-run the SAME checks from task 2 - do NOT write new tests
+    - Set DevTools viewport to 768px, 1024px, 1280px, 1920px
+    - Check: `.a4-paper` width = 210mm (~794px) on all desktop viewports ✓
+    - Check: `.a4-header` retains `grid-template-columns: 1fr 110px 1fr` ✓
+    - Check: `.a4-meta-grid` retains 3 columns ✓
+    - Check: `.a4-bill-to` retains 2 columns ✓
+    - Check: `.a4-summary` retains `flex-direction: row` ✓
+    - Simulate `@media print` in DevTools and verify `width: 210mm !important` still applies ✓
+    - **EXPECTED OUTCOME**: All checks PASS (confirms no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Verify task 1 exploration test PASSES after fix (bug confirmed fixed)
+  - Verify task 2 preservation tests still PASS (no regressions on desktop/print)
+  - Open invoice on mobile viewport (390px) — no horizontal scrollbar, all content readable
+  - Open invoice on desktop viewport (1280px) — layout identical to pre-fix
+  - Simulate print from desktop — A4 portrait layout unchanged
+  - Ensure all tests pass; ask the user if questions arise.

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>الفواتير الدائنة - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="credit-invoices.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-credit-invoices">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 14l-4-4 4-4"/>
+              <path d="M5 10h11a4 4 0 0 1 0 8h-1"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="credit-heading">الفواتير الدائنة</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="credit-btn-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input id="searchInput" type="text" class="search-input"
+             placeholder="بحث برقم الإشعار أو رقم الفاتورة أو اسم العميل أو الهاتف..." autocomplete="off" data-i18n-placeholder="credit-search-placeholder" />
+        </div>
+
+        <div class="date-filter-wrap">
+          <label class="date-label" data-i18n="credit-from">من</label>
+          <input id="dateFrom" type="date" class="date-input" />
+          <label class="date-label" data-i18n="credit-to">إلى</label>
+          <input id="dateTo" type="date" class="date-input" />
+          <button id="btnDateFilter" class="btn-filter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            <span data-i18n="credit-btn-filter">تصفية</span>
+          </button>
+          <button id="btnDateClear" class="btn-clear" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            <span data-i18n="credit-btn-clear">مسح</span>
+          </button>
+        </div>
+
+        <div class="export-btns">
+          <button id="btnExportExcel" class="btn-export btn-excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <span data-i18n="credit-btn-export-excel">تصدير Excel</span>
+          </button>
+          <button id="btnExportPdf" class="btn-export btn-pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="12" y2="18"/>
+              <line x1="15" y1="15" x2="12" y2="18"/>
+            </svg>
+            <span data-i18n="credit-btn-export-pdf">تصدير PDF</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <p class="table-scroll-hint" data-i18n="credit-scroll-hint">← اسحب الجدول يميناً ويساراً لعرض كل الأعمدة →</p>
+        <table class="invoices-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th data-i18n="credit-th-number">رقم الإشعار</th>
+              <th data-i18n="credit-th-orig-invoice">فاتورة أصلية</th>
+              <th data-i18n="credit-th-date">التاريخ</th>
+              <th data-i18n="credit-th-customer">العميل</th>
+              <th data-i18n="credit-th-total">الإجمالي</th>
+              <th>ZATCA</th>
+              <th data-i18n="credit-th-actions">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="cnTableBody">
+            <tr id="loadingRow">
+              <td colspan="8" class="loading-cell">
+                <div class="spinner"></div>
+                <span data-i18n="credit-loading">جارٍ التحميل...</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 14l-4-4 4-4"/>
+          <path d="M5 10h11a4 4 0 0 1 0 8h-1"/>
+        </svg>
+        <p data-i18n="credit-empty">لا توجد فواتير دائنة مسجلة</p>
+      </div>
+
+      <div class="pagination-bar" id="paginationBar" style="display:none">
+        <div class="pagination-info">
+          <span id="paginationInfo"></span>
+        </div>
+        <div class="pagination-controls">
+          <button id="btnFirstPage" class="page-btn" data-i18n-title="credit-pagination-first" title="أول صفحة">«</button>
+          <button id="btnPrevPage"  class="page-btn" data-i18n-title="credit-pagination-prev" title="السابق">‹</button>
+          <div id="pageNumbers" class="page-numbers"></div>
+          <button id="btnNextPage"  class="page-btn" data-i18n-title="credit-pagination-next" title="التالي">›</button>
+          <button id="btnLastPage"  class="page-btn" data-i18n-title="credit-pagination-last" title="آخر صفحة">»</button>
+        </div>
+        <div class="page-size-selector">
+          <span data-i18n="credit-pagination-show">عرض</span>
+          <select id="pageSizeSelect">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+          <span data-i18n="credit-pagination-per-page">في الصفحة</span>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Original Invoice Modal -->
+  <div id="invoiceViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="btnInvClose" class="btn-inv-action btn-inv-close" type="button" data-i18n="credit-btn-close">إغلاق</button>
+        <button id="btnInvExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="18"/>
+            <line x1="15" y1="15" x2="12" y2="18"/>
+          </svg>
+          <span data-i18n="credit-btn-export-pdf">تصدير PDF</span>
+        </button>
+        <button id="btnInvPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span data-i18n="credit-btn-print">طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="invoicePaper">
+          <div class="inv-logo-wrap" id="invLogoWrap" style="display:none">
+            <img id="invLogo" class="inv-logo" alt="شعار المغسلة" />
+          </div>
+          <div class="inv-shop-name" id="invShopName"></div>
+          <div class="inv-shop-sub" id="invShopAddress"></div>
+          <div class="inv-shop-sub" id="invShopPhone"></div>
+          <div class="inv-shop-sub" id="invVatNumber" dir="ltr"></div>
+          <div class="inv-shop-sub" id="invShopEmail"></div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">رقم الفاتورة</span>
+            <span class="inv-meta-val" id="invOrderNum" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">التاريخ</span>
+            <span class="inv-meta-val" id="invDate" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">طريقة الدفع</span>
+            <span class="inv-meta-val" id="invPayment"></span>
+          </div>
+          <div class="inv-meta-row" id="invPaidAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ السداد</span>
+            <span class="inv-meta-val" id="invPaidAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="invCleanedAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التنظيف</span>
+            <span class="inv-meta-val" id="invCleanedAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="invDeliveredAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التسليم</span>
+            <span class="inv-meta-val" id="invDeliveredAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="invCRRow" style="display:none">
+            <span class="inv-meta-label">السجل التجاري</span>
+            <span class="inv-meta-val" id="invCR" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="invCreatedByRow" style="display:none">
+            <span class="inv-meta-label">الكاشير</span>
+            <span class="inv-meta-val" id="invCreatedBy"></span>
+          </div>
+          <div id="invCustomerSection" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row" id="invCustNameRow" style="display:none">
+              <span class="inv-meta-label">الاسم</span>
+              <span class="inv-meta-val" id="invCustName"></span>
+            </div>
+            <div class="inv-meta-row" id="invCustPhoneRow" style="display:none">
+              <span class="inv-meta-label">الجوال</span>
+              <span class="inv-meta-val" id="invCustPhone" dir="ltr"></span>
+            </div>
+            <div class="inv-meta-row" id="invSubBalRow" style="display:none">
+              <span class="inv-meta-label">الرصيد المتبقي</span>
+              <span class="inv-meta-val" id="invSubBalance" dir="ltr"></span>
+            </div>
+          </div>
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="inv-th-name">النوع</th>
+                <th class="inv-th-num">عدد</th>
+                <th class="inv-th-num">الإجمالي</th>
+                <th class="inv-th-name">العملية</th>
+              </tr>
+            </thead>
+            <tbody id="invItemsTbody"></tbody>
+          </table>
+          <div class="inv-totals-box">
+            <div class="inv-total-row">
+              <span class="inv-total-label" id="invSubtotalLabel">المجموع قبل الضريبة</span>
+              <span class="inv-total-val" id="invSubtotal" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="invDiscRow" style="display:none">
+              <span class="inv-total-label">الخصم</span>
+              <span class="inv-total-val inv-disc-val" id="invDiscount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="invAfterDiscRow" style="display:none">
+              <span class="inv-total-label">المجموع بعد الخصم</span>
+              <span class="inv-total-val" id="invAfterDiscount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="invExtraRow" style="display:none">
+              <span class="inv-total-label">الإضافي</span>
+              <span class="inv-total-val inv-extra-val" id="invExtra" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="invVatRow">
+              <span class="inv-total-label" id="invVatLabel">ضريبة القيمة المضافة</span>
+              <span class="inv-total-val" id="invVat" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-grand-row">
+              <span class="inv-grand-label" id="invTotalLabel">الإجمالي شامل الضريبة</span>
+              <span class="inv-grand-val" id="invTotal" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-mixed-cash-row" id="invMixedCashRow" style="display:none">
+              <span class="inv-total-label">المدفوع كاش</span>
+              <span class="inv-total-val" id="invMixedCash" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-mixed-card-row" id="invMixedCardRow" style="display:none">
+              <span class="inv-total-label">المدفوع شبكة</span>
+              <span class="inv-total-val" id="invMixedCard" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-paid-row" id="invPaidRow" style="display:none">
+              <span class="inv-total-label">المدفوع</span>
+              <span class="inv-total-val inv-paid-val" id="invPaidAmount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-remaining-row" id="invRemainingRow" style="display:none">
+              <span class="inv-total-label">المتبقي</span>
+              <span class="inv-total-val inv-remaining-val" id="invRemainingAmount" dir="ltr"></span>
+            </div>
+          </div>
+          <div id="invExtraOpts" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row" id="invStarchRow" style="display:none">
+              <span class="inv-meta-label">نشا</span>
+              <span class="inv-meta-val" id="invStarch"></span>
+            </div>
+          </div>
+          <div class="inv-barcode-wrap">
+            <svg id="invBarcode"></svg>
+          </div>
+          <div class="inv-qr-wrap">
+            <div id="invQR" class="inv-qr"></div>
+          </div>
+          <div id="invFooterNotes" class="inv-notes-box" style="display:none">
+            <span class="inv-notes-title">الشروط والأحكام (Terms):</span>
+            <span class="inv-notes-content" id="invNotesContent"></span>
+          </div>
+        </div>
+
+        <div class="inv-paper-a4m" id="invoicePaperA4m">
+          <header class="a4m-header">
+            <div class="a4m-header-ar" dir="rtl">
+              <div class="a4m-brand-name" id="a4mShopNameAr"></div>
+              <div class="a4m-brand-sub" id="a4mShopAddressAr"></div>
+              <div class="a4m-brand-sub" id="a4mShopPhoneAr"></div>
+              <div class="a4m-brand-sub" id="a4mVatAr"></div>
+              <div class="a4m-brand-sub" id="a4mCrAr"></div>
+            </div>
+            <div class="a4m-header-logo">
+              <img id="a4mLogo" alt="Logo" style="display:none" />
+            </div>
+            <div class="a4m-header-en" dir="ltr">
+              <div class="a4m-brand-name" id="a4mShopNameEn"></div>
+              <div class="a4m-brand-sub" id="a4mShopAddressEn"></div>
+              <div class="a4m-brand-sub" id="a4mShopEmail"></div>
+              <div class="a4m-brand-sub" id="a4mVatEn"></div>
+              <div class="a4m-brand-sub" id="a4mCrEn"></div>
+            </div>
+          </header>
+          <div class="a4m-title-band">
+            <span>فاتورة ضريبية مبسطة</span>
+            <span class="a4m-title-sep">•</span>
+            <span>Simplified Tax Invoice</span>
+          </div>
+          <section class="a4m-meta-grid">
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">رقم الفاتورة / Invoice #</div>
+              <div class="a4m-meta-val" id="a4mOrderNum" dir="ltr"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">التاريخ / Date</div>
+              <div class="a4m-meta-val" id="a4mDate" dir="ltr"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">طريقة الدفع / Payment</div>
+              <div class="a4m-meta-val" id="a4mPayment"></div>
+            </div>
+          </section>
+          <section class="a4m-bill-to">
+            <div class="a4m-card">
+              <div class="a4m-kv"><span>الاسم / Name</span><b id="a4mCustName"></b></div>
+              <div class="a4m-kv"><span>الجوال / Mobile</span><b id="a4mCustPhone" dir="ltr"></b></div>
+              <div class="a4m-kv" id="a4mRowSubPackage" style="display:none"><span>الباقة / Package</span><b id="a4mSubPackage"></b></div>
+              <div class="a4m-kv" id="a4mRowSubBalance" style="display:none"><span>الرصيد / Balance</span><b id="a4mSubBalance" dir="ltr"></b></div>
+            </div>
+            <div class="a4m-card">
+              <div class="a4m-kv" id="a4mRowPaidAt" style="display:none"><span>تاريخ السداد / Paid</span><b id="a4mPaidAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="a4mRowCleanedAt" style="display:none"><span>تاريخ التنظيف / Cleaned</span><b id="a4mCleanedAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="a4mRowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="a4mDeliveredAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="a4mRowStarch" style="display:none"><span>نشا / Starch</span><b id="a4mStarch"></b></div>
+              <div class="a4m-kv" id="a4mRowBluing" style="display:none"><span>النيلة / Bluing</span><b id="a4mBluing"></b></div>
+            </div>
+          </section>
+          <div class="a4m-items-wrap">
+            <table class="a4m-items">
+              <thead>
+                <tr>
+                  <th class="a4m-th-num">#</th>
+                  <th class="a4m-th-name">النوع / Item</th>
+                  <th class="a4m-th-name">العملية / Service</th>
+                  <th class="a4m-th-num">الكمية / Qty</th>
+                  <th class="a4m-th-num">سعر الوحدة / Unit Price</th>
+                  <th class="a4m-th-num">قبل الضريبة / Net</th>
+                  <th class="a4m-th-num">الضريبة / VAT</th>
+                  <th class="a4m-th-num">الإجمالي / Total</th>
+                </tr>
+              </thead>
+              <tbody id="a4mItemsTbody"></tbody>
+            </table>
+          </div>
+          <section class="a4m-summary">
+            <div class="a4m-totals-col">
+              <div class="a4m-totals">
+                <div class="a4m-trow"><span id="a4mSubtotalLabel">المجموع قبل الضريبة / Subtotal</span><b id="a4mSubtotal" dir="ltr"></b></div>
+                <div class="a4m-trow" id="a4mDiscRow" style="display:none"><span>الخصم / Discount</span><b id="a4mDiscount" class="a4m-neg" dir="ltr"></b></div>
+                <div class="a4m-trow" id="a4mAfterDiscRow" style="display:none"><span>المجموع بعد الخصم / After Discount</span><b id="a4mAfterDiscount" dir="ltr"></b></div>
+                <div class="a4m-trow" id="a4mExtraRow" style="display:none"><span>الإضافي / Extra</span><b id="a4mExtra" dir="ltr"></b></div>
+                <div class="a4m-trow" id="a4mVatRow"><span id="a4mVatLabel">ضريبة القيمة المضافة</span><b id="a4mVat" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-grand"><span id="a4mTotalLabel">الإجمالي شامل الضريبة / Grand Total</span><b id="a4mTotal" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-mixed-row" id="a4mMixedCashRow" style="display:none">
+                  <span>المدفوع كاش</span><b id="a4mMixedCash" dir="ltr"></b>
+                </div>
+                <div class="a4m-trow a4m-mixed-row" id="a4mMixedCardRow" style="display:none">
+                  <span>المدفوع شبكة</span><b id="a4mMixedCard" dir="ltr"></b>
+                </div>
+              </div>
+              <div id="a4mFooterNotes" class="a4m-notes-box" style="display:none">
+                <span class="a4m-notes-title">الشروط والأحكام (Terms):</span>
+                <span class="a4m-notes-content" id="a4mNotesContent"></span>
+              </div>
+            </div>
+            <div class="a4m-qr-box">
+              <div id="a4mQR" class="a4m-qr"></div>
+            </div>
+          </section>
+          <footer class="a4m-footer" style="display:none"></footer>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credit Note Modal -->
+  <div id="cnViewModal" class="modal-overlay cn-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog cn-dialog">
+      <div class="inv-dialog-footer no-print cn-modal-header-bar">
+        <button id="btnCnClose" class="btn-inv-action btn-inv-close" type="button" data-i18n="credit-btn-close">إغلاق</button>
+        <button id="btnCnExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="18"/>
+            <line x1="15" y1="15" x2="12" y2="18"/>
+          </svg>
+           <span data-i18n="credit-btn-export-pdf">تصدير PDF</span>
+        </button>
+        <button id="btnCnPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span data-i18n="credit-btn-print">طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper cn-paper" id="cnPaper">
+          <div class="inv-logo-wrap" id="cnLogoWrap" style="display:none">
+            <img id="cnLogo" class="inv-logo" alt="شعار المغسلة" />
+          </div>
+          <div class="inv-shop-name" id="cnShopName"></div>
+          <div class="inv-shop-sub" id="cnShopAddress"></div>
+          <div class="inv-shop-sub" id="cnShopPhone"></div>
+          <div class="inv-shop-sub" id="cnVatNumber" dir="ltr"></div>
+          <div class="inv-shop-sub" id="cnShopEmail"></div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div style="border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 0;margin:4px 0;text-align:center">
+            <span class="inv-meta-label" style="color:#000;font-size:12px;display:block;text-align:center">إشعار دائن للفاتورة الضريبية المبسطة</span>
+          </div>
+          <div style="border-bottom:1px dashed #000;margin:0 0 8px"></div>
+          <div class="inv-meta-row" style="justify-content:center;gap:6px;flex-wrap:wrap">
+            <span class="inv-meta-label">رقم الإشعار:</span>
+            <span class="inv-meta-val" id="cnNoteNum" dir="ltr"></span>
+            <span class="inv-meta-label">—</span>
+            <span class="inv-meta-label">الفاتورة الأصلية:</span>
+            <span class="inv-meta-val" id="cnOrigInv" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">التاريخ</span>
+            <span class="inv-meta-val" id="cnDate" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">طريقة الدفع</span>
+            <span class="inv-meta-val" id="cnPayment"></span>
+          </div>
+          <div class="inv-meta-row" id="cnPaidAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ السداد</span>
+            <span class="inv-meta-val" id="cnPaidAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="cnCleanedAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التنظيف</span>
+            <span class="inv-meta-val" id="cnCleanedAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="cnDeliveredAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التسليم</span>
+            <span class="inv-meta-val" id="cnDeliveredAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="cnCRRow" style="display:none">
+            <span class="inv-meta-label">السجل التجاري</span>
+            <span class="inv-meta-val" id="cnCR" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="cnCreatedByRow" style="display:none">
+            <span class="inv-meta-label">الكاشير</span>
+            <span class="inv-meta-val" id="cnCreatedBy"></span>
+          </div>
+          <div id="cnCustomerSection" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row" id="cnCustNameRow" style="display:none">
+              <span class="inv-meta-label">الاسم</span>
+              <span class="inv-meta-val" id="cnCustName"></span>
+            </div>
+            <div class="inv-meta-row" id="cnCustPhoneRow" style="display:none">
+              <span class="inv-meta-label">الجوال</span>
+              <span class="inv-meta-val" id="cnCustPhone" dir="ltr"></span>
+            </div>
+            <div class="inv-meta-row" id="cnSubBalRow" style="display:none">
+              <span class="inv-meta-label">الرصيد المتبقي</span>
+              <span class="inv-meta-val" id="cnSubBalance" dir="ltr"></span>
+            </div>
+          </div>
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="inv-th-name">النوع</th>
+                <th class="inv-th-num">عدد</th>
+                <th class="inv-th-num">الإجمالي</th>
+                <th class="inv-th-name">العملية</th>
+              </tr>
+            </thead>
+            <tbody id="cnItemsTbody"></tbody>
+          </table>
+          <div class="inv-totals-box">
+            <div class="inv-total-row">
+              <span class="inv-total-label" id="cnSubtotalLabel">المجموع قبل الضريبة</span>
+              <span class="inv-total-val" id="cnSubtotal" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="cnDiscRow" style="display:none">
+              <span class="inv-total-label">الخصم</span>
+              <span class="inv-total-val inv-disc-val" id="cnDiscount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="cnAfterDiscRow" style="display:none">
+              <span class="inv-total-label">المجموع بعد الخصم</span>
+              <span class="inv-total-val" id="cnAfterDiscount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="cnExtraRow" style="display:none">
+              <span class="inv-total-label">الإضافي</span>
+              <span class="inv-total-val" id="cnExtra" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="cnVatRow">
+              <span class="inv-total-label" id="cnVatLabel">ضريبة القيمة المضافة</span>
+              <span class="inv-total-val" id="cnVat" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-grand-row">
+              <span class="inv-grand-label" id="cnTotalLabel">الإجمالي شامل الضريبة</span>
+              <span class="inv-grand-val" id="cnTotal" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-mixed-cash-row" id="cnMixedCashRow" style="display:none">
+              <span class="inv-total-label">المدفوع كاش</span>
+              <span class="inv-total-val" id="cnMixedCash" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-mixed-card-row" id="cnMixedCardRow" style="display:none">
+              <span class="inv-total-label">المدفوع شبكة</span>
+              <span class="inv-total-val" id="cnMixedCard" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-paid-row" id="cnPaidRow" style="display:none">
+              <span class="inv-total-label">المدفوع</span>
+              <span class="inv-total-val inv-paid-val" id="cnPaidAmount" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row inv-remaining-row" id="cnRemainingRow" style="display:none">
+              <span class="inv-total-label">المتبقي</span>
+              <span class="inv-total-val inv-remaining-val" id="cnRemainingAmount" dir="ltr"></span>
+            </div>
+          </div>
+          <div class="inv-barcode-wrap">
+            <svg id="cnBarcode"></svg>
+          </div>
+          <div class="inv-qr-wrap">
+            <div id="cnQR" class="inv-qr"></div>
+          </div>
+          <div id="cnExtraOpts" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row" id="cnStarchRow" style="display:none">
+              <span class="inv-meta-label">نشا</span>
+              <span class="inv-meta-val" id="cnStarch"></span>
+            </div>
+            <div class="inv-meta-row" id="cnBluingRow" style="display:none">
+              <span class="inv-meta-label">النيلة</span>
+              <span class="inv-meta-val" id="cnBluing"></span>
+            </div>
+          </div>
+          <div id="cnNotesSection" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">ملاحظات</span>
+              <span class="inv-meta-val" id="cnNotes"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="inv-paper-a4m" id="cnPaperA4m">
+          <header class="a4m-header">
+            <div class="a4m-header-ar" dir="rtl">
+              <div class="a4m-brand-name" id="cnA4mShopNameAr"></div>
+              <div class="a4m-brand-sub" id="cnA4mShopAddressAr"></div>
+              <div class="a4m-brand-sub" id="cnA4mShopPhoneAr"></div>
+              <div class="a4m-brand-sub" id="cnA4mVatAr"></div>
+              <div class="a4m-brand-sub" id="cnA4mCrAr"></div>
+            </div>
+            <div class="a4m-header-logo">
+              <img id="cnA4mLogo" alt="Logo" style="display:none" />
+            </div>
+            <div class="a4m-header-en" dir="ltr">
+              <div class="a4m-brand-name" id="cnA4mShopNameEn"></div>
+              <div class="a4m-brand-sub" id="cnA4mShopAddressEn"></div>
+              <div class="a4m-brand-sub" id="cnA4mShopEmail"></div>
+              <div class="a4m-brand-sub" id="cnA4mVatEn"></div>
+              <div class="a4m-brand-sub" id="cnA4mCrEn"></div>
+            </div>
+          </header>
+          <div class="a4m-title-band">
+            <span>إشعار دائن للفاتورة الضريبية المبسطة</span>
+          </div>
+          <div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;font-size:10pt;font-weight:900;color:#000;padding:1.5mm 0 2.5mm;border-bottom:1px dashed #000;margin-bottom:3mm">
+            <span>رقم الإشعار:</span>
+            <span id="cnA4mNoteNum" dir="ltr"></span>
+            <span>—</span>
+            <span>الفاتورة الأصلية:</span>
+            <span id="cnA4mOrigInv" dir="ltr"></span>
+          </div>
+          <section class="a4m-meta-grid">
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">التاريخ / Date</div>
+              <div class="a4m-meta-val" id="cnA4mDate" dir="ltr"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">طريقة الدفع / Payment</div>
+              <div class="a4m-meta-val" id="cnA4mPayment"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">الكاشير / Cashier</div>
+              <div class="a4m-meta-val" id="cnA4mCreatedBy"></div>
+            </div>
+          </section>
+          <section class="a4m-bill-to">
+            <div class="a4m-card">
+              <div class="a4m-kv"><span>الاسم / Name</span><b id="cnA4mCustName"></b></div>
+              <div class="a4m-kv"><span>الجوال / Mobile</span><b id="cnA4mCustPhone" dir="ltr"></b></div>
+              <div class="a4m-kv" id="cnA4mRowSubPackage" style="display:none"><span>الباقة / Package</span><b id="cnA4mSubPackage"></b></div>
+              <div class="a4m-kv" id="cnA4mRowSubBalance" style="display:none"><span>الرصيد / Balance</span><b id="cnA4mSubBalance" dir="ltr"></b></div>
+            </div>
+            <div class="a4m-card">
+              <div class="a4m-kv" id="cnA4mRowPaidAt" style="display:none"><span>تاريخ السداد / Paid</span><b id="cnA4mPaidAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="cnA4mRowCleanedAt" style="display:none"><span>تاريخ التنظيف / Cleaned</span><b id="cnA4mCleanedAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="cnA4mRowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="cnA4mDeliveredAt" dir="ltr"></b></div>
+              <div class="a4m-kv" id="cnA4mRowStarch" style="display:none"><span>نشا / Starch</span><b id="cnA4mStarch"></b></div>
+              <div class="a4m-kv" id="cnA4mRowBluing" style="display:none"><span>النيلة / Bluing</span><b id="cnA4mBluing"></b></div>
+            </div>
+          </section>
+          <div class="a4m-items-wrap">
+            <table class="a4m-items">
+              <thead>
+                <tr>
+                  <th class="a4m-th-num">#</th>
+                  <th class="a4m-th-name">النوع / Item</th>
+                  <th class="a4m-th-name">العملية / Service</th>
+                  <th class="a4m-th-num">الكمية / Qty</th>
+                  <th class="a4m-th-num">سعر الوحدة / Unit Price</th>
+                  <th class="a4m-th-num">قبل الضريبة / Net</th>
+                  <th class="a4m-th-num">الضريبة / VAT</th>
+                  <th class="a4m-th-num">الإجمالي / Total</th>
+                </tr>
+              </thead>
+              <tbody id="cnA4mItemsTbody"></tbody>
+            </table>
+          </div>
+          <section class="a4m-summary">
+            <div class="a4m-totals-col">
+              <div class="a4m-totals">
+                <div class="a4m-trow"><span id="cnA4mSubtotalLabel">المجموع قبل الضريبة / Subtotal</span><b id="cnA4mSubtotal" dir="ltr"></b></div>
+                <div class="a4m-trow" id="cnA4mDiscRow" style="display:none"><span>الخصم / Discount</span><b id="cnA4mDiscount" class="a4m-neg" dir="ltr"></b></div>
+                <div class="a4m-trow" id="cnA4mAfterDiscRow" style="display:none"><span>المجموع بعد الخصم / After Discount</span><b id="cnA4mAfterDiscount" dir="ltr"></b></div>
+                <div class="a4m-trow" id="cnA4mExtraRow" style="display:none"><span>الإضافي / Extra</span><b id="cnA4mExtra" dir="ltr"></b></div>
+                <div class="a4m-trow" id="cnA4mVatRow"><span id="cnA4mVatLabel">ضريبة القيمة المضافة</span><b id="cnA4mVat" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-grand"><span id="cnA4mTotalLabel">الإجمالي شامل الضريبة / Grand Total</span><b id="cnA4mTotal" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-mixed-row" id="cnA4mMixedCashRow" style="display:none">
+                  <span>المدفوع كاش</span><b id="cnA4mMixedCash" dir="ltr"></b>
+                </div>
+                <div class="a4m-trow a4m-mixed-row" id="cnA4mMixedCardRow" style="display:none">
+                  <span>المدفوع شبكة</span><b id="cnA4mMixedCard" dir="ltr"></b>
+                </div>
+              </div>
+              <div id="cnA4mFooterNotes" class="a4m-notes-box" style="display:none">
+                <span class="a4m-notes-title">الشروط والأحكام (Terms):</span>
+                <span class="a4m-notes-content" id="cnA4mNotesContent"></span>
+              </div>
+            </div>
+            <div class="a4m-qr-box">
+              <div id="cnA4mQR" class="a4m-qr"></div>
+            </div>
+          </section>
+          <footer class="a4m-footer" style="display:none"></footer>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ZATCA Response Modal -->
+  <div id="zatcaRespModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="zatca-resp-dialog">
+      <div class="zatca-resp-header">
+        <span class="zatca-resp-title">رد هيئة الزكاة والضريبة</span>
+        <button id="btnZatcaRespClose" class="zatca-resp-close">✕</button>
+      </div>
+      <pre id="zatcaRespText" class="zatca-resp-body"></pre>
+    </div>
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="../../assets/qrcode-min.js"></script>
+  <script src="../../assets/JsBarcode.min.js"></script>
+  <script src="credit-invoices.js"></script>
+</body>
+</html>

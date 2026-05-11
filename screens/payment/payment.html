@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>سداد الفاتورة الآجلة - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="payment.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <line x1="2" y1="10" x2="22" y2="10"/>
+            </svg>
+          </div>
+          <span class="header-title">سداد الفاتورة الآجلة</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span>العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <!-- Loading State -->
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <span>جارٍ التحميل...</span>
+      </div>
+
+      <!-- Error State -->
+      <div id="errorState" class="error-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p id="errorMessage">حدث خطأ في تحميل البيانات</p>
+        <button id="btnRetry" class="btn-primary">إعادة المحاولة</button>
+      </div>
+
+      <!-- Main Content -->
+      <div id="mainContent" style="display:none">
+
+        <!-- Invoice Summary Card -->
+        <div class="card invoice-summary">
+          <h2 class="card-title">معلومات الفاتورة</h2>
+          
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">رقم الفاتورة</span>
+              <span class="info-value" id="invoiceNumber">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">العميل</span>
+              <span class="info-value" id="customerName">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">الجوال</span>
+              <span class="info-value" id="customerPhone" dir="ltr">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">حالة الفاتورة</span>
+              <span class="info-value status-badge" id="invoiceStatus">-</span>
+            </div>
+          </div>
+
+          <div class="amounts-grid">
+            <div class="amount-box">
+              <span class="amount-label">المبلغ الإجمالي</span>
+              <span class="amount-value total" id="totalAmount" dir="ltr">0.00 ر.س</span>
+            </div>
+            <div class="amount-box">
+              <span class="amount-label">المبلغ المدفوع</span>
+              <span class="amount-value paid" id="paidAmount" dir="ltr">0.00 ر.س</span>
+            </div>
+            <div class="amount-box">
+              <span class="amount-label">المبلغ المتبقي</span>
+              <span class="amount-value remaining" id="remainingAmount" dir="ltr">0.00 ر.س</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Input Section -->
+        <div class="card payment-input" id="paymentInputCard">
+          <h2 class="card-title">إدخال دفعة جديدة</h2>
+          
+          <div class="form-group">
+            <label for="paymentAmount" class="form-label">مبلغ الدفعة</label>
+            <div class="input-with-button">
+              <input type="number" id="paymentAmount" class="form-input" 
+                placeholder="أدخل المبلغ" step="0.01" min="0" />
+              <button id="btnPayFull" class="btn-pay-full">سداد المبلغ المتبقي</button>
+            </div>
+            <span id="amountError" class="error-message" style="display:none"></span>
+          </div>
+
+          <div class="payment-method-row">
+            <div class="form-group">
+              <label class="form-label">طريقة الدفع</label>
+              <div class="payment-methods">
+                <button class="payment-method-btn" data-method="cash">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  </svg>
+                  <span>نقداً</span>
+                </button>
+                <button class="payment-method-btn" data-method="card">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                    <line x1="1" y1="10" x2="23" y2="10"/>
+                  </svg>
+                  <span>شبكة</span>
+                </button>
+                <button class="payment-method-btn" data-method="mixed">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="17 1 21 5 17 9"/>
+                    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                    <polyline points="7 23 3 19 7 15"/>
+                    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                  <span>مختلط</span>
+                </button>
+                <button class="payment-method-btn" data-method="bank">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                  </svg>
+                  <span>تحويل بنكي</span>
+                </button>
+                <button class="payment-method-btn" data-method="other">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  <span>أخرى</span>
+                </button>
+              </div>
+              <span id="methodError" class="error-message" style="display:none"></span>
+            </div>
+
+            <div class="remaining-after-payment">
+              <span class="remaining-label">المتبقي بعد هذه الدفعة</span>
+              <span class="remaining-value" id="remainingAfterPayment" dir="ltr">0.00 ر.س</span>
+            </div>
+          </div>
+
+          <!-- Mixed payment section (deferred screen) -->
+          <div id="mixedPaymentSection" style="display:none" class="mixed-payment-section">
+            <div class="mixed-fields-row">
+              <div class="mixed-field-group">
+                <label class="mixed-field-label">نقداً</label>
+                <div class="mixed-field-input-wrap">
+                  <span class="sar mixed-field-sar">&#xE900;</span>
+                  <input type="text" inputmode="decimal" id="mixedCashAmount"
+                         class="form-input mixed-field-input" placeholder="0.00" dir="ltr"
+                         autocomplete="off" />
+                </div>
+              </div>
+              <span class="mixed-field-plus">+</span>
+              <div class="mixed-field-group">
+                <label class="mixed-field-label">شبكة (تلقائي)</label>
+                <div class="mixed-field-input-wrap mixed-field-card-wrap">
+                  <span class="sar mixed-field-sar mixed-field-sar-card">&#xE900;</span>
+                  <input type="text" id="mixedCardAmount" readonly
+                         class="form-input mixed-field-input mixed-field-input-auto" placeholder="0.00" dir="ltr" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="btnConfirmPayment" class="btn-primary btn-large">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span>تأكيد الدفعة</span>
+          </button>
+        </div>
+
+        <!-- Fully Paid Message -->
+        <div class="card fully-paid-message" id="fullyPaidMessage" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <h3>تم سداد الفاتورة بالكامل</h3>
+          <p>هذه الفاتورة مدفوعة بالكامل ولا يوجد مبلغ متبقي</p>
+        </div>
+
+        <!-- Payment History -->
+        <div class="card payment-history">
+          <h2 class="card-title">سجل الدفعات</h2>
+          
+          <div id="emptyHistory" class="empty-history" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p>لا توجد دفعات مسجلة على هذه الفاتورة</p>
+          </div>
+
+          <div class="table-container" id="historyTable" style="display:none">
+            <table class="payments-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>المبلغ</th>
+                  <th>طريقة الدفع</th>
+                  <th>المستخدم</th>
+                  <th>ملاحظات</th>
+                </tr>
+              </thead>
+              <tbody id="paymentsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="payment.js"></script>
+</body>
+</html>

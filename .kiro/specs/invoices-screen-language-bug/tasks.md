@@ -1,0 +1,117 @@
+# Implementation Plan
+
+- [ ] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Invoices Screen English Translation Missing
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For this deterministic bug, scope the property to concrete failing cases: language='en' AND screen='invoices'
+  - Test implementation details from Bug Condition in design:
+    - Set localStorage 'app_lang' to 'en'
+    - Navigate to invoices screen (`screens/invoices/invoices.html`)
+    - Call `I18N.apply('en')`
+    - Verify that English translation keys are missing from `_translations.en` object
+    - Check specific elements that should translate but don't:
+      - Page title (data-i18n="page-title-invoices")
+      - Table headers (data-i18n="invoices-col-invoice-num", "invoices-col-date", etc.)
+      - Search placeholder (data-i18n="invoices-search-placeholder")
+      - Invoice modal labels (data-i18n="invoices-modal-*")
+  - The test assertions should match the Expected Behavior Properties from design:
+    - ASSERT page title displays "الفواتير - نظام المغسلة" (Arabic) instead of English
+    - ASSERT table headers display Arabic text instead of English
+    - ASSERT search placeholder displays Arabic text instead of English
+    - ASSERT invoice modal labels display Arabic text instead of English
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+  - Document counterexamples found:
+    - Example 1: Page title shows "الفواتير - نظام المغسلة" instead of "Invoices - Laundry System"
+    - Example 2: Table headers show "رقم الفاتورة", "التاريخ", "العميل" instead of "Invoice #", "Date", "Customer"
+    - Example 3: Search placeholder shows Arabic text instead of "Search by invoice number, customer name or phone..."
+    - Example 4: Invoice modal labels show Arabic text instead of English
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3_
+
+- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Non-English Language Behavior
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs (language != 'en' OR screen != 'invoices'):
+    - Test Case 1: Set language to Arabic → navigate to invoices screen → observe all text displays in Arabic
+    - Test Case 2: Set language to English → navigate to customers screen → observe translations work correctly
+    - Test Case 3: Set language to English → navigate to expenses screen → observe translations work correctly
+    - Test Case 4: Set language to Arabic → navigate to multiple screens → observe translations work correctly
+    - Test Case 5: Print invoice in Arabic → observe printing works correctly
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements:
+    - Property: For all screens WHERE language='ar' OR screen!='invoices', translations SHALL work exactly as before
+    - Property: For all screens WHERE screen!='invoices', English translations SHALL continue to work
+    - Property: Invoice printing functionality SHALL work correctly in both languages
+    - Property: Language switching SHALL work correctly across all screens
+  - Property-based testing generates many test cases for stronger guarantees:
+    - Generate random language switches between 'ar' and 'en'
+    - Generate random navigation sequences across different screens
+    - Verify translations always work correctly for non-buggy cases
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 3. Fix for invoices screen language display bug
+
+  - [x] 3.1 Add English translation keys to assets/i18n.js
+    - Open file `assets/i18n.js`
+    - Locate the `_translations.en` object (around line 666)
+    - Add the following English translation keys in the same order as they appear in `_translations.ar`:
+      - Page title: `'page-title-invoices': 'Invoices - Laundry System'`
+      - Header: `'invoices-header-title': 'Invoices'`, `'invoices-back': 'Back'`
+      - Search: `'invoices-search-placeholder': 'Search by invoice number, customer name or phone...'`
+      - Table: `'invoices-table-scroll-hint': '← Scroll table left and right to view all columns →'`
+      - Table columns: `'invoices-col-invoice-num': 'Invoice #'`, `'invoices-col-date': 'Date'`, `'invoices-col-customer': 'Customer'`, `'invoices-col-payment': 'Payment Method'`, `'invoices-col-total': 'Total'`, `'invoices-col-actions': 'Actions'`
+      - States: `'invoices-loading': 'Loading...'`, `'invoices-empty': 'No invoices found'`, `'invoices-btn-view': 'View'`
+      - Pagination: `'invoices-pagination-info': 'Showing {start}–{end} of {total} invoices'`, `'invoices-pagination-show': 'Show'`, `'invoices-pagination-per-page': 'per page'`, `'invoices-pagination-first': 'First page'`, `'invoices-pagination-prev': 'Previous'`, `'invoices-pagination-next': 'Next'`, `'invoices-pagination-last': 'Last page'`
+      - Modal: `'invoices-modal-close': 'Close'`, `'invoices-modal-print': 'Print'`, `'invoices-modal-simplified-tax-invoice': 'Simplified Tax Invoice'`, `'invoices-modal-invoice-num': 'Invoice Number'`, `'invoices-modal-date': 'Date'`, `'invoices-modal-payment': 'Payment Method'`, `'invoices-modal-paid-at': 'Payment Date'`, `'invoices-modal-cleaned-at': 'Cleaning Date'`, `'invoices-modal-delivered-at': 'Delivery Date'`, `'invoices-modal-cr': 'Commercial Register'`, `'invoices-modal-cashier': 'Cashier'`, `'invoices-modal-customer-name': 'Name'`, `'invoices-modal-customer-phone': 'Mobile'`, `'invoices-modal-balance': 'Remaining Balance'`, `'invoices-modal-item-type': 'Type'`, `'invoices-modal-item-qty': 'Qty'`, `'invoices-modal-item-total': 'Total'`, `'invoices-modal-item-service': 'Service'`, `'invoices-modal-subtotal': 'Subtotal (before tax)'`, `'invoices-modal-discount': 'Discount'`, `'invoices-modal-vat': 'VAT'`, `'invoices-modal-grand-total': 'Total (including tax)'`, `'invoices-modal-terms': 'Terms and Conditions:'`
+      - Errors: `'invoices-err-load': 'Error loading invoices'`, `'invoices-err-load-invoice': 'Could not load invoice data'`, `'invoices-err-generic': 'An error occurred while loading the invoice'`
+    - Ensure all keys match exactly with the data-i18n attributes used in `screens/invoices/invoices.html`
+    - Verify the structure and formatting matches the existing `_translations.ar` object
+    - _Bug_Condition: isBugCondition(input) where input.language='en' AND input.screen='invoices' AND NOT existsEnglishTranslations('page-title-invoices')_
+    - _Expected_Behavior: For all inputs where language='en' AND screen='invoices', I18N.apply('en') SHALL display all text elements in English_
+    - _Preservation: All Arabic translations and other screen translations SHALL remain unchanged_
+    - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 3.5_
+
+  - [x] 3.2 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Invoices Screen English Translation Working
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1:
+      - Set localStorage 'app_lang' to 'en'
+      - Navigate to invoices screen
+      - Call `I18N.apply('en')`
+      - Verify English translation keys are now found in `_translations.en`
+      - Check that all elements now display in English:
+        - Page title shows "Invoices - Laundry System"
+        - Table headers show "Invoice #", "Date", "Customer", "Payment Method", "Total", "Actions"
+        - Search placeholder shows "Search by invoice number, customer name or phone..."
+        - Invoice modal labels show English text
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - _Requirements: 2.1, 2.2, 2.3_
+
+  - [x] 3.3 Verify preservation tests still pass
+    - **Property 2: Preservation** - Non-English Language Behavior Unchanged
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2:
+      - Test Arabic language display on invoices screen (should still work)
+      - Test English translations on other screens (should still work)
+      - Test language switching across all screens (should still work)
+      - Test invoice printing in both languages (should still work)
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix (no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Run all bug condition tests and verify they pass
+  - Run all preservation tests and verify they pass
+  - Manually test the invoices screen with English language selected
+  - Manually test the invoices screen with Arabic language selected
+  - Manually test other screens with both languages
+  - Verify no regressions in existing functionality
+  - Ask the user if questions arise

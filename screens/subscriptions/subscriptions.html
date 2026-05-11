@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-subscriptions">الاشتراكات المسبقة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <style id="subs-inline-css">
+@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'SaudiRiyal';src:url('../../assets/fonts/saudi-riyal.woff') format('woff');font-weight:400}
+/* فرض الأرقام اللاتينية: خط النظام للأرقام 0-9 يُحمَّل قبل Cairo */
+@font-face{font-family:'CairoNum';src:local('Segoe UI'),local('Arial'),local('Helvetica Neue'),local('Tahoma');unicode-range:U+0030-0039,U+002F,U+002D,U+002E}
+@font-face{font-family:'CairoNum';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700;unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:'CairoNum';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400;unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
+.sar{font-family:'SaudiRiyal','Segoe UI',sans-serif;font-size:1.08em;display:inline-block;vertical-align:middle;line-height:1}
+/* LTR حتى يظهر رمز الريال يسار الرقم وليس بعده بسبب dir=rtl */
+.amt-sar{display:inline-flex;align-items:center;gap:4px;flex-direction:row;direction:ltr;unicode-bidi:embed}
+html{height:100%;overflow-x:hidden}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'CairoNum','Cairo',sans-serif;font-weight:700}
+body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;overflow:hidden;background:#f8fafc;color:#1e293b;user-select:none;-webkit-app-region:no-drag;direction:rtl}
+.page-wrapper{display:flex;flex-direction:column;height:100%;max-height:100dvh;min-height:0}
+.header-bar{min-height:52px;background:#ffffff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:max(8px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) 8px max(12px,env(safe-area-inset-left,0));flex-shrink:0;-webkit-app-region:drag;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.header-right,.header-left{display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag}
+.back-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(90deg,#14b8a6,#0d9488);border:none;color:#fff;font-size:14px;font-weight:700;padding:8px 18px;border-radius:50px;cursor:pointer;box-shadow:0 2px 8px rgba(13,148,136,.25)}
+.back-btn:hover{opacity:.95}
+.main-content{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto;padding:max(12px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) max(20px,env(safe-area-inset-bottom,0)) max(12px,env(safe-area-inset-left,0));display:flex;flex-direction:column;gap:12px}
+.tabs{display:flex;gap:6px;border-bottom:2px solid #e2e8f0;padding-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+.tab-btn{padding:10px 16px;border:none;background:transparent;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;border-radius:8px 8px 0 0;flex-shrink:0;white-space:nowrap;touch-action:manipulation}
+.tab-btn.active{background:linear-gradient(180deg,rgba(13,148,136,.12),transparent);color:#0d9488;border-bottom:3px solid #0d9488;margin-bottom:-2px}
+.panel{display:none;flex-direction:column;gap:16px}
+.panel.active{display:flex}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between}
+.search-wrap{display:flex;align-items:center;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:0 12px;flex:1;min-width:200px;max-width:360px}
+.search-input{flex:1;border:none;outline:none;padding:10px 0;font-size:14px;background:transparent}
+.btn-primary{display:flex;align-items:center;gap:8px;padding:10px 20px;border:none;border-radius:50px;background:linear-gradient(90deg,#14b8a6,#0d9488);color:#fff;font-size:14px;cursor:pointer;box-shadow:0 2px 8px rgba(13,148,136,.3)}
+.btn-secondary{padding:10px 16px;border:1.5px solid #e2e8f0;border-radius:50px;background:#fff;color:#475569;font-size:13px;cursor:pointer}
+.btn-export{padding:8px 14px;border-radius:8px;border:none;font-size:12px;cursor:pointer;font-weight:700}
+.btn-excel{background:linear-gradient(90deg,#10b981,#059669);color:#fff}
+.btn-pdf{background:linear-gradient(90deg,#ef4444,#dc2626);color:#fff}
+.pagination-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 4px;flex-wrap:wrap}
+.pagination-info{font-size:13px;color:#64748b;font-weight:700;white-space:nowrap}
+.pagination-controls{display:flex;align-items:center;gap:4px}
+.page-btn{width:34px;height:34px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;font-weight:700}
+.page-btn:hover:not(:disabled){border-color:#0d9488;color:#0d9488;background:rgba(13,148,136,.06)}
+.page-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-numbers{display:flex;align-items:center;gap:4px}
+.page-num{min-width:34px;height:34px;padding:0 4px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#475569;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.page-num:hover{border-color:#0d9488;color:#0d9488;background:rgba(13,148,136,.06)}
+.page-num.active{background:linear-gradient(90deg,#14b8a6,#0d9488);border-color:transparent;color:#fff;box-shadow:0 2px 8px rgba(13,148,136,.25)}
+.page-ellipsis{padding:0 4px;color:#94a3b8;font-size:14px;display:flex;align-items:center;height:34px}
+.page-size-selector{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#64748b;white-space:nowrap}
+.page-size-selector select{background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;color:#1e293b;outline:none;cursor:pointer;font-family:inherit}
+.page-size-selector select:focus{border-color:#0d9488}
+.table-container{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;min-width:0;max-width:100%}
+.table-container::-webkit-scrollbar{height:10px;width:10px}
+.table-container::-webkit-scrollbar-track{background:#f1f5f9;border-radius:8px}
+.table-container::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+.table-container::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+.data-table{width:100%;border-collapse:collapse;min-width:1180px}
+.data-table thead tr{background:linear-gradient(90deg,rgba(13,148,136,.08),rgba(20,184,166,.08));border-bottom:2px solid #e2e8f0}
+.data-table th{padding:12px 14px;text-align:right;font-size:12px;color:#0d9488;white-space:nowrap}
+.data-table td{padding:12px 14px;font-size:13px;color:#475569;border-bottom:1px solid #f1f5f9}
+.data-table--subs th,.data-table--subs td{text-align:center;vertical-align:middle}
+.data-table--subs .cell-ltr{direction:ltr;unicode-bidi:embed;text-align:center}
+.data-table--subs th:last-child,.data-table--subs td:last-child{min-width:210px}
+.data-table tbody tr:hover{background:rgba(13,148,136,.04)}
+.loading-cell{text-align:center!important;padding:36px!important;color:#94a3b8}
+.spinner{width:22px;height:22px;border:2px solid #e2e8f0;border-top-color:#0d9488;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-left:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:48px;color:#94a3b8}
+.sub-ref{font-size:12px;color:#0d9488;font-weight:700}
+.actions-cell{display:flex;gap:6px;flex-wrap:wrap}
+.action-btn{width:32px;height:32px;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.action-btn svg{width:15px;height:15px}
+.btn-edit{background:rgba(13,148,136,.12);color:#0d9488}
+.btn-print{background:rgba(59,130,246,.12);color:#2563eb}
+.btn-pdf-row{background:rgba(239,68,68,.1);color:#dc2626}
+.btn-del{background:rgba(239,68,68,.14);color:#b91c1c}
+.actions-cell.subs-actions{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 6px!important}
+.subs-action-row{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%}
+.action-btn-label{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 14px;min-height:36px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap;border:1px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.06);transition:box-shadow .15s,transform .08s,opacity .15s,background .15s}
+.subs-actions .action-btn-label{gap:4px;padding:4px 9px;min-height:26px;border-radius:7px;font-size:11px;font-weight:700;box-shadow:0 1px 1px rgba(0,0,0,.05)}
+.subs-actions .action-btn-label:hover:not(:disabled){box-shadow:0 2px 5px rgba(0,0,0,.08);transform:translateY(-1px)}
+.subs-actions .action-btn-label svg{width:11px;height:11px}
+.action-btn-label:hover:not(:disabled){box-shadow:0 2px 8px rgba(0,0,0,.1);transform:translateY(-1px)}
+.action-btn-label:active:not(:disabled){transform:translateY(0)}
+.action-btn-label:disabled{opacity:.42;cursor:not-allowed;box-shadow:none;transform:none}
+.action-btn-label svg{width:15px;height:15px;flex-shrink:0}
+.action-btn-label--teal{background:rgba(13,148,136,.12);color:#0d9488;border-color:rgba(13,148,136,.25)}
+.action-btn-label--teal:hover:not(:disabled){background:rgba(13,148,136,.2)}
+.action-btn-label--blue{background:rgba(59,130,246,.1);color:#2563eb;border-color:rgba(59,130,246,.28)}
+.action-btn-label--blue:hover:not(:disabled){background:rgba(59,130,246,.18)}
+.action-btn-label--red-soft{background:rgba(239,68,68,.1);color:#dc2626;border-color:rgba(239,68,68,.22)}
+.action-btn-label--red-soft:hover:not(:disabled){background:rgba(239,68,68,.16)}
+.action-btn-label--red-del{background:rgba(239,68,68,.12);color:#b91c1c;border-color:rgba(239,68,68,.28)}
+.action-btn-label--red-del:hover:not(:disabled){background:rgba(239,68,68,.2)}
+.action-btn-label--amber{background:rgba(245,158,11,.12);color:#b45309;border-color:rgba(245,158,11,.3)}
+.action-btn-label--amber:hover:not(:disabled){background:rgba(245,158,11,.2)}
+.action-btn-label--violet{background:rgba(139,92,246,.1);color:#6d28d9;border-color:rgba(139,92,246,.28)}
+.action-btn-label--violet:hover:not(:disabled){background:rgba(139,92,246,.18)}
+.action-btn-label--green{background:rgba(22,163,74,.12);color:#15803d;border-color:rgba(22,163,74,.28)}
+.action-btn-label--green:hover:not(:disabled){background:rgba(22,163,74,.2)}
+.badge{display:inline-flex;padding:2px 10px;border-radius:20px;font-size:11px}
+.badge-act{background:rgba(34,197,94,.12);color:#16a34a}
+.badge-exp{background:rgba(239,68,68,.1);color:#dc2626}
+.badge-closed{background:rgba(100,116,139,.12);color:#64748b}
+.badge-none{background:rgba(148,163,184,.15);color:#64748b}
+.filter-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filter-row label{font-size:12px;color:#64748b}
+.filter-row select{padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff}
+.filter-field{display:flex;align-items:center;gap:6px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:5px 10px;min-width:0;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+.filter-field:hover{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.12)}
+.filter-label{font-size:12px;color:#64748b;font-weight:700;white-space:nowrap;flex-shrink:0}
+.filter-input{border:none;background:transparent;outline:none;color:#1e293b;font-size:13px;font-family:'CairoNum','Cairo',sans-serif;font-weight:700;padding:2px;cursor:pointer;min-width:180px;max-width:100%}
+.filter-input::-webkit-calendar-picker-indicator{cursor:pointer}
+.modal-overlay{position:fixed;inset:0;padding:max(12px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) max(12px,env(safe-area-inset-bottom,0)) max(12px,env(safe-area-inset-left,0));background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.modal-box{background:#fff;border-radius:16px;width:520px;max-width:100%;max-height:min(90dvh,90vh);overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto}
+.modal-wide{width:820px}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #e2e8f0;background:linear-gradient(90deg,rgba(13,148,136,.06),transparent)}
+.modal-title{font-size:16px;color:#1e293b}
+.modal-close{background:none;border:none;font-size:18px;color:#64748b;cursor:pointer}
+.modal-body{padding:18px 20px}
+.modal-footer{padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-start;flex-direction:row-reverse}
+.field-group{margin-bottom:16px}
+.field-label{display:block;font-size:12px;color:#0d9488;margin-bottom:6px}
+.field-input,.field-select{width:100%;padding:10px 0;border:none;border-bottom:2px solid #e2e8f0;outline:none;font-size:14px;background:transparent}
+input[type="date"],input[type="number"]{font-family:'Segoe UI',Arial,Tahoma,sans-serif!important;direction:ltr;text-align:right;font-variant-numeric:tabular-nums;-webkit-font-feature-settings:'tnum';font-feature-settings:'tnum'}
+input[type="date"]::-webkit-datetime-edit{font-family:'Segoe UI',Arial,Tahoma,sans-serif!important;direction:ltr;unicode-bidi:bidi-override}
+input[type="date"]::-webkit-datetime-edit-fields-wrapper{direction:ltr}
+input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-datetime-edit-month-field,input[type="date"]::-webkit-datetime-edit-year-field{font-family:'Segoe UI',Arial,Tahoma,sans-serif!important}
+.field-textarea{width:100%;min-height:72px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;resize:vertical}.error-msg{background:#fef2f2;color:#b91c1c;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+.toast-container{position:fixed;top:max(12px,env(safe-area-inset-top,0));left:max(12px,env(safe-area-inset-left,0));right:max(12px,env(safe-area-inset-right,0));z-index:9999;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:100%;box-sizing:border-box}
+.toast{padding:12px 16px;border-radius:10px;font-size:13px;animation:toastIn .3s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(-20px)}}
+.toast-success{background:#ecfdf5;border:1px solid #6ee7b7;color:#047857}
+.toast-error{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.modal-confirm{z-index:120}
+.modal-confirm-box{width:440px;max-width:95vw}
+.confirm-modal-row{display:flex;gap:14px;align-items:flex-start}
+.confirm-icon-wrap{flex-shrink:0;width:48px;height:48px;border-radius:50%;background:rgba(239,68,68,.12);display:flex;align-items:center;justify-content:center;color:#dc2626}
+.confirm-modal-text{flex:1;font-size:14px;color:#475569;line-height:1.65;margin:0;padding-top:4px}
+.package-dd{position:relative;width:100%}
+.package-dd-trigger{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border:none;border-bottom:2px solid #e2e8f0;background:transparent;font-size:14px;font-weight:700;font-family:inherit;color:#1e293b;cursor:pointer;text-align:right}
+.package-dd-trigger:focus{outline:2px solid rgba(13,148,136,.35);outline-offset:2px}
+.package-dd-label{flex:1;min-width:0;text-align:right;line-height:1.4;word-break:break-word}
+.package-dd-label.is-placeholder{color:#94a3b8}
+.package-dd-caret{flex-shrink:0;font-size:10px;color:#64748b;opacity:.85}
+.package-dd-list{position:absolute;left:0;right:0;top:100%;z-index:200;margin:4px 0 0;padding:4px 0;list-style:none;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.12);max-height:240px;overflow-y:auto}
+.package-dd-list li{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f1f5f9;text-align:right;line-height:1.45}
+.package-dd-list li:last-child{border-bottom:none}
+.package-dd-list li:hover,.package-dd-list li.is-active{background:rgba(13,148,136,.08)}
+.package-dd-amounts{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;direction:rtl;justify-content:flex-end}
+.customer-search-dd{position:relative;width:100%;z-index:5}
+.customer-search-input{width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;outline:none;font-size:14px;font-weight:700;background:#fff;color:#1e293b;transition:border-color .2s,box-shadow .2s}
+.customer-search-input:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.15)}
+.customer-search-input::placeholder{color:#94a3b8;font-weight:600}
+.customer-search-list{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:210;margin:0;padding:6px 0;list-style:none;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 40px rgba(15,23,42,.12);max-height:min(320px,55dvh);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.customer-search-toolbar{display:block;margin:0 6px 2px;padding:0 0 4px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:4;background:#fff}
+.customer-search-count{padding:4px 12px 6px;font-size:11px;font-weight:600;color:#64748b;text-align:start}
+.customer-search-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(92px,.9fr) minmax(72px,auto);align-items:center;column-gap:10px;row-gap:2px;padding:8px 12px;text-align:start}
+.customer-search-grid--head{background:linear-gradient(180deg,#f8fafc,#f1f5f9);border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;margin:0 2px}
+.customer-search-hcell{font-size:11px;font-weight:800;color:#475569;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.customer-search-hcell--phone{text-align:center}
+.customer-search-hcell--sub{text-align:end}
+.customer-search-item{display:block;padding:0;margin:0 6px 3px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:background .12s,border-color .12s}
+.customer-search-item:last-child{margin-bottom:0}
+.customer-search-item:hover,.customer-search-item.is-active{background:linear-gradient(90deg,rgba(13,148,136,.1),rgba(20,184,166,.06));border-color:rgba(13,148,136,.2)}
+.customer-search-item-inner{padding:9px 10px}
+.customer-search-phone{font-size:13px;font-weight:700;color:#0f172a;direction:ltr;unicode-bidi:embed;letter-spacing:.02em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.customer-search-name{font-size:13px;font-weight:600;color:#1e293b;line-height:1.35;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.customer-search-ref{font-size:11px;font-weight:700;color:#0d9488;background:rgba(13,148,136,.12);padding:4px 9px;border-radius:999px;justify-self:end;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.customer-search-empty{padding:14px 16px;text-align:center;font-size:13px;color:#94a3b8;font-weight:600}
+.customer-search-hint{padding:8px 14px 4px;font-size:11px;color:#94a3b8;font-weight:600;text-align:right}
+.btn-danger-grad{background:linear-gradient(90deg,#ef4444,#dc2626)!important;color:#fff!important;box-shadow:0 2px 8px rgba(220,38,38,.28)}
+.btn-danger-grad:hover{opacity:.96;cursor:pointer}
+.modal-detail{display:flex;flex-direction:column;max-height:min(90dvh,90vh);overflow:hidden}
+.modal-detail .modal-header{flex-shrink:0}
+.modal-detail .modal-detail-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.modal-detail .modal-footer{flex-shrink:0}
+.modal-detail .modal-close{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;touch-action:manipulation}
+.modal-detail .modal-close:active{background:rgba(15,23,42,.06)}
+.modal-detail .modal-detail-footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex-wrap:unset!important;justify-content:stretch}
+.modal-detail .modal-detail-footer .btn-primary,.modal-detail .modal-detail-footer .btn-export,.modal-detail .modal-detail-footer .btn-secondary{min-height:44px;touch-action:manipulation;justify-content:center}
+/* ── تابات داخل modal التفاصيل ── */
+.detail-modal-tabs{display:flex;flex-shrink:0;border-bottom:2px solid #e2e8f0;background:#fff;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.detail-modal-tabs::-webkit-scrollbar{display:none}
+.detail-modal-tab{flex:1;padding:11px 16px;border:none;background:transparent;color:#64748b;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-2px;touch-action:manipulation;transition:color .15s,border-color .15s}
+.detail-modal-tab.active{color:#0d9488;border-bottom-color:#0d9488;background:linear-gradient(180deg,rgba(13,148,136,.07),transparent)}
+/* pagination داخل modal الفواتير */
+.detail-inv-pag{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0 4px;flex-wrap:wrap}
+.detail-inv-pag-info{font-size:12px;color:#64748b;font-weight:700}
+.detail-inv-pag-controls{display:flex;align-items:center;gap:4px}
+/* ── بطاقات الفواتير في الجوال ── */
+.detail-inv-mobile{display:none}
+.inv-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.inv-card-row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.inv-card-num{font-size:13px;font-weight:800;color:#0d9488}
+.inv-card-date{font-size:12px;color:#64748b}
+.inv-card-row2{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.inv-card-field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.inv-card-label{font-size:10px;font-weight:800;color:#94a3b8;white-space:nowrap}
+.inv-card-val{font-size:12px;font-weight:700;color:#1e293b}
+.inv-card-pay{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(13,148,136,.1);color:#0d9488}
+/* ── بطاقات الفترات والحركات ── */
+.detail-desktop-only{display:block}
+.detail-mobile-only{display:none}
+.detail-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.detail-card-row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+.detail-card-pkg{font-size:13px;font-weight:800;color:#1e293b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-card-type{font-size:13px;font-weight:800;color:#1e293b}
+.detail-card-date{font-size:11px;color:#64748b;white-space:nowrap}
+.detail-card-dates{font-size:11px;color:#64748b;margin-bottom:6px}
+.detail-card-row2{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.detail-card-field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.detail-card-label{font-size:10px;font-weight:800;color:#94a3b8;white-space:nowrap}
+.detail-card-val{font-size:12px;font-weight:700;color:#1e293b}
+.detail-card-notes{font-size:11px;color:#64748b;margin-top:5px;padding-top:5px;border-top:1px solid #f1f5f9}
+.detail-card-empty{text-align:center;padding:18px;color:#94a3b8;font-size:13px}.detail-body-inner{display:flex;flex-direction:column;gap:18px;padding-bottom:4px}
+.detail-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.detail-field{background:linear-gradient(180deg,#fff,#f8fafc);border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.detail-field-label{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.02em}
+.detail-field-value{font-size:14px;color:#0f172a;line-height:1.45;word-break:break-word;font-variant-numeric:tabular-nums}
+.detail-field--phone .detail-field-value{direction:ltr;unicode-bidi:embed;text-align:right}
+.detail-section{display:flex;flex-direction:column;gap:8px;min-width:0}
+.detail-section-title{font-size:13px;font-weight:800;color:#0d9488;margin:0;padding-bottom:2px;border-bottom:2px solid rgba(13,148,136,.2);letter-spacing:.02em}
+.detail-table-scroll{margin:0 -4px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;max-width:calc(100% + 8px);align-self:stretch}
+.detail-table-scroll::-webkit-scrollbar{height:8px}
+.detail-table-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+.sub-table{width:100%;font-size:12px;border-collapse:collapse;margin:0;min-width:0}
+.sub-table.detail-periods{min-width:640px}
+.sub-table.detail-ledger{min-width:520px}
+.sub-table.detail-invoices{min-width:560px}
+.sub-table th,.sub-table td{padding:9px 10px;border:1px solid #e2e8f0;text-align:right;vertical-align:middle}
+.sub-table th{background:linear-gradient(180deg,#f8fafc,#f1f5f9);color:#475569;font-size:11px;font-weight:800;white-space:nowrap;position:sticky;top:0;z-index:2;box-shadow:0 1px 0 #e2e8f0}
+.sub-table td{font-size:12px;color:#334155}
+.sub-table tbody tr:nth-child(even){background:rgba(248,250,252,.65)}
+.sub-table tbody tr:hover{background:rgba(13,148,136,.06)}
+.detail-td-val{display:block;text-align:inherit;min-width:0;word-break:break-word}
+.sub-table.detail-resp .sub-table-empty td{text-align:center!important;color:#94a3b8;font-weight:700}
+.subs-form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+/* ── Detail Tabs (mobile only) ── */
+.detail-tabs-nav{display:none}
+@media(max-width:639px){
+.main-content{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto;padding-bottom:max(24px,env(safe-area-inset-bottom,0))}
+.table-container{
+  flex:0 0 auto;
+  min-width:0;
+  min-height:clamp(220px,45dvh,420px);
+  max-height:none;
+  overflow-x:auto;
+  overflow-y:visible;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+  touch-action:pan-x;
+  scrollbar-width:thin;
+  scrollbar-color:#cbd5e1 #f1f5f9;
+}
+.header-bar .header-right .text-lg{font-size:15px!important;max-width:min(200px,55vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toolbar{flex-direction:column;align-items:stretch}
+.toolbar .search-wrap{max-width:none;width:100%}
+.filter-row{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center}
+.filter-row label{white-space:nowrap;font-size:11px;margin:0}
+.filter-row select,.filter-row input[type="date"],.filter-row input[type="datetime-local"]{width:100%;min-width:0;padding:7px 8px;font-size:12px}
+.filter-field{grid-column:1/-1;min-width:0}
+.filter-input{min-width:0;width:100%}
+.modal-body,.modal-header,.modal-footer{padding-left:14px!important;padding-right:14px!important}
+.detail-summary-grid{grid-template-columns:1fr 1fr!important}
+#modalDetail.modal-overlay{align-items:flex-end;padding-left:0;padding-right:0;padding-bottom:0;overflow:hidden}
+#modalDetail .modal-detail.modal-box{width:100%;max-width:none;border-radius:16px 16px 0 0;margin:0;height:min(94dvh,calc(100dvh - env(safe-area-inset-top,0px)));max-height:min(94dvh,calc(100dvh - env(safe-area-inset-top,0px)));box-shadow:0 -12px 48px rgba(15,23,42,.18);display:flex;flex-direction:column;overflow:hidden}
+#modalDetail .modal-header{padding-top:max(14px,env(safe-area-inset-top,0px))!important;flex-shrink:0}
+#modalDetail .modal-detail-footer{padding-bottom:max(14px,env(safe-area-inset-bottom,0px))!important;flex-shrink:0}
+/* tabs nav bar */
+.detail-tabs-nav{display:flex;flex-shrink:0;border-bottom:2px solid #e2e8f0;background:#fff;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.detail-tabs-nav::-webkit-scrollbar{display:none}
+.detail-tab-btn{flex:1;min-width:0;padding:10px 8px;border:none;background:transparent;color:#64748b;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-2px;touch-action:manipulation;transition:color .15s,border-color .15s}
+.detail-tab-btn.active{color:#0d9488;border-bottom-color:#0d9488;background:linear-gradient(180deg,rgba(13,148,136,.07),transparent)}
+/* body wrapper: height set explicitly by JS, clips content */
+#modalDetail .modal-detail-body.has-tabs{overflow-y:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:0!important;flex:1 1 auto;min-height:0;scrollbar-width:thin;scrollbar-color:#cbd5e1 #f1f5f9}
+#modalDetail .modal-detail-body.has-tabs::-webkit-scrollbar{width:4px}
+#modalDetail .modal-detail-body.has-tabs::-webkit-scrollbar-track{background:#f1f5f9;border-radius:4px}
+#modalDetail .modal-detail-body.has-tabs::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+/* tab panels: simple show/hide, no positioning tricks */
+.detail-tab-panel{display:none}
+.detail-tab-panel.active{display:block;padding:14px;touch-action:pan-y}
+/* كل العناصر داخل الـ panel تسمح بالتمرير العمودي للأعلى */
+.detail-tab-panel *{touch-action:pan-y}
+/* الجداول الأفقية تسمح بالتمرير في الاتجاهين */
+.detail-tab-panel .detail-table-scroll{touch-action:pan-x pan-y}
+.detail-tab-panel .detail-table-scroll *{touch-action:pan-x pan-y}
+/* content inside panel */
+.detail-tab-panel-inner{display:flex;flex-direction:column;gap:12px}
+/* summary grid inside tab */
+.detail-tab-panel .detail-summary-grid{grid-template-columns:1fr 1fr!important;gap:8px}
+.detail-tab-panel .detail-field{padding:10px 12px}
+.detail-tab-panel .detail-section{gap:8px}
+/* table inside tab */
+.detail-tab-panel .detail-table-scroll{margin:0;max-width:100%;overflow-x:auto;overflow-y:visible}
+.sub-table.detail-resp thead{display:none}
+.sub-table.detail-resp,.sub-table.detail-resp tbody,.sub-table.detail-resp tr,.sub-table.detail-resp td{display:block;width:100%}
+.sub-table.detail-resp tbody tr{margin-bottom:10px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.sub-table.detail-resp tbody tr.sub-table-empty{box-shadow:none;border-style:dashed;background:transparent}
+.sub-table.detail-resp tbody tr.sub-table-empty td{border:none;padding:18px 12px}
+.sub-table.detail-resp tbody td{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:none;border-bottom:1px solid #f1f5f9;padding:11px 14px;font-size:13px;text-align:start!important}
+.sub-table.detail-resp tbody tr td:last-child{border-bottom:none}
+.sub-table.detail-resp tbody td::before{content:attr(data-label);flex-shrink:0;font-size:11px;font-weight:800;color:#64748b;max-width:42%;line-height:1.4}
+.sub-table.detail-resp tbody tr.sub-table-empty td::before{display:none!important}
+.sub-table.detail-resp tbody td .detail-td-val{flex:1;min-width:0;text-align:end;font-weight:700;color:#1e293b}
+.sub-table.detail-resp tbody td .amt-sar{justify-content:flex-end}
+.modal-footer{flex-wrap:wrap;justify-content:center}
+/* في الجوال: أخفِ الجدول وأظهر البطاقات */
+.detail-inv-desktop{display:none}
+.detail-inv-mobile{display:block!important}
+.detail-desktop-only{display:none!important}
+.detail-mobile-only{display:block!important}
+.subs-form-row-2{grid-template-columns:1fr!important}
+.pagination-bar{flex-direction:column;align-items:stretch;gap:12px}
+.pagination-info{white-space:normal;text-align:center}
+.pagination-controls{justify-content:center;flex-wrap:wrap}
+.page-size-selector{justify-content:center;flex-wrap:wrap;width:100%}
+}
+@media(max-width:480px){
+.page-wrapper .header-bar{min-height:44px;padding-top:max(6px,env(safe-area-inset-top,0));padding-bottom:6px;padding-left:max(8px,env(safe-area-inset-left,0));padding-right:max(8px,env(safe-area-inset-right,0));gap:6px}
+.back-btn{padding:6px 12px;font-size:12px;gap:5px;border-radius:40px}
+.back-btn svg{width:14px;height:14px}
+.header-bar .header-right .text-lg{font-size:13px!important;max-width:min(160px,48vw)!important}
+.main-content{padding:max(8px,env(safe-area-inset-top,0)) max(8px,env(safe-area-inset-right,0)) max(24px,env(safe-area-inset-bottom,0)) max(8px,env(safe-area-inset-left,0));gap:8px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto}
+.tabs{gap:4px}
+.tab-btn{padding:7px 10px;font-size:12px;border-radius:6px 6px 0 0}
+.panel{gap:10px}
+.search-wrap{padding:0 8px;border-radius:8px;border-width:1px}
+.search-input{padding:7px 0;font-size:13px}
+.filter-row{gap:5px 8px}
+.filter-row label{font-size:10px}
+.filter-row select,.filter-row input[type="date"],.filter-row input[type="datetime-local"]{padding:5px 6px;font-size:11px;border-radius:6px}
+#panelSubscriptions .toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:stretch}
+#panelSubscriptions .toolbar .search-wrap{grid-column:1/-1;width:100%;max-width:none;order:2}
+#panelSubscriptions .toolbar .filter-row{grid-column:1/-1;order:3}
+#panelSubscriptions .toolbar #btnNewSubscription{grid-column:1/-1;justify-content:center;padding:8px 14px;font-size:12px;min-height:0;order:0}
+#panelSubscriptions .toolbar #btnExportSubsExcel,#panelSubscriptions .toolbar #btnExportSubsPdf{display:inline-flex;align-items:center;justify-content:center;padding:7px 8px;font-size:11px;border-radius:7px;min-height:36px;order:1}
+#panelSubscriptions .toolbar #customerExportWrap{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;order:1}
+#panelSubscriptions .toolbar #customerExportWrap span{font-size:10px}
+#panelSubscriptions .toolbar #customerExportWrap .btn-export{padding:6px 10px;font-size:11px;min-height:34px}
+#panelPackages .toolbar .btn-primary{padding:8px 14px;font-size:12px;justify-content:center}
+.table-container{border-radius:10px;max-height:none}
+.data-table th,.data-table td{padding:8px 10px;font-size:12px}
+.data-table th{font-size:11px}
+.empty-state{padding:28px 16px;font-size:13px}
+.btn-primary{gap:6px}
+.btn-secondary{padding:8px 12px;font-size:12px;border-radius:40px}
+.btn-export{padding:6px 10px;font-size:11px}
+.pagination-bar{padding:8px 2px;gap:8px}
+.page-btn,.page-num{min-width:30px;height:30px;font-size:12px}
+.page-ellipsis{height:30px;font-size:12px}
+.page-size-selector{font-size:12px;gap:6px}
+.page-size-selector select{padding:5px 8px;font-size:12px}
+}
+  </style>
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body class="bg-[#f8fafc]" data-page-title="page-title-subscriptions">
+  <div class="page-wrapper">
+    <header class="header-bar" dir="ltr" style="-webkit-app-region:drag">
+      <div class="header-left" style="-webkit-app-region:no-drag">
+        <button type="button" id="btnBack" class="back-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          <span data-i18n="subscriptions-back">العودة</span>
+        </button>
+      </div>
+      <div class="header-right" style="-webkit-app-region:no-drag">
+        <span class="text-lg font-bold text-[#1e293b]" data-i18n="subscriptions-header-title">الاشتراكات المسبقة</span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="tabs">
+        <button type="button" class="tab-btn active" id="tabSubscriptions" data-i18n="subscriptions-tab-list">اشتراكات العملاء</button>
+        <button type="button" class="tab-btn" id="tabPackages" data-i18n="subscriptions-tab-packages">الباقات</button>
+      </div>
+
+      <div id="panelPackages" class="panel">
+        <div class="toolbar">
+          <button type="button" id="btnAddPackage" class="btn-primary">
+            <span data-i18n="subscriptions-btn-add-package">إضافة باقة</span>
+          </button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="subscriptions-packages-col-name">اسم الباقة</th>
+                <th data-i18n="subscriptions-packages-col-prepaid">السعر المدفوع</th>
+                <th data-i18n="subscriptions-packages-col-credit">رصيد الخدمات</th>
+                <th data-i18n="subscriptions-packages-col-status">الحالة</th>
+                <th data-i18n="subscriptions-packages-col-actions">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="packagesTableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyPackages" class="empty-state" style="display:none" data-i18n="subscriptions-empty-packages">لا توجد باقات</div>
+      </div>
+
+      <div id="panelSubscriptions" class="panel active">
+        <div class="toolbar">
+          <div class="search-wrap">
+            <input type="search" id="searchSubscriptions" class="search-input" data-i18n-placeholder="subscriptions-search-placeholder" placeholder="" />
+          </div>
+          <div class="filter-row">
+            <label data-i18n="subscriptions-filter-status">الحالة</label>
+            <select id="filterStatus">
+              <option value="all" data-i18n="subscriptions-status-all">الكل</option>
+              <option value="active" data-i18n="subscriptions-status-active">نشط</option>
+              <option value="expired" data-i18n="subscriptions-status-expired">منتهي</option>
+              <option value="closed" data-i18n="subscriptions-status-closed">مغلق</option>
+              <option value="none" data-i18n="subscriptions-status-none">بدون فترة</option>
+            </select>
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="subscriptions-date-from">من</span>
+              <input type="datetime-local" id="filterDateFrom" class="filter-input" step="1" />
+            </label>
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="subscriptions-date-to">إلى</span>
+              <input type="datetime-local" id="filterDateTo" class="filter-input" step="1" />
+            </label>
+          </div>
+          <button type="button" id="btnNewSubscription" class="btn-primary" data-i18n="subscriptions-btn-new">اشتراك جديد</button>
+          <button type="button" id="btnExportSubsExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
+          <button type="button" id="btnExportSubsPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
+          <span id="customerExportWrap" style="display:none;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#64748b" data-i18n="subscriptions-btn-export-customer">تقرير العميل</span>
+            <button type="button" id="btnExportCustomerExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
+            <button type="button" id="btnExportCustomerPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
+          </span>
+        </div>
+        <div class="table-container">
+          <table class="data-table data-table--subs">
+            <thead>
+              <tr>
+                <th data-i18n="subscriptions-col-ref">رقم الاشتراك</th>
+                <th data-i18n="subscriptions-col-customer">العميل</th>
+                <th data-i18n="subscriptions-col-phone">الجوال</th>
+                <th data-i18n="subscriptions-col-package">الباقة</th>
+                <th data-i18n="subscriptions-col-period">الفترة</th>
+                <th data-i18n="subscriptions-col-balance">الرصيد</th>
+                <th data-i18n="subscriptions-col-status">الحالة</th>
+                <th data-i18n="subscriptions-col-actions">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="subscriptionsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptySubscriptions" class="empty-state" style="display:none" data-i18n="subscriptions-empty">لا توجد بيانات</div>
+        <div id="subscriptionsPaginationBar" class="pagination-bar" style="display:none" aria-label="pagination">
+          <div class="pagination-info"><span id="subscriptionsPaginationInfo"></span></div>
+          <div class="pagination-controls">
+            <button type="button" id="subsBtnFirstPage" class="page-btn" data-i18n-title="subscriptions-pagination-first">«</button>
+            <button type="button" id="subsBtnPrevPage" class="page-btn" data-i18n-title="subscriptions-pagination-prev">‹</button>
+            <div id="subscriptionsPageNumbers" class="page-numbers"></div>
+            <button type="button" id="subsBtnNextPage" class="page-btn" data-i18n-title="subscriptions-pagination-next">›</button>
+            <button type="button" id="subsBtnLastPage" class="page-btn" data-i18n-title="subscriptions-pagination-last">»</button>
+          </div>
+          <div class="page-size-selector">
+            <span data-i18n="subscriptions-pagination-show">عرض</span>
+            <select id="subscriptionsPageSizeSelect" aria-label="page size">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
+            <span data-i18n="subscriptions-pagination-per-page">في الصفحة</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <div id="modalPackage" class="modal-overlay">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h2 id="modalPackageTitle" class="modal-title" data-i18n="subscriptions-modal-package-add">إضافة باقة</h2>
+        <button type="button" class="modal-close" id="btnClosePackage">✕</button>
+      </div>
+      <div id="errPackage" class="error-msg"></div>
+      <div class="modal-body">
+        <input type="hidden" id="editPackageId" />
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-package-name">اسم الباقة</label>
+          <input type="text" id="pkgName" class="field-input" />
+        </div>
+        <div class="subs-form-row-2">
+          <div class="field-group">
+            <label class="field-label" data-i18n="subscriptions-label-prepaid-price">المبلغ المدفوع</label>
+            <input type="number" id="pkgPrepaid" class="field-input" step="0.01" min="0" lang="en" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" data-i18n="subscriptions-label-credit-value">رصيد الخدمات</label>
+            <input type="number" id="pkgCredit" class="field-input" step="0.01" min="0" lang="en" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-notes">ملاحظات</label>
+          <textarea id="pkgNotes" class="field-textarea"></textarea>
+        </div>
+        <div class="field-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="pkgActive" checked />
+            <span data-i18n="subscriptions-label-active">مفعّلة</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="btnSavePackage" data-i18n="products-btn-save">حفظ</button>
+        <button type="button" class="btn-secondary" id="btnCancelPackage" data-i18n="products-btn-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalNewSub" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="subscriptions-modal-new-title">اشتراك جديد</h2>
+        <button type="button" class="modal-close" id="btnCloseNewSub">✕</button>
+      </div>
+      <div id="errNewSub" class="error-msg"></div>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label" for="newSubCustomerSearch" data-i18n="subscriptions-label-customer">العميل</label>
+          <div class="customer-search-dd" id="newSubCustomerWrap">
+            <input type="hidden" id="newSubCustomerId" value="" />
+            <input type="text" id="newSubCustomerSearch" class="customer-search-input" autocomplete="off"
+              data-i18n-placeholder="subscriptions-customer-search-placeholder" placeholder="" lang="en" dir="rtl"
+              aria-autocomplete="list" aria-expanded="false" aria-controls="newSubCustomerList" />
+            <ul class="customer-search-list" id="newSubCustomerList" role="listbox" hidden aria-label=""></ul>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-package">الباقة</label>
+          <div class="package-dd" data-package-dd="newSub">
+            <input type="hidden" id="newSubPackage" value="" />
+            <button type="button" class="package-dd-trigger" id="newSubPackageTrigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="newSubPackageLabel">
+              <span class="package-dd-label is-placeholder" id="newSubPackageLabel"></span>
+              <span class="package-dd-caret" aria-hidden="true">▾</span>
+            </button>
+            <ul class="package-dd-list" id="newSubPackageList" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-start-date">تاريخ البداية</label>
+          <input type="date" id="newSubStart" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+          <span style="font-size:11px;color:#94a3b8" data-i18n="subscriptions-label-start-hint"></span>
+        </div>
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-end-date">تاريخ انتهاء الباقة (اختياري)</label>
+          <input type="date" id="newSubEnd" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+          <span style="font-size:11px;color:#94a3b8" data-i18n="subscriptions-label-end-hint">اتركه فارغاً للباقة المفتوحة</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="btnSaveNewSub" data-i18n="products-btn-save">حفظ</button>
+        <button type="button" class="btn-secondary" id="btnCancelNewSub" data-i18n="products-btn-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalRenew" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="subscriptions-modal-renew-title">تجديد</h2>
+        <button type="button" class="modal-close" id="btnCloseRenew">✕</button>
+      </div>
+      <div id="errRenew" class="error-msg"></div>
+      <div class="modal-body">
+        <input type="hidden" id="renewSubId" />
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-package">الباقة</label>
+          <div class="package-dd" data-package-dd="renew">
+            <input type="hidden" id="renewPackage" value="" />
+            <button type="button" class="package-dd-trigger" id="renewPackageTrigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="renewPackageLabel">
+              <span class="package-dd-label is-placeholder" id="renewPackageLabel"></span>
+              <span class="package-dd-caret" aria-hidden="true">▾</span>
+            </button>
+            <ul class="package-dd-list" id="renewPackageList" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" data-i18n="subscriptions-label-start-date">تاريخ بداية الفترة</label>
+          <input type="date" id="renewStart" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+        </div>
+        <div class="field-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="renewCarry" checked />
+            <span data-i18n="subscriptions-renew-carry">ترحيل الرصيد</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="btnSaveRenew" data-i18n="products-btn-save">حفظ</button>
+        <button type="button" class="btn-secondary" id="btnCancelRenew" data-i18n="products-btn-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalEditSub" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="subscriptions-modal-edit-title">تعديل الاشتراك</h2>
+        <button type="button" class="modal-close" id="btnCloseEditSub">✕</button>
+      </div>
+      <div id="errEditSub" class="error-msg"></div>
+      <div class="modal-body">
+        <input type="hidden" id="editSubId" />
+        <p id="editSubRefHint" style="font-size:12px;color:#64748b;margin-bottom:10px"></p>
+        <div class="field-group">
+          <label class="field-label" for="editSubPeriodFrom" data-i18n="subscriptions-label-start-date">تاريخ بداية الفترة</label>
+          <input type="date" id="editSubPeriodFrom" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="editSubEndDate" data-i18n="subscriptions-label-end-date">تاريخ انتهاء الباقة (اختياري)</label>
+          <input type="date" id="editSubEndDate" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+          <span style="font-size:11px;color:#94a3b8" data-i18n="subscriptions-label-end-hint">اتركه فارغاً للباقة المفتوحة</span>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="editSubCredit" data-i18n="subscriptions-label-edit-credit">الرصيد المتبقي (ر.س)</label>
+          <input type="number" id="editSubCredit" class="field-input" step="0.01" min="0" lang="en" />
+          <span style="font-size:11px;color:#94a3b8" data-i18n="subscriptions-label-edit-credit-hint"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="btnSaveEditSub" data-i18n="products-btn-save">حفظ</button>
+        <button type="button" class="btn-secondary" id="btnCancelEditSub" data-i18n="products-btn-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalDetail" class="modal-overlay">
+    <div class="modal-box modal-wide modal-detail">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="subscriptions-modal-detail-title">تفاصيل الاشتراك</h2>
+        <button type="button" class="modal-close" id="btnCloseDetail">✕</button>
+      </div>
+      <!-- تابات الـ modal -->
+      <div class="detail-modal-tabs" id="detailModalTabsBar">
+        <button type="button" class="detail-modal-tab active" id="detailTabInfo">التفاصيل</button>
+        <button type="button" class="detail-modal-tab" id="detailTabInvoices">الفواتير</button>
+      </div>
+      <!-- panel التفاصيل -->
+      <div class="modal-body modal-detail-body" id="detailBody"></div>
+      <!-- panel الفواتير -->
+      <div class="modal-body modal-detail-body" id="detailInvoicesBody" style="display:none">
+        <div style="padding:12px 0 8px">
+          <div class="search-wrap" style="max-width:100%;margin-bottom:10px">
+            <input type="search" id="detailInvSearch" class="search-input" placeholder="بحث برقم الفاتورة..." />
+          </div>
+        </div>
+        <!-- desktop: جدول | mobile: بطاقات -->
+        <div class="detail-inv-desktop">
+          <div class="detail-table-scroll" role="region" tabindex="0">
+            <table class="sub-table detail-invoices" style="min-width:480px">
+              <thead>
+                <tr>
+                  <th>رقم الفاتورة</th>
+                  <th>التاريخ</th>
+                  <th>المبلغ الإجمالي</th>
+                  <th>المخصوم من الاشتراك</th>
+                  <th>طريقة الدفع</th>
+                </tr>
+              </thead>
+              <tbody id="detailInvoicesTbody">
+                <tr><td colspan="5" class="loading-cell"><span class="spinner"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="detail-inv-mobile" id="detailInvoicesCards" style="display:none"></div>
+        <div id="detailInvoicesEmpty" class="empty-state" style="display:none">لا توجد فواتير مرتبطة بهذا الاشتراك</div>
+        <!-- pagination الفواتير -->
+        <div id="detailInvPagBar" class="detail-inv-pag" style="display:none">
+          <div class="detail-inv-pag-info"><span id="detailInvPagInfo"></span></div>
+          <div class="detail-inv-pag-controls">
+            <button type="button" class="page-btn" id="detailInvBtnFirst">«</button>
+            <button type="button" class="page-btn" id="detailInvBtnPrev">‹</button>
+            <div id="detailInvPageNums" class="page-numbers"></div>
+            <button type="button" class="page-btn" id="detailInvBtnNext">›</button>
+            <button type="button" class="page-btn" id="detailInvBtnLast">»</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-detail-footer" id="detailFooterInfo">
+        <button type="button" class="btn-primary" id="btnDetailPrint" data-i18n="subscriptions-btn-print">طباعة إيصال</button>
+        <button type="button" class="btn-export btn-pdf" id="btnDetailReceiptPdf" data-i18n="subscriptions-btn-pdf-receipt">PDF إيصال</button>
+        <button type="button" class="btn-export btn-pdf" id="btnDetailReportPdf" data-i18n="subscriptions-btn-pdf-report">PDF تقرير الاشتراك</button>
+        <button type="button" class="btn-secondary" id="btnCloseDetail2" data-i18n="products-btn-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalConfirm" class="modal-overlay modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="modal-box modal-confirm-box">
+      <div class="modal-header">
+        <h2 id="confirmModalTitle" class="modal-title"></h2>
+        <button type="button" class="modal-close" id="btnCloseConfirm" aria-label="✕">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-modal-row">
+          <div class="confirm-icon-wrap" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <p id="confirmModalMessage" class="confirm-modal-text"></p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary btn-danger-grad" id="btnConfirmOk"></button>
+        <button type="button" class="btn-secondary" id="btnConfirmCancel"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="subscriptions.js"></script>
+</body>
+</html>

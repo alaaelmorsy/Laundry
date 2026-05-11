@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>إعدادات ZATCA</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="zatca-settings.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-zatca-settings">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon" style="background:linear-gradient(135deg,#0f766e,#14b8a6)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2 19 6v6c0 5-3 9-7 10C8 21 5 17 5 12V6l7-4z"/>
+              <path d="M9 12l2 2 4-5"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="zatca-settings-header-title">إعدادات الربط الإلكتروني (ZATCA)</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="zatca-settings-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <div class="content-grid">
+
+        <!-- بيانات المنشأة -->
+        <section class="card card-company">
+          <div class="card-header">
+            <div class="card-icon" style="background:linear-gradient(135deg,#4b5563,#6b7280)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21V7l-8-4-8 4v14"/>
+                <path d="M9 21V11h6v10"/>
+              </svg>
+            </div>
+            <div>
+              <div class="card-title" data-i18n="zatca-settings-company-title">بيانات المنشأة</div>
+              <div class="card-subtitle" data-i18n="zatca-settings-company-subtitle">بيانات مطلوبة لتوليد QR وتوافق الفواتير</div>
+            </div>
+          </div>
+          <div class="card-body grid-2col">
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-company-name">اسم المنشأة</label>
+              <input id="companyName" type="text" class="field-input" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-vat-number">رقم التسجيل الضريبي</label>
+              <input id="vatNumber" type="text" class="field-input" dir="ltr" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-cr">رقم السجل التجاري</label>
+              <input id="commercialRegistration" type="text" class="field-input" dir="ltr" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-business-category">نشاط العمل</label>
+              <input id="businessCategory" type="text" class="field-input" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-branch-name">اسم الفرع</label>
+              <input id="branchName" type="text" class="field-input" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-email">البريد الإلكتروني</label>
+              <input id="email" type="email" class="field-input" dir="ltr" />
+            </div>
+          </div>
+        </section>
+
+        <!-- العنوان الوطني -->
+        <section class="card card-address">
+          <div class="card-header">
+            <div class="card-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+            </div>
+            <div>
+              <div class="card-title" data-i18n="zatca-settings-address-title">العنوان الوطني</div>
+              <div class="card-subtitle" data-i18n="zatca-settings-address-subtitle">استخدم بيانات دقيقة لضمان مطابقة الفاتورة</div>
+            </div>
+          </div>
+          <div class="card-body grid-2col">
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-street">الشارع</label>
+              <input id="street" type="text" class="field-input" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-building">رقم المبنى</label>
+              <input id="building" type="text" class="field-input" dir="ltr" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-city">المدينة</label>
+              <input id="city" type="text" class="field-input" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-postal">الرمز البريدي</label>
+              <input id="postalCode" type="text" class="field-input" dir="ltr" />
+            </div>
+            <div class="field">
+              <label class="field-label" data-i18n="zatca-settings-label-district">الحي</label>
+              <input id="district" type="text" class="field-input" />
+            </div>
+          </div>
+        </section>
+
+        <!-- إعدادات الإرسال المحلي (متقدم — مخفي افتراضياً) -->
+        <section class="card card-advanced">
+          <div class="card-header">
+            <div class="card-icon" style="background:linear-gradient(135deg,#0f766e,#14b8a6)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v18"/>
+                <path d="M5 8h14"/>
+                <path d="M5 16h14"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="card-title" data-i18n="zatca-settings-local-title">إعدادات الإرسال المحلي</div>
+              <div class="card-subtitle" data-i18n="zatca-settings-local-subtitle">إعدادات متقدمة — اتركها افتراضية إن لم تكن بحاجة لتغييرها</div>
+            </div>
+          </div>
+
+          <details class="advanced-details">
+            <summary class="advanced-summary">
+              <svg class="summary-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              <span data-i18n="zatca-settings-advanced-summary">إعدادات متقدمة (LocalZatcaBridge)</span>
+            </summary>
+            <div class="card-body grid-2col" style="padding-top:16px">
+              <div class="field field-span2">
+                <label class="field-label" data-i18n="zatca-settings-label-endpoint">رابط الإرسال المحلي (submitInvoice)</label>
+                <input id="localApiEndpoint" type="text" class="field-input" dir="ltr" placeholder="http://localhost:8080/zatca_2/api/customerInvoice/submitInvoice" data-i18n-placeholder="zatca-settings-placeholder-endpoint" />
+              </div>
+              <div class="field">
+                <label class="field-label" data-i18n="zatca-settings-label-param-name">اسم المتغير (Param Name)</label>
+                <input id="localApiParamName" type="text" class="field-input" dir="ltr" placeholder="invoiceJO" data-i18n-placeholder="zatca-settings-placeholder-param-name" />
+              </div>
+              <div class="field">
+                <label class="field-label" data-i18n="zatca-settings-label-preferred-mode">الاستراتيجية المفضلة</label>
+                <select id="localApiPreferredMode" class="field-input" dir="ltr">
+                  <option value="form" data-i18n="zatca-settings-mode-form">form (مُوصى به)</option>
+                  <option value="json-raw" data-i18n="zatca-settings-mode-json-raw">json-raw</option>
+                  <option value="json-wrapped" data-i18n="zatca-settings-mode-json-wrapped">json-wrapped</option>
+                  <option value="json-wrapped-string" data-i18n="zatca-settings-mode-json-wrapped-string">json-wrapped-string</option>
+                  <option value="multipart" data-i18n="zatca-settings-mode-multipart">multipart</option>
+                  <option value="multipart-file" data-i18n="zatca-settings-mode-multipart-file">multipart-file</option>
+                  <option value="text-plain" data-i18n="zatca-settings-mode-text-plain">text-plain</option>
+                </select>
+              </div>
+              <div class="field field-span2">
+                <label class="field-label" data-i18n="zatca-settings-label-param-aliases">الأسماء البديلة (Param Aliases) — مفصولة بفواصل</label>
+                <textarea id="localApiParamAliases" rows="2" class="field-input" dir="ltr" placeholder="invoiceJO,invoiceIO,invoiceIo,invoiceJson,invoice,data,payload" data-i18n-placeholder="zatca-settings-placeholder-param-aliases"></textarea>
+              </div>
+              <div class="field field-span2">
+                <div class="toggle-row">
+                  <div class="toggle-label" data-i18n="zatca-settings-label-enable-text-plain">تفعيل محاولة text/plain ضمن Fallback</div>
+                  <label class="toggle-switch">
+                    <input id="localApiEnableTextPlain" type="checkbox" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+    </main>
+
+    <div class="save-footer">
+      <button id="btnSave" type="button" class="btn-save" data-i18n="zatca-settings-btn-save">حفظ الإعدادات</button>
+    </div>
+
+    <div id="statusToast" class="status-toast"></div>
+
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="zatca-settings.js"></script>
+</body>
+</html>
