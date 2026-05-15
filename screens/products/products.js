@@ -55,7 +55,7 @@ window.addEventListener('DOMContentLoaded', () => {
     let imageRemoved = false;
 
     const LS_PRODUCT_SORT = 'productsTableSort';
-    const PRODUCT_SORT_KEYS = new Set(['id', 'name_ar', 'name_en', 'is_active', 'created_at', 'lines', 'sort_order']);
+    const PRODUCT_SORT_KEYS = new Set(['id', 'name_ar', 'name_en', 'is_active', 'lines', 'sort_order']);
     let sortBy = 'sort_order';
     let sortDir = 'asc';
     try {
@@ -382,7 +382,7 @@ window.addEventListener('DOMContentLoaded', () => {
       buildFilters();
       productsTableBody.innerHTML = `
         <tr>
-          <td colspan="10" class="loading-cell">
+          <td colspan="9" class="loading-cell">
             <div class="spinner"></div>
             <span>${I18N.t('products-loading')}</span>
           </td>
@@ -458,7 +458,7 @@ window.addEventListener('DOMContentLoaded', () => {
               ${active ? I18N.t('products-status-active') : I18N.t('products-status-inactive')}
             </span>
           </td>
-          <td class="col-date" dir="ltr">${escHtml(formatProductDate(p.created_at))}</td>
+
           <td>
             <div class="actions-cell">
               <button type="button" class="action-btn btn-edit" title="${I18N.t('products-btn-edit-title')}" data-action="edit" data-id="${p.id}">

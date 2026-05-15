@@ -52,7 +52,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .page-size-selector{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#64748b;white-space:nowrap}
 .page-size-selector select{background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;color:#1e293b;outline:none;cursor:pointer;font-family:inherit}
 .page-size-selector select:focus{border-color:#0d9488}
-.table-container{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;min-width:0;max-width:100%}
+.table-container{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;min-width:0;max-width:100%}
 .table-container::-webkit-scrollbar{height:10px;width:10px}
 .table-container::-webkit-scrollbar-track{background:#f1f5f9;border-radius:8px}
 .table-container::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
@@ -63,7 +63,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .data-table td{padding:12px 14px;font-size:13px;color:#475569;border-bottom:1px solid #f1f5f9}
 .data-table--subs th,.data-table--subs td{text-align:center;vertical-align:middle}
 .data-table--subs .cell-ltr{direction:ltr;unicode-bidi:embed;text-align:center}
-.data-table--subs th:last-child,.data-table--subs td:last-child{min-width:210px}
+.data-table--subs th:last-child,.data-table--subs td:last-child{min-width:240px}
 .data-table tbody tr:hover{background:rgba(13,148,136,.04)}
 .loading-cell{text-align:center!important;padding:36px!important;color:#94a3b8}
 .spinner{width:22px;height:22px;border:2px solid #e2e8f0;border-top-color:#0d9488;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-left:8px}
@@ -114,6 +114,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .filter-label{font-size:12px;color:#64748b;font-weight:700;white-space:nowrap;flex-shrink:0}
 .filter-input{border:none;background:transparent;outline:none;color:#1e293b;font-size:13px;font-family:'CairoNum','Cairo',sans-serif;font-weight:700;padding:2px;cursor:pointer;min-width:180px;max-width:100%}
 .filter-input::-webkit-calendar-picker-indicator{cursor:pointer}
+.date-range-row{display:inline-flex;gap:8px;align-items:center}
 .modal-overlay{position:fixed;inset:0;padding:max(12px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) max(12px,env(safe-area-inset-bottom,0)) max(12px,env(safe-area-inset-left,0));background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .modal-box{background:#fff;border-radius:16px;width:520px;max-width:100%;max-height:min(90dvh,90vh);overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto}
 .modal-wide{width:820px}
@@ -180,8 +181,9 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
 .modal-detail .modal-footer{flex-shrink:0}
 .modal-detail .modal-close{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;touch-action:manipulation}
 .modal-detail .modal-close:active{background:rgba(15,23,42,.06)}
-.modal-detail .modal-detail-footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex-wrap:unset!important;justify-content:stretch}
+.modal-detail .modal-detail-footer{display:flex;flex-direction:column;gap:8px;flex-wrap:unset!important;justify-content:stretch}
 .modal-detail .modal-detail-footer .btn-primary,.modal-detail .modal-detail-footer .btn-export,.modal-detail .modal-detail-footer .btn-secondary{min-height:44px;touch-action:manipulation;justify-content:center}
+#modalDetail #btnDetailPowerToggle.btn-danger-grad{background:linear-gradient(90deg,#ef4444,#dc2626)!important;color:#fff!important;box-shadow:0 2px 8px rgba(220,38,38,.28);border:none}
 /* ── تابات داخل modal التفاصيل ── */
 .detail-modal-tabs{display:flex;flex-shrink:0;border-bottom:2px solid #e2e8f0;background:#fff;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .detail-modal-tabs::-webkit-scrollbar{display:none}
@@ -257,12 +259,20 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
   scrollbar-color:#cbd5e1 #f1f5f9;
 }
 .header-bar .header-right .text-lg{font-size:15px!important;max-width:min(200px,55vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.header-bar .app-title-area{max-width:min(200px,45vw)}
+.header-bar .app-subtitle{display:none}
+.header-bar .header-right{gap:4px;flex-wrap:wrap}
+.header-bar .header-right .btn-primary{padding:6px 10px;font-size:12px;border-radius:40px;gap:4px}
+.header-bar .header-right .btn-primary svg{width:13px;height:13px}
+.header-bar .header-right .btn-export{padding:5px 8px;font-size:10px;border-radius:6px}
 .toolbar{flex-direction:column;align-items:stretch}
 .toolbar .search-wrap{max-width:none;width:100%}
 .filter-row{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center}
 .filter-row label{white-space:nowrap;font-size:11px;margin:0}
 .filter-row select,.filter-row input[type="date"],.filter-row input[type="datetime-local"]{width:100%;min-width:0;padding:7px 8px;font-size:12px}
 .filter-field{grid-column:1/-1;min-width:0}
+.date-range-row{grid-column:1/-1;display:flex;gap:8px;min-width:0}
+.date-range-row .filter-field{flex:1;min-width:0}
 .filter-input{min-width:0;width:100%}
 .modal-body,.modal-header,.modal-footer{padding-left:14px!important;padding-right:14px!important}
 .detail-summary-grid{grid-template-columns:1fr 1fr!important}
@@ -323,7 +333,13 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
 .page-wrapper .header-bar{min-height:44px;padding-top:max(6px,env(safe-area-inset-top,0));padding-bottom:6px;padding-left:max(8px,env(safe-area-inset-left,0));padding-right:max(8px,env(safe-area-inset-right,0));gap:6px}
 .back-btn{padding:6px 12px;font-size:12px;gap:5px;border-radius:40px}
 .back-btn svg{width:14px;height:14px}
-.header-bar .header-right .text-lg{font-size:13px!important;max-width:min(160px,48vw)!important}
+.app-title{font-size:14px!important}
+.app-subtitle{display:none}
+.header-bar .app-title-area{min-width:0;flex:1}
+.header-bar .header-right{gap:4px;flex-wrap:wrap}
+.header-bar .header-right .btn-primary{padding:6px 10px;font-size:11px;border-radius:40px;gap:4px}
+.header-bar .header-right .btn-primary svg{width:12px;height:12px}
+.header-bar .header-right .btn-export{padding:5px 8px;font-size:10px;border-radius:6px}
 .main-content{padding:max(8px,env(safe-area-inset-top,0)) max(8px,env(safe-area-inset-right,0)) max(24px,env(safe-area-inset-bottom,0)) max(8px,env(safe-area-inset-left,0));gap:8px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto}
 .tabs{gap:4px}
 .tab-btn{padding:7px 10px;font-size:12px;border-radius:6px 6px 0 0}
@@ -333,57 +349,180 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
 .filter-row{gap:5px 8px}
 .filter-row label{font-size:10px}
 .filter-row select,.filter-row input[type="date"],.filter-row input[type="datetime-local"]{padding:5px 6px;font-size:11px;border-radius:6px}
-#panelSubscriptions .toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:stretch}
-#panelSubscriptions .toolbar .search-wrap{grid-column:1/-1;width:100%;max-width:none;order:2}
-#panelSubscriptions .toolbar .filter-row{grid-column:1/-1;order:3}
-#panelSubscriptions .toolbar #btnNewSubscription{grid-column:1/-1;justify-content:center;padding:8px 14px;font-size:12px;min-height:0;order:0}
-#panelSubscriptions .toolbar #btnExportSubsExcel,#panelSubscriptions .toolbar #btnExportSubsPdf{display:inline-flex;align-items:center;justify-content:center;padding:7px 8px;font-size:11px;border-radius:7px;min-height:36px;order:1}
-#panelSubscriptions .toolbar #customerExportWrap{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;order:1}
-#panelSubscriptions .toolbar #customerExportWrap span{font-size:10px}
-#panelSubscriptions .toolbar #customerExportWrap .btn-export{padding:6px 10px;font-size:11px;min-height:34px}
+#panelSubscriptions .toolbar{display:grid;grid-template-columns:1fr;gap:6px;align-items:stretch}
+#panelSubscriptions .toolbar .search-wrap{grid-column:1/-1;width:100%;max-width:none}
+#panelSubscriptions .toolbar .filter-row{grid-column:1/-1}
+#panelSubscriptions .toolbar .filter-actions{grid-column:1/-1;justify-content:center}
 #panelPackages .toolbar .btn-primary{padding:8px 14px;font-size:12px;justify-content:center}
 .table-container{border-radius:10px;max-height:none}
 .data-table th,.data-table td{padding:8px 10px;font-size:12px}
 .data-table th{font-size:11px}
-.empty-state{padding:28px 16px;font-size:13px}
+.empty-state-enhanced{padding:28px 16px}
+.empty-state-enhanced-text{font-size:13px}
 .btn-primary{gap:6px}
 .btn-secondary{padding:8px 12px;font-size:12px;border-radius:40px}
 .btn-export{padding:6px 10px;font-size:11px}
+.btn-filter-apply,.btn-filter-clear{padding:6px 10px;font-size:11px}
 .pagination-bar{padding:8px 2px;gap:8px}
 .page-btn,.page-num{min-width:30px;height:30px;font-size:12px}
 .page-ellipsis{height:30px;font-size:12px}
 .page-size-selector{font-size:12px;gap:6px}
 .page-size-selector select{padding:5px 8px;font-size:12px}
 }
+/* ── ملخص الاشتراكات (كروت) ── */
+.summary-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;flex-shrink:0}
+.summary-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04);transition:box-shadow .15s}
+.summary-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.06)}
+.summary-card-label{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.02em}
+.summary-card-value{font-size:22px;font-weight:800;color:#0f172a;line-height:1.2;font-variant-numeric:tabular-nums}
+.summary-card--active{border-right:3px solid #22c55e}
+.summary-card--active .summary-card-value{color:#16a34a}
+.summary-card--near{border-right:3px solid #f59e0b}
+.summary-card--near .summary-card-value{color:#b45309}
+.summary-card--expired{border-right:3px solid #ef4444}
+.summary-card--expired .summary-card-value{color:#dc2626}
+.summary-card--credit{border-right:3px solid #0d9488}
+.summary-card--credit .summary-card-value{color:#0d9488}
+.app-title-area{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.app-title{font-size:18px;font-weight:800;color:#1e293b;line-height:1.3}
+.app-subtitle{font-size:12px;color:#64748b;font-weight:600}
+.filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn-filter-apply{padding:8px 14px;border:none;border-radius:8px;background:linear-gradient(90deg,#14b8a6,#0d9488);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(13,148,136,.25)}
+.btn-filter-clear{padding:8px 14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:12px;font-weight:700;cursor:pointer}
+.btn-filter-clear:hover{border-color:#cbd5e1;color:#475569}
+.badge-near{background:rgba(245,158,11,.12);color:#b45309}
+.package-summary{background:linear-gradient(135deg,rgba(13,148,136,.06),rgba(20,184,166,.04));border:1px solid rgba(13,148,136,.15);border-radius:12px;padding:14px 16px;margin-top:12px;display:none;flex-direction:column;gap:8px}
+.package-summary.visible{display:flex}
+.package-summary-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.package-summary-label{font-size:12px;color:#64748b;font-weight:600}
+.package-summary-value{font-size:13px;color:#1e293b;font-weight:700;text-align:left}
+.package-summary-hint{font-size:11px;color:#94a3b8;font-weight:600;text-align:center;padding-top:4px;border-top:1px solid rgba(13,148,136,.1)}
+.edit-sub-info-card{background:linear-gradient(135deg,rgba(245,158,11,.06),rgba(245,158,11,.02));border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#92400e;font-weight:600}
+.edit-sub-info-card svg{flex-shrink:0;width:16px;height:16px}
+.empty-state-enhanced{text-align:center;padding:48px 24px;color:#94a3b8;display:flex;flex-direction:column;align-items:center;gap:12px}
+.empty-state-enhanced svg{width:48px;height:48px;opacity:.35}
+.empty-state-enhanced-text{font-size:14px;font-weight:700}
+.empty-state-enhanced-action{margin-top:4px}
+.btn-outline-teal{padding:8px 14px;border:1.5px solid #0d9488;border-radius:50px;background:transparent;color:#0d9488;font-size:13px;cursor:pointer;font-weight:700}
+.btn-outline-teal:hover{background:rgba(13,148,136,.06)}
+.field-hint{font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-top:4px}
+@media(max-width:1180px){
+.table-container{overflow-x:auto}
+}
+@media(max-width:1023px){
+.summary-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+.summary-cards{grid-template-columns:1fr;gap:8px}
+.summary-card{padding:12px 14px}
+.summary-card-value{font-size:18px}
+.app-title{font-size:15px}
+}
+/* ── أزرار الإجراءات المدمجة ── */
+.subs-actions-compact{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-wrap:nowrap;position:relative}
+.sub-action-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 14px;min-height:36px;border:1.5px solid #e2e8f0;background:#fff;color:#475569;border-radius:10px;font-size:12px;font-weight:700;font-family:inherit;line-height:1;cursor:pointer;white-space:nowrap;transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 2px rgba(0,0,0,.04);outline:none}
+.sub-action-btn:hover{background:#f8fafc;border-color:#cbd5e1;box-shadow:0 2px 8px rgba(0,0,0,.08);transform:translateY(-1px)}
+.sub-action-btn:active{transform:translateY(0);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.sub-action-btn svg{flex-shrink:0}
+.sub-action-btn span{line-height:1}
+.sub-action-btn--detail{background:#fff;border-color:#e2e8f0}
+.sub-action-btn--detail:hover{background:rgba(13,148,136,.04);border-color:#0d9488;color:#0d9488}
+.sub-action-btn--primary{background:linear-gradient(135deg,#14b8a6,#0d9488);border-color:transparent;color:#fff;box-shadow:0 2px 8px rgba(13,148,136,.3)}
+.sub-action-btn--primary:hover{background:linear-gradient(135deg,#0d9488,#0f766e);box-shadow:0 4px 14px rgba(13,148,136,.4);transform:translateY(-1px);color:#fff}
+.sub-action-btn--primary:active{transform:translateY(0)}
+.sub-action-btn--resume{background:linear-gradient(135deg,#22c55e,#16a34a);border-color:transparent;color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.3)}
+.sub-action-btn--resume:hover{background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 4px 14px rgba(22,163,74,.4);transform:translateY(-1px);color:#fff}
+.sub-action-btn--resume:active{transform:translateY(0)}
+.sub-actions-more{position:relative;flex-shrink:0}
+.sub-actions-more>summary{list-style:none;display:block;cursor:pointer}
+.sub-actions-more>summary::-webkit-details-marker{display:none}
+.sub-actions-more>summary::marker{display:none;content:''}
+.sub-actions-more-trigger{width:auto;min-width:90px;height:36px;padding:0 18px;border:none;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;flex-direction:row;gap:5px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:0 2px 8px rgba(13,148,136,.3);outline:none;letter-spacing:.02em;white-space:nowrap}
+.sub-actions-more-trigger:hover{background:linear-gradient(135deg,#0d9488,#0f766e);box-shadow:0 4px 14px rgba(13,148,136,.4);transform:translateY(-1px)}
+.sub-actions-more-trigger:active{transform:translateY(0);box-shadow:0 1px 4px rgba(13,148,136,.3)}
+.sub-actions-more-trigger svg{flex-shrink:0;transition:transform .2s ease;color:#fff;display:block}
+.sub-actions-more-trigger span{display:block;line-height:36px;height:36px}
+.sub-actions-more[open] .sub-actions-more-trigger{background:linear-gradient(135deg,#0d9488,#0f766e);box-shadow:0 4px 14px rgba(13,148,136,.4)}
+.sub-actions-more[open] .sub-actions-more-trigger svg{transform:rotate(180deg)}
+.sub-actions-menu{position:absolute;top:calc(100% + 8px);left:0;min-width:190px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 16px 48px rgba(15,23,42,.16);padding:8px;z-index:60;direction:rtl;text-align:right;animation:menuIn .15s cubic-bezier(.4,0,.2,1)}
+@keyframes menuIn{from{opacity:0;transform:translateY(-4px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.sub-actions-menu-item{width:100%;border:0;background:transparent;color:#475569;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;font-family:inherit;text-align:right;cursor:pointer;display:flex;align-items:center;gap:10px;white-space:nowrap;transition:background .15s,color .15s,padding .15s}
+.sub-actions-menu-item:hover{background:#f1f5f9;padding-right:16px}
+.sub-actions-menu-item svg{flex-shrink:0;opacity:.7}
+.sub-actions-menu-item:hover svg{opacity:1}
+.sub-actions-menu-item--warning{color:#b45309}
+.sub-actions-menu-item--warning:hover{background:rgba(245,158,11,.08);color:#92400e}
+.sub-actions-menu-item--danger{color:#dc2626}
+.sub-actions-menu-item--danger:hover{background:#fef2f2;color:#b91c1c}
+/* ── تحسين فوتر التفاصيل ── */
+.detail-actions-section{margin-bottom:0}
+.detail-actions-section-title{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px;letter-spacing:.02em}
+.detail-actions-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.detail-actions-danger{margin-top:10px;padding-top:10px;border-top:1px solid #fecaca}
+.detail-actions-danger .detail-actions-section-title{color:#dc2626}
+@media(max-width:640px){
+.subs-actions-compact{gap:4px}
+.sub-action-btn{padding:6px 10px;min-height:32px;font-size:11px;gap:5px;border-radius:8px}
+.sub-action-btn svg{width:11px;height:11px}
+.sub-actions-more-trigger{height:34px;padding:0 14px;font-size:12px;border-radius:50px}
+.sub-actions-more-trigger span{line-height:34px;height:34px}
+.sub-actions-more-trigger svg{width:8px;height:8px}
+.sub-actions-menu{min-width:180px;left:auto;right:0;border-radius:12px}
+.sub-actions-menu-item{padding:9px 12px;font-size:12px;gap:8px}
+.detail-actions-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+.subs-actions-compact{width:100%;display:grid;grid-template-columns:1fr 1fr auto;gap:4px}
+.sub-action-btn{width:100%;justify-content:center;padding:8px 6px;min-height:34px;font-size:11px}
+.sub-actions-more{justify-self:end}
+.detail-actions-grid{grid-template-columns:1fr}
+}
   </style>
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
 </head>
 <body class="bg-[#f8fafc]" data-page-title="page-title-subscriptions">
   <div class="page-wrapper">
-    <header class="header-bar" dir="ltr" style="-webkit-app-region:drag">
+    <header class="header-bar" style="-webkit-app-region:drag">
       <div class="header-left" style="-webkit-app-region:no-drag">
+        <div class="app-title-area">
+          <span class="app-title" data-i18n="subscriptions-app-title">إدارة الاشتراكات</span>
+          <span class="app-subtitle" data-i18n="subscriptions-app-subtitle">متابعة اشتراكات العملاء، الرصيد المتبقي، التجديد، وإدارة الباقات.</span>
+        </div>
+      </div>
+      <div class="header-right" style="-webkit-app-region:no-drag">
+        <button type="button" id="btnNewSubscription" class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          <span data-i18n="subscriptions-btn-new">+ اشتراك جديد</span>
+        </button>
+        <button type="button" id="btnExportSubsExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
+        <button type="button" id="btnExportSubsPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
+        <span id="customerExportWrap" style="display:none;align-items:center;gap:6px">
+          <span style="font-size:12px;color:#64748b" data-i18n="subscriptions-btn-export-customer">تقرير العميل</span>
+          <button type="button" id="btnExportCustomerExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
+          <button type="button" id="btnExportCustomerPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
+        </span>
         <button type="button" id="btnBack" class="back-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           <span data-i18n="subscriptions-back">العودة</span>
         </button>
-      </div>
-      <div class="header-right" style="-webkit-app-region:no-drag">
-        <span class="text-lg font-bold text-[#1e293b]" data-i18n="subscriptions-header-title">الاشتراكات المسبقة</span>
       </div>
     </header>
 
     <main class="main-content">
       <div class="tabs">
         <button type="button" class="tab-btn active" id="tabSubscriptions" data-i18n="subscriptions-tab-list">اشتراكات العملاء</button>
-        <button type="button" class="tab-btn" id="tabPackages" data-i18n="subscriptions-tab-packages">الباقات</button>
+        <button type="button" class="tab-btn" id="tabPackages" data-i18n="subscriptions-tab-packages">إدارة الباقات</button>
       </div>
 
       <div id="panelPackages" class="panel">
         <div class="toolbar">
+          <h3 class="detail-section-title" style="margin:0;flex:1" data-i18n="subscriptions-packages-title">إدارة الباقات</h3>
           <button type="button" id="btnAddPackage" class="btn-primary">
-            <span data-i18n="subscriptions-btn-add-package">إضافة باقة</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="subscriptions-btn-add-package">+ إضافة باقة</span>
           </button>
         </div>
+        <p style="font-size:12px;color:#64748b;margin-top:-8px" data-i18n="subscriptions-packages-desc">إنشاء وتعديل باقات الاشتراك التي تظهر عند إنشاء أو تجديد الاشتراكات.</p>
         <div class="table-container">
           <table class="data-table">
             <thead>
@@ -398,15 +537,26 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
             <tbody id="packagesTableBody"></tbody>
           </table>
         </div>
-        <div id="emptyPackages" class="empty-state" style="display:none" data-i18n="subscriptions-empty-packages">لا توجد باقات</div>
+        <div id="emptyPackages" class="empty-state-enhanced" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          <span class="empty-state-enhanced-text" data-i18n="subscriptions-empty-packages-title">لا توجد باقات حتى الآن.</span>
+          <span style="font-size:13px" data-i18n="subscriptions-empty-packages-hint">أضف أول باقة لاستخدامها في الاشتراكات.</span>
+          <button type="button" class="btn-primary empty-state-enhanced-action" onclick="document.getElementById('btnAddPackage').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="subscriptions-btn-add-package">+ إضافة باقة</span>
+          </button>
+        </div>
       </div>
 
       <div id="panelSubscriptions" class="panel active">
-        <div class="toolbar">
-          <div class="search-wrap">
-            <input type="search" id="searchSubscriptions" class="search-input" data-i18n-placeholder="subscriptions-search-placeholder" placeholder="" />
+        <div class="toolbar" style="margin-top:4px">
+          <div class="search-wrap" style="max-width:none;flex:1">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="search" id="searchSubscriptions" class="search-input" data-i18n-placeholder="subscriptions-search-placeholder" placeholder="ابحث باسم العميل / رقم الجوال / رقم الاشتراك" />
           </div>
-          <div class="filter-row">
+        </div>
+        <div class="toolbar" style="margin-top:-4px">
+          <div class="filter-row" style="flex:1">
             <label data-i18n="subscriptions-filter-status">الحالة</label>
             <select id="filterStatus">
               <option value="all" data-i18n="subscriptions-status-all">الكل</option>
@@ -415,34 +565,31 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
               <option value="closed" data-i18n="subscriptions-status-closed">مغلق</option>
               <option value="none" data-i18n="subscriptions-status-none">بدون فترة</option>
             </select>
-            <label class="filter-field">
-              <span class="filter-label" data-i18n="subscriptions-date-from">من</span>
-              <input type="datetime-local" id="filterDateFrom" class="filter-input" step="1" />
-            </label>
-            <label class="filter-field">
-              <span class="filter-label" data-i18n="subscriptions-date-to">إلى</span>
-              <input type="datetime-local" id="filterDateTo" class="filter-input" step="1" />
-            </label>
+            <div class="date-range-row">
+              <label class="filter-field">
+                <span class="filter-label" data-i18n="subscriptions-date-from">من</span>
+                <input type="datetime-local" id="filterDateFrom" class="filter-input" step="1" />
+              </label>
+              <label class="filter-field">
+                <span class="filter-label" data-i18n="subscriptions-date-to">إلى</span>
+                <input type="datetime-local" id="filterDateTo" class="filter-input" step="1" />
+              </label>
+            </div>
           </div>
-          <button type="button" id="btnNewSubscription" class="btn-primary" data-i18n="subscriptions-btn-new">اشتراك جديد</button>
-          <button type="button" id="btnExportSubsExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
-          <button type="button" id="btnExportSubsPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
-          <span id="customerExportWrap" style="display:none;align-items:center;gap:6px">
-            <span style="font-size:12px;color:#64748b" data-i18n="subscriptions-btn-export-customer">تقرير العميل</span>
-            <button type="button" id="btnExportCustomerExcel" class="btn-export btn-excel" data-i18n="subscriptions-export-excel">Excel</button>
-            <button type="button" id="btnExportCustomerPdf" class="btn-export btn-pdf" data-i18n="subscriptions-export-pdf">PDF</button>
-          </span>
+          <div class="filter-actions">
+            <button type="button" class="btn-filter-apply" id="btnApplySubscriptionFilters" data-i18n="subscriptions-btn-apply-filters">تطبيق الفلترة</button>
+            <button type="button" class="btn-filter-clear" id="btnClearSubscriptionFilters" data-i18n="subscriptions-btn-clear-filters">مسح الفلاتر</button>
+          </div>
         </div>
         <div class="table-container">
           <table class="data-table data-table--subs">
             <thead>
               <tr>
-                <th data-i18n="subscriptions-col-ref">رقم الاشتراك</th>
                 <th data-i18n="subscriptions-col-customer">العميل</th>
                 <th data-i18n="subscriptions-col-phone">الجوال</th>
                 <th data-i18n="subscriptions-col-package">الباقة</th>
-                <th data-i18n="subscriptions-col-period">الفترة</th>
-                <th data-i18n="subscriptions-col-balance">الرصيد</th>
+                <th data-i18n="subscriptions-col-remaining-credit">الرصيد المتبقي</th>
+                <th data-i18n="subscriptions-col-expiry-date">تاريخ الانتهاء</th>
                 <th data-i18n="subscriptions-col-status">الحالة</th>
                 <th data-i18n="subscriptions-col-actions">الإجراءات</th>
               </tr>
@@ -450,7 +597,15 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
             <tbody id="subscriptionsTableBody"></tbody>
           </table>
         </div>
-        <div id="emptySubscriptions" class="empty-state" style="display:none" data-i18n="subscriptions-empty">لا توجد بيانات</div>
+        <div id="emptySubscriptions" class="empty-state-enhanced" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          <span class="empty-state-enhanced-text" data-i18n="subscriptions-empty-title">لا توجد اشتراكات حتى الآن.</span>
+          <span style="font-size:13px" data-i18n="subscriptions-empty-hint">ابدأ بإضافة اشتراك جديد.</span>
+          <button type="button" class="btn-primary empty-state-enhanced-action" onclick="document.getElementById('btnNewSubscription').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="subscriptions-btn-new">+ اشتراك جديد</span>
+          </button>
+        </div>
         <div id="subscriptionsPaginationBar" class="pagination-bar" style="display:none" aria-label="pagination">
           <div class="pagination-info"><span id="subscriptionsPaginationInfo"></span></div>
           <div class="pagination-controls">
@@ -471,7 +626,6 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
           </div>
         </div>
       </div>
-
     </main>
   </div>
 
@@ -544,6 +698,21 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
             </button>
             <ul class="package-dd-list" id="newSubPackageList" role="listbox" hidden></ul>
           </div>
+          <div class="package-summary" id="newSubPackageSummary">
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-package">الباقة:</span>
+              <span class="package-summary-value" id="newSubPackageSummaryName">—</span>
+            </div>
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-price">السعر:</span>
+              <span class="package-summary-value" id="newSubPackageSummaryPrice">—</span>
+            </div>
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-credit">الرصيد:</span>
+              <span class="package-summary-value" id="newSubPackageSummaryCredit">—</span>
+            </div>
+            <div class="package-summary-hint" data-i18n="subscriptions-new-summary-hint">سيتم إنشاء الاشتراك بناءً على هذه البيانات.</div>
+          </div>
         </div>
         <div class="field-group">
           <label class="field-label" data-i18n="subscriptions-label-start-date">تاريخ البداية</label>
@@ -572,6 +741,7 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
       <div id="errRenew" class="error-msg"></div>
       <div class="modal-body">
         <input type="hidden" id="renewSubId" />
+        <div id="renewSubInfo" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#475569"></div>
         <div class="field-group">
           <label class="field-label" data-i18n="subscriptions-label-package">الباقة</label>
           <div class="package-dd" data-package-dd="renew">
@@ -581,6 +751,21 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
               <span class="package-dd-caret" aria-hidden="true">▾</span>
             </button>
             <ul class="package-dd-list" id="renewPackageList" role="listbox" hidden></ul>
+          </div>
+          <div class="package-summary" id="renewPackageSummary">
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-package">الباقة:</span>
+              <span class="package-summary-value" id="renewPackageSummaryName">—</span>
+            </div>
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-price">السعر:</span>
+              <span class="package-summary-value" id="renewPackageSummaryPrice">—</span>
+            </div>
+            <div class="package-summary-row">
+              <span class="package-summary-label" data-i18n="subscriptions-summary-credit">الرصيد:</span>
+              <span class="package-summary-value" id="renewPackageSummaryCredit">—</span>
+            </div>
+            <div class="package-summary-hint" data-i18n="subscriptions-renew-summary-hint">سيتم إنشاء فترة جديدة للاشتراك بعد الحفظ.</div>
           </div>
         </div>
         <div class="field-group">
@@ -610,7 +795,11 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
       <div id="errEditSub" class="error-msg"></div>
       <div class="modal-body">
         <input type="hidden" id="editSubId" />
-        <p id="editSubRefHint" style="font-size:12px;color:#64748b;margin-bottom:10px"></p>
+        <div class="edit-sub-info-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <span data-i18n="subscriptions-edit-warning">تعديل الرصيد أو التواريخ قد يؤثر على حسابات الاشتراك والفواتير.</span>
+        </div>
+        <p id="editSubRefHint" style="font-size:13px;color:#64748b;margin-bottom:10px;font-weight:700"></p>
         <div class="field-group">
           <label class="field-label" for="editSubPeriodFrom" data-i18n="subscriptions-label-start-date">تاريخ بداية الفترة</label>
           <input type="date" id="editSubPeriodFrom" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
@@ -641,8 +830,8 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
       </div>
       <!-- تابات الـ modal -->
       <div class="detail-modal-tabs" id="detailModalTabsBar">
-        <button type="button" class="detail-modal-tab active" id="detailTabInfo">التفاصيل</button>
-        <button type="button" class="detail-modal-tab" id="detailTabInvoices">الفواتير</button>
+        <button type="button" class="detail-modal-tab active" id="detailTabInfo" data-i18n="subscriptions-detail-tab-info">التفاصيل</button>
+        <button type="button" class="detail-modal-tab" id="detailTabInvoices" data-i18n="subscriptions-detail-tab-invoices">الفواتير</button>
       </div>
       <!-- panel التفاصيل -->
       <div class="modal-body modal-detail-body" id="detailBody"></div>
@@ -650,7 +839,7 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
       <div class="modal-body modal-detail-body" id="detailInvoicesBody" style="display:none">
         <div style="padding:12px 0 8px">
           <div class="search-wrap" style="max-width:100%;margin-bottom:10px">
-            <input type="search" id="detailInvSearch" class="search-input" placeholder="بحث برقم الفاتورة..." />
+            <input type="search" id="detailInvSearch" class="search-input" data-i18n-placeholder="subscriptions-invoice-search-placeholder" placeholder="بحث برقم الفاتورة..." />
           </div>
         </div>
         <!-- desktop: جدول | mobile: بطاقات -->
@@ -659,11 +848,11 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
             <table class="sub-table detail-invoices" style="min-width:480px">
               <thead>
                 <tr>
-                  <th>رقم الفاتورة</th>
-                  <th>التاريخ</th>
-                  <th>المبلغ الإجمالي</th>
-                  <th>المخصوم من الاشتراك</th>
-                  <th>طريقة الدفع</th>
+                  <th data-i18n="subscriptions-invoice-col-num">رقم الفاتورة</th>
+                  <th data-i18n="subscriptions-invoice-col-date">التاريخ</th>
+                  <th data-i18n="subscriptions-invoice-col-total">المبلغ الإجمالي</th>
+                  <th data-i18n="subscriptions-invoice-col-deducted">المخصوم من الاشتراك</th>
+                  <th data-i18n="subscriptions-invoice-col-payment">طريقة الدفع</th>
                 </tr>
               </thead>
               <tbody id="detailInvoicesTbody">
@@ -673,7 +862,7 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
           </div>
         </div>
         <div class="detail-inv-mobile" id="detailInvoicesCards" style="display:none"></div>
-        <div id="detailInvoicesEmpty" class="empty-state" style="display:none">لا توجد فواتير مرتبطة بهذا الاشتراك</div>
+        <div id="detailInvoicesEmpty" class="empty-state" style="display:none" data-i18n="subscriptions-invoice-empty">لا توجد فواتير مرتبطة بهذا الاشتراك</div>
         <!-- pagination الفواتير -->
         <div id="detailInvPagBar" class="detail-inv-pag" style="display:none">
           <div class="detail-inv-pag-info"><span id="detailInvPagInfo"></span></div>
@@ -687,10 +876,8 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
         </div>
       </div>
       <div class="modal-footer modal-detail-footer" id="detailFooterInfo">
-        <button type="button" class="btn-primary" id="btnDetailPrint" data-i18n="subscriptions-btn-print">طباعة إيصال</button>
-        <button type="button" class="btn-export btn-pdf" id="btnDetailReceiptPdf" data-i18n="subscriptions-btn-pdf-receipt">PDF إيصال</button>
         <button type="button" class="btn-export btn-pdf" id="btnDetailReportPdf" data-i18n="subscriptions-btn-pdf-report">PDF تقرير الاشتراك</button>
-        <button type="button" class="btn-secondary" id="btnCloseDetail2" data-i18n="products-btn-cancel">إلغاء</button>
+        <button type="button" class="btn-secondary" id="btnCloseDetail2" data-i18n="products-btn-cancel">إغلاق</button>
       </div>
     </div>
   </div>

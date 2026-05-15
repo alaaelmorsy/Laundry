@@ -171,6 +171,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (st === 'active') return 'badge-act';
     if (st === 'expired') return 'badge-exp';
     if (st === 'closed') return 'badge-closed';
+    if (st === 'near_expiry') return 'badge-near';
     return 'badge-none';
   }
 
@@ -179,20 +180,22 @@ window.addEventListener('DOMContentLoaded', () => {
       active: 'subscriptions-status-active',
       expired: 'subscriptions-status-expired',
       closed: 'subscriptions-status-closed',
-      none: 'subscriptions-status-none'
+      none: 'subscriptions-status-none',
+      near_expiry: 'subscriptions-status-active'
     }[st];
+    if (st === 'near_expiry') return I18N.t('subscriptions-status-near-expiry');
     return k ? I18N.t(k) : st;
   }
 
   function ledgerLabel(t) {
     const k = {
-      purchase: 'شراء / تفعيل',
-      renewal: 'تجديد',
-      consumption: 'استهلاك',
-      adjustment: 'تعديل',
-      refund: 'استرجاع'
+      purchase: 'subscriptions-ledger-purchase',
+      renewal: 'subscriptions-ledger-renewal',
+      consumption: 'subscriptions-ledger-consumption',
+      adjustment: 'subscriptions-ledger-adjustment',
+      refund: 'subscriptions-ledger-refund'
     };
-    return k[t] || t;
+    return k[t] ? I18N.t(k[t]) : t;
   }
 
   /** تاريخ ميلادي بأرقام إنجليزية DD/MM/YYYY */
@@ -252,6 +255,47 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function riyalHtml(amountStr) {
     return `<span class="amt-sar"><span class="sar">&#xE900;</span><span>${amountStr}</span></span>`;
+  }
+
+  function isNearExpiry(sub) {
+    if (sub.display_status !== 'active' && sub.status !== 'active') return false;
+    const endStr = sub.end_date || sub.period_to;
+    if (!endStr) return false;
+    const endDate = new Date(endStr);
+    if (Number.isNaN(endDate.getTime())) return false;
+    const now = new Date();
+    const diffMs = endDate.getTime() - now.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 7;
+  }
+
+  function updateSummaryCards(list) {
+    const elActive = document.getElementById('summaryActiveSubscriptions');
+    const elNear = document.getElementById('summaryNearExpirySubscriptions');
+    const elExpired = document.getElementById('summaryExpiredSubscriptions');
+    const elCredit = document.getElementById('summaryRemainingCredit');
+    if (!elActive && !elNear && !elExpired && !elCredit) return;
+    const activeCount = list.filter(s => s.display_status === 'active').length;
+    const nearCount = list.filter(s => {
+      const near = isNearExpiry(s);
+      if (near) s._nearExpiry = true;
+      return near;
+    }).length;
+    const expiredCount = list.filter(s => s.display_status === 'expired').length;
+    let totalCredit = 0;
+    list.forEach(s => {
+      const cr = Number(s.credit_remaining);
+      if (Number.isFinite(cr)) totalCredit += cr;
+    });
+    if (elActive) elActive.textContent = String(activeCount);
+    if (elNear) elNear.textContent = String(nearCount);
+    if (elExpired) elExpired.textContent = String(expiredCount);
+    if (elCredit) elCredit.innerHTML = riyalHtml(totalCredit.toFixed(0));
+  }
+
+  function getDisplayStatus(s) {
+    if (s.display_status === 'active' && isNearExpiry(s)) return 'near_expiry';
+    return s.display_status;
   }
 
   function packageOptionLabelHtml(p) {
@@ -501,6 +545,22 @@ window.addEventListener('DOMContentLoaded', () => {
     listEl.hidden = false;
     triggerEl.setAttribute('aria-expanded', 'true');
   }
+  function updatePackageSummary(prefix, li) {
+    const summaryEl = document.getElementById(`${prefix}PackageSummary`);
+    if (!summaryEl) return;
+    const nameEl = document.getElementById(`${prefix}PackageSummaryName`);
+    const priceEl = document.getElementById(`${prefix}PackageSummaryPrice`);
+    const creditEl = document.getElementById(`${prefix}PackageSummaryCredit`);
+    const name = li.dataset.pkgName || '';
+    const price = li.dataset.pkgPrice || '0';
+    const credit = li.dataset.pkgCredit || '0';
+    if (nameEl) nameEl.textContent = name;
+    if (priceEl) priceEl.innerHTML = riyalHtml(Number(price).toFixed(0));
+    if (creditEl) creditEl.innerHTML = riyalHtml(Number(credit).toFixed(0));
+    if (name) summaryEl.classList.add('visible');
+    else summaryEl.classList.remove('visible');
+  }
+
   function initPackageDropdown(prefix) {
     const triggerEl = document.getElementById(`${prefix}PackageTrigger`);
     const listEl = document.getElementById(`${prefix}PackageList`);
@@ -540,6 +600,7 @@ window.addEventListener('DOMContentLoaded', () => {
       labelEl.classList.remove('is-placeholder');
       labelEl.innerHTML = li.innerHTML;
       closePackageDd(prefix);
+      updatePackageSummary(prefix, li);
     });
   }
 
@@ -711,15 +772,22 @@ window.addEventListener('DOMContentLoaded', () => {
     listEl.innerHTML = '';
     listEl.hidden = true;
     triggerEl.setAttribute('aria-expanded', 'false');
+    const summaryEl = document.getElementById(`${prefix}PackageSummary`);
+    if (summaryEl) summaryEl.classList.remove('visible');
     if (!res.success || !res.packages) return;
-    for (const p of res.packages) {
+    const pkgs = res.packages;
+    for (const p of pkgs) {
       if (activeOnly && !p.is_active) continue;
       const li = document.createElement('li');
       li.setAttribute('role', 'option');
       li.dataset.value = String(p.id);
+      li.dataset.pkgName = p.name_ar || '';
+      li.dataset.pkgPrice = String(p.prepaid_price || '0');
+      li.dataset.pkgCredit = String(p.service_credit_value || '0');
       li.innerHTML = packageOptionLabelHtml(p);
       listEl.appendChild(li);
     }
+    listEl._pkgs = pkgs;
   }
 
   function buildListFilters() {
@@ -862,7 +930,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!row) return;
         const refEl = row.querySelector('.sub-ref');
         const ref = refEl ? refEl.textContent.trim() : '';
-        const name = row.cells[2] ? row.cells[2].textContent.trim() : '';
+        const name = row.dataset.customerName || '';
         openEditSubscriptionModal({
           id: sid,
           subscription_ref: ref,
@@ -876,7 +944,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadSubscriptions() {
-    subscriptionsTableBody.innerHTML = `<tr><td colspan="8" class="loading-cell"><span class="spinner"></span> ${I18N.t('subscriptions-loading')}</td></tr>`;
+    subscriptionsTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell"><span class="spinner"></span> ${I18N.t('subscriptions-loading')}</td></tr>`;
     emptySubscriptions.style.display = 'none';
     if (subscriptionsPaginationBar) subscriptionsPaginationBar.style.display = 'none';
     customerExportWrap.style.display = filterCustomerId ? 'inline-flex' : 'none';
@@ -905,23 +973,26 @@ window.addEventListener('DOMContentLoaded', () => {
         subsPage = 1;
       }
 
+      updateSummaryCards(list);
+
       if (!list.length) {
         subscriptionsTableBody.innerHTML = '';
-        emptySubscriptions.style.display = 'block';
+        emptySubscriptions.style.display = 'flex';
         renderSubscriptionsPagination();
         return;
       }
       emptySubscriptions.style.display = 'none';
       subscriptionsTableBody.innerHTML = list.map((s, idx) => {
         const rowNum = (subsPage - 1) * subsPageSize + idx + 1;
-        const periodTxt = s.period_from && s.period_to
-          ? `${formatDateNumeric(s.period_from)} — ${formatDateNumeric(s.period_to)}`
-          : s.period_from && !s.period_to
-          ? `${formatDateNumeric(s.period_from)} — ∞`
+        const ref = s.customer_file_ref || '';
+        const displayStatus = getDisplayStatus(s);
+        const endDateStr = s.end_date
+          ? formatDateNumeric(s.end_date)
+          : s.period_to
+          ? formatDateNumeric(s.period_to)
           : '—';
         const bal = s.credit_remaining != null ? riyalHtml(Number(s.credit_remaining).toFixed(2)) : '—';
         const hasPeriod = !!s.current_period_id;
-        const disPrint = !hasPeriod ? 'disabled' : '';
         const canManageActive = s.display_status === 'active' && hasPeriod;
         const disManage = canManageActive ? '' : 'disabled';
         const canResumeClosed = s.display_status === 'closed' && hasPeriod;
@@ -948,24 +1019,75 @@ window.addEventListener('DOMContentLoaded', () => {
         const pToAttr = escHtml(toDateInputValue(s.period_to));
         const crn = Number(s.credit_remaining);
         const credAttr = Number.isFinite(crn) ? escHtml(String(crn)) : '';
+        const refHtml = ref ? `<span class="sub-ref">#${escHtml(fmtSubRef(ref))}</span>` : '';
+        const balClass = s.credit_remaining != null && Number(s.credit_remaining) <= 0 ? 'color:#dc2626;font-weight:800' : '';
+
+        const mainActionHtml = canResumeClosed
+          ? `<button type="button" class="sub-action-btn sub-action-btn--resume" data-sub-toggle="${s.id}" data-sub-power-toggle="resume" data-sub-ref="${String(s.subscription_ref || '').replace(/"/g, '')}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="8 5 19 12 8 19 8 5"/></svg>
+              <span>${I18N.t('subscriptions-btn-resume-sub')}</span>
+            </button>`
+          : (s.display_status === 'active' || s.display_status === 'expired')
+          ? `<button type="button" class="sub-action-btn sub-action-btn--primary" data-sub-renew="${s.id}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>${I18N.t('subscriptions-btn-renew')}</span>
+            </button>`
+          : '';
+
+        const detailBtnHtml = `<button type="button" class="sub-action-btn sub-action-btn--detail" data-sub-detail="${s.id}" title="${I18N.t('subscriptions-btn-detail-title')}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>${I18N.t('subscriptions-btn-detail')}</span>
+        </button>`;
+
+        const menuBtnHtml = `<details class="sub-actions-more">
+          <summary class="sub-actions-more-trigger" aria-label="${I18N.t('subscriptions-btn-more-options')}" title="${I18N.t('subscriptions-btn-more')}">
+            <span>${I18N.t('subscriptions-btn-more')}</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="display:inline-block;vertical-align:middle;margin-top:1px"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="sub-actions-menu" onclick="event.stopPropagation()">
+            <button type="button" class="sub-actions-menu-item" data-sub-edit="${s.id}" data-period-from="${pFromAttr}" data-period-to="${pToAttr}" data-credit-remaining="${credAttr}" ${disManage}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <span>${I18N.t('subscriptions-btn-edit-sub')}</span>
+            </button>
+            ${hasPeriod ? `
+            <button type="button" class="sub-actions-menu-item" data-sub-print="${s.current_period_id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+              <span>${I18N.t('subscriptions-btn-print')}</span>
+            </button>
+            <button type="button" class="sub-actions-menu-item" data-sub-pdf="${s.current_period_id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+              <span>${I18N.t('subscriptions-btn-pdf-receipt')}</span>
+            </button>
+            ` : ''}
+            ${canManageActive ? `
+            <button type="button" class="sub-actions-menu-item sub-actions-menu-item--warning" data-sub-toggle="${s.id}" data-sub-power-toggle="stop" data-sub-ref="${String(s.subscription_ref || '').replace(/"/g, '')}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              <span>${I18N.t('subscriptions-dropdown-stop-sub')}</span>
+            </button>
+            ` : ''}
+            <button type="button" class="sub-actions-menu-item sub-actions-menu-item--danger" data-sub-delete="${s.id}" data-sub-ref="${String(s.subscription_ref || '').replace(/"/g, '')}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>${I18N.t('subscriptions-row-action-delete')}</span>
+            </button>
+          </div>
+        </details>`;
+
         return `
-        <tr>
-          <td><span class="sub-ref">${escHtml(s.customer_file_ref || '—')}</span></td>
-          <td>${escHtml(s.customer_name)}</td>
+        <tr data-sub-id="${s.id}" data-customer-name="${escHtml(s.customer_name || '')}">
+          <td>
+            <span style="font-weight:800;color:#1e293b">${escHtml(s.customer_name)}</span>
+            ${refHtml}
+          </td>
           <td class="cell-ltr">${escHtml(s.phone)}</td>
           <td>${escHtml(s.package_name || '—')}</td>
-          <td style="font-size:12px">${periodTxt}</td>
-          <td>${bal}</td>
-          <td><span class="badge ${statusBadgeClass(s.display_status)}">${statusLabel(s.display_status)}</span></td>
-          <td class="actions-cell subs-actions">
-            <div class="subs-action-row">
-              <button type="button" class="action-btn-label action-btn-label--teal" data-sub-detail="${s.id}" title="${I18N.t('subscriptions-btn-detail')}">${subActionSvg.detail}<span>${I18N.t('subscriptions-btn-detail')}</span></button>
-              <button type="button" class="action-btn-label action-btn-label--teal" data-sub-renew="${s.id}" title="${I18N.t('subscriptions-btn-renew')}">${subActionSvg.renew}<span>${I18N.t('subscriptions-btn-renew')}</span></button>
-            </div>
-            <div class="subs-action-row">
-              <button type="button" class="action-btn-label action-btn-label--violet" data-sub-edit="${s.id}" data-period-from="${pFromAttr}" data-period-to="${pToAttr}" data-credit-remaining="${credAttr}" title="${I18N.t('subscriptions-btn-edit-sub')}" ${disManage}>${subActionSvg.edit}<span>${I18N.t('subscriptions-btn-edit-sub')}</span></button>
-              <button type="button" class="action-btn-label ${powerToggleClass}" data-sub-toggle="${s.id}" data-sub-power-toggle="${powerToggleKind}" data-sub-ref="${String(s.subscription_ref || '').replace(/"/g, '')}" title="${powerToggleTitle}" ${disPowerToggle}>${powerToggleSvg}<span>${powerToggleLabel}</span></button>
-              <button type="button" class="action-btn-label action-btn-label--red-del" data-sub-delete="${s.id}" data-sub-ref="${String(s.subscription_ref || '').replace(/"/g, '')}" title="${I18N.t('subscriptions-btn-delete')}">${subActionSvg.del}<span>${I18N.t('subscriptions-row-action-delete')}</span></button>
+          <td style="${balClass}">${bal}</td>
+          <td style="font-size:12px">${endDateStr}</td>
+          <td><span class="badge ${statusBadgeClass(displayStatus)}">${statusLabel(displayStatus)}</span></td>
+          <td>
+            <div class="subs-actions-compact">
+              ${detailBtnHtml}
+              ${mainActionHtml}
+              ${menuBtnHtml}
             </div>
           </td>
         </tr>`;
@@ -999,6 +1121,25 @@ window.addEventListener('DOMContentLoaded', () => {
     subsPage = 1;
     loadSubscriptions();
   });
+
+  const btnApplyFilters = document.getElementById('btnApplySubscriptionFilters');
+  const btnClearFilters = document.getElementById('btnClearSubscriptionFilters');
+  if (btnApplyFilters) {
+    btnApplyFilters.addEventListener('click', () => {
+      subsPage = 1;
+      loadSubscriptions();
+    });
+  }
+  if (btnClearFilters) {
+    btnClearFilters.addEventListener('click', () => {
+      filterStatus.value = 'all';
+      filterDateFrom.value = '';
+      filterDateTo.value = '';
+      searchSubscriptions.value = '';
+      subsPage = 1;
+      loadSubscriptions();
+    });
+  }
 
   subsBtnFirstPage.addEventListener('click', () => goSubsPage(1));
   subsBtnPrevPage.addEventListener('click', () => goSubsPage(subsPage - 1));
@@ -1068,6 +1209,26 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('errRenew').style.display = 'none';
     document.getElementById('renewStart').value = '';
     document.getElementById('renewCarry').checked = true;
+    const infoEl = document.getElementById('renewSubInfo');
+    if (infoEl) {
+      try {
+        const dRes = await window.api.getSubscriptionDetail({ id: subId });
+        if (dRes.success && dRes.subscription) {
+          const s = dRes.subscription;
+          const bal = s.credit_remaining != null ? Number(s.credit_remaining).toFixed(0) : '—';
+          infoEl.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <span><strong>${I18N.t('subscriptions-renew-info-customer')}</strong> ${escHtml(s.customer_name)}</span>
+              <span><strong>${I18N.t('subscriptions-renew-info-balance')}</strong> ${riyalHtml(bal)}</span>
+            </div>`;
+          infoEl.style.display = 'block';
+        } else {
+          infoEl.style.display = 'none';
+        }
+      } catch (e) {
+        if (infoEl) infoEl.style.display = 'none';
+      }
+    }
     await fillPackageSelect('renew', true);
     modalRenew.style.display = 'flex';
   }
@@ -1272,7 +1433,7 @@ window.addEventListener('DOMContentLoaded', () => {
       ).join('');
       return `
         <div class="detail-inv-pag" id="pag-${id}">
-          <div class="detail-inv-pag-info">${s}–${e} من ${total}</div>
+          <div class="detail-inv-pag-info">${s}–${e} ${I18N.t('subscriptions-pagination-of')} ${total}</div>
           <div class="detail-inv-pag-controls">
             <button type="button" class="page-btn" data-pag-id="${id}" data-pag-p="first" ${page===1?'disabled':''}>«</button>
             <button type="button" class="page-btn" data-pag-id="${id}" data-pag-p="prev"  ${page===1?'disabled':''}>‹</button>
@@ -1422,9 +1583,9 @@ window.addEventListener('DOMContentLoaded', () => {
       tabsNav.className = 'detail-tabs-nav';
       tabsNav.setAttribute('role', 'tablist');
       const tabDefs = [
-        { id: 'dtab-info',     label: I18N.t('subscriptions-detail-tab-info')    || 'المعلومات' },
-        { id: 'dtab-periods',  label: I18N.t('subscriptions-detail-tab-periods') || 'الفترات' },
-        { id: 'dtab-ledger',   label: I18N.t('subscriptions-detail-tab-ledger')  || 'الحركات' }
+        { id: 'dtab-info',     label: I18N.t('subscriptions-detail-tab-info')    || I18N.t('subscriptions-mobile-tab-info') },
+        { id: 'dtab-periods',  label: I18N.t('subscriptions-detail-tab-periods') || I18N.t('subscriptions-mobile-tab-periods') },
+        { id: 'dtab-ledger',   label: I18N.t('subscriptions-detail-tab-ledger')  || I18N.t('subscriptions-mobile-tab-ledger') }
       ];
       tabDefs.forEach((td, i) => {
         const btn = document.createElement('button');
@@ -1506,9 +1667,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // ربط pagination بعد بناء الـ mobile tabs
       bindPagClicks();
     }
-    const noPeriod = !detailPrintPeriodId;
-    document.getElementById('btnDetailPrint').disabled = noPeriod;
-    document.getElementById('btnDetailReceiptPdf').disabled = noPeriod;
+    // لا توجد إجراءات إضافية في الفوتر - كل الإجراءات متاحة من زر خيارات في الجدول
     // إعادة التاب لـ "التفاصيل" عند كل فتح
     detailInvLoaded = false;
     switchDetailTab('info');
@@ -1593,7 +1752,17 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderDetailInvoices(filteredList) {
-    const pmLabel = (m) => ({ cash:'نقداً', card:'شبكة', credit:'آجل', mixed:'مختلط', bank:'تحويل بنكي', other:'أخرى' }[m] || m || '—');
+    const pmLabel = (m) => {
+      const map = {
+        cash: I18N.t('subscriptions-payment-cash'),
+        card: I18N.t('subscriptions-payment-card'),
+        credit: I18N.t('subscriptions-payment-credit'),
+        mixed: I18N.t('subscriptions-payment-mixed'),
+        bank: I18N.t('subscriptions-payment-bank'),
+        other: I18N.t('subscriptions-payment-other')
+      };
+      return map[m] || m || '—';
+    };
 
     if (!filteredList.length) {
       detailInvTbody.innerHTML = '';
@@ -1626,16 +1795,16 @@ window.addEventListener('DOMContentLoaded', () => {
       detailInvCards.innerHTML = pageList.map(inv => `
         <div class="inv-card">
           <div class="inv-card-row1">
-            <span class="inv-card-num">فاتورة #${escHtml(String(inv.invoice_seq || inv.order_number || '—'))}</span>
+            <span class="inv-card-num">${I18N.t('subscriptions-invoice-prefix')}${escHtml(String(inv.invoice_seq || inv.order_number || '—'))}</span>
             <span class="inv-card-date">${escHtml(formatDateTimeNumeric(inv.created_at))}</span>
           </div>
           <div class="inv-card-row2">
             <div class="inv-card-field">
-              <span class="inv-card-label">المبلغ الإجمالي</span>
+              <span class="inv-card-label">${I18N.t('subscriptions-invoice-total')}</span>
               <span class="inv-card-val">${riyalHtml(Number(inv.total_amount).toFixed(2))}</span>
             </div>
             <div class="inv-card-field">
-              <span class="inv-card-label">المخصوم</span>
+              <span class="inv-card-label">${I18N.t('subscriptions-invoice-deducted')}</span>
               <span class="inv-card-val">${riyalHtml(Number(inv.deducted_amount).toFixed(2))}</span>
             </div>
             <span class="inv-card-pay">${escHtml(pmLabel(inv.payment_method))}</span>
@@ -1650,7 +1819,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } else {
         detailInvPagBar.style.display = 'flex';
         const s = start + 1, e = Math.min(start + detailInvPageSize, total);
-        detailInvPagInfo.textContent = `${s}–${e} من ${total}`;
+        detailInvPagInfo.textContent = `${s}–${e} ${I18N.t('subscriptions-pagination-of')} ${total}`;
         detailInvBtnFirst.disabled = detailInvPage === 1;
         detailInvBtnPrev.disabled  = detailInvPage === 1;
         detailInvBtnNext.disabled  = detailInvPage === totalPages;
@@ -1690,7 +1859,7 @@ window.addEventListener('DOMContentLoaded', () => {
       detailInvAllList = res && res.success ? (res.orders || []) : [];
       renderDetailInvoices(detailInvAllList);
     } catch (e) {
-      detailInvTbody.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:#b91c1c">حدث خطأ</td></tr>`;
+      detailInvTbody.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:#b91c1c">${I18N.t('subscriptions-err-load-invoices')}</td></tr>`;
     }
   }
 
@@ -1713,21 +1882,8 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.getElementById('btnDetailPrint').addEventListener('click', async () => {
-    if (!detailPrintPeriodId) return;
-    const r = await window.api.printSubscriptionReceipt({ periodId: detailPrintPeriodId });
-    if (r.success) showToast(I18N.t('subscriptions-print-success'), 'success');
-    else showToast(r.message || I18N.t('subscriptions-err-generic'), 'error');
-  });
-
-  document.getElementById('btnDetailReceiptPdf').addEventListener('click', async () => {
-    if (!detailPrintPeriodId) return;
-    const r = await window.api.exportSubscriptionReceiptPdf({ periodId: detailPrintPeriodId });
-    if (r.success) showToast(I18N.t('subscriptions-pdf-receipt-success'), 'success');
-    else showToast(r.message || I18N.t('subscriptions-export-error'), 'error');
-  });
-
-  document.getElementById('btnDetailReportPdf').addEventListener('click', async () => {
+  const btnDetailReportPdfEl = document.getElementById('btnDetailReportPdf');
+  if (btnDetailReportPdfEl) btnDetailReportPdfEl.addEventListener('click', async () => {
     if (!detailCustomerId || !detailSubscriptionId) return;
     const r = await window.api.exportSubscriptionCustomerReport({
       type: 'pdf',

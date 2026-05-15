@@ -234,12 +234,12 @@ window.addEventListener('DOMContentLoaded', () => {
     fields.vatRate.value = s.vatRate != null ? String(s.vatRate) : '15';
     fields.vatNumber.value = s.vatNumber || '';
     fields.commercialRegister.value = s.commercialRegister || '';
-    fields.buildingNumber.value = s.buildingNumber || '';
-    fields.streetNameAr.value = s.streetNameAr || '';
-    fields.districtAr.value = s.districtAr || '';
-    fields.cityAr.value = s.cityAr || '';
-    fields.postalCode.value = s.postalCode || '';
-    fields.additionalNumber.value = s.additionalNumber || '';
+    if (fields.buildingNumber) fields.buildingNumber.value = s.buildingNumber || '';
+    if (fields.streetNameAr) fields.streetNameAr.value = s.streetNameAr || '';
+    if (fields.districtAr) fields.districtAr.value = s.districtAr || '';
+    if (fields.cityAr) fields.cityAr.value = s.cityAr || '';
+    if (fields.postalCode) fields.postalCode.value = s.postalCode || '';
+    if (fields.additionalNumber) fields.additionalNumber.value = s.additionalNumber || '';
     fields.invoicePaperType.value = s.invoicePaperType === 'a4' ? 'a4' : 'thermal';
     fields.logoWidth.value = s.logoWidth != null ? String(s.logoWidth) : '180';
     fields.logoHeight.value = s.logoHeight != null ? String(s.logoHeight) : '70';
@@ -288,7 +288,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (reportEmailStatus) {
       const st = s.reportEmailLastStatus || (s.reportEmailEnabled ? 'enabled' : 'disabled');
-      reportEmailStatus.textContent = st || '—';
+      const statusMap = {
+        'enabled': I18N.t('settings-report-email-status-enabled'),
+        'disabled': I18N.t('settings-report-email-status-disabled'),
+        'success': I18N.t('settings-report-email-status-success'),
+        'failed': I18N.t('settings-report-email-status-failed'),
+      };
+      reportEmailStatus.textContent = statusMap[st] || st || '—';
     }
     if (reportEmailLastSent) reportEmailLastSent.textContent = fmtDateTimeLocal(s.reportEmailLastSentAt);
   }
@@ -354,12 +360,12 @@ window.addEventListener('DOMContentLoaded', () => {
       vatRate: fields.vatRate.value,
       vatNumber: fields.vatNumber.value,
       commercialRegister: fields.commercialRegister.value,
-      buildingNumber: fields.buildingNumber.value,
-      streetNameAr: fields.streetNameAr.value,
-      districtAr: fields.districtAr.value,
-      cityAr: fields.cityAr.value,
-      postalCode: fields.postalCode.value,
-      additionalNumber: fields.additionalNumber.value,
+      buildingNumber: fields.buildingNumber ? fields.buildingNumber.value : '',
+      streetNameAr: fields.streetNameAr ? fields.streetNameAr.value : '',
+      districtAr: fields.districtAr ? fields.districtAr.value : '',
+      cityAr: fields.cityAr ? fields.cityAr.value : '',
+      postalCode: fields.postalCode ? fields.postalCode.value : '',
+      additionalNumber: fields.additionalNumber ? fields.additionalNumber.value : '',
       priceDisplayMode,
       enabledPaymentMethods,
       defaultPaymentMethod: defaultPaymentMethod.value,
@@ -503,20 +509,20 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   if (btnTestReportEmail) btnTestReportEmail.addEventListener('click', async () => {
     if (!window.api || typeof window.api.sendTestDailyReportEmail !== 'function') {
-      showToast('API غير جاهز', 'error');
+      showToast(I18N.t('settings-report-email-toast-api-not-ready'), 'error');
       return;
     }
     btnTestReportEmail.disabled = true;
     try {
       const res = await window.api.sendTestDailyReportEmail();
       if (!res || !res.success) {
-        showToast(res?.message || 'فشل إرسال البريد', 'error');
+        showToast(res?.message || I18N.t('settings-report-email-toast-send-failed'), 'error');
         return;
       }
-      showToast('تم إرسال التقرير بنجاح', 'success');
+      showToast(I18N.t('settings-report-email-toast-sent'), 'success');
       await loadSettings();
     } catch (e) {
-      showToast(e.message || 'فشل إرسال البريد', 'error');
+      showToast(e.message || I18N.t('settings-report-email-toast-send-failed'), 'error');
     } finally {
       btnTestReportEmail.disabled = false;
     }
