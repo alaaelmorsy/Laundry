@@ -304,19 +304,30 @@ html, body {
   direction: ltr;
 }
 
-/* ===== Summary: QR + Totals ===== */
+/* ===== QR row (centered on page) ===== */
+.a4-qr-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 4mm;
+}
+.a4-qr-box {
+  text-align: center;
+  flex-shrink: 0;
+  width: 38mm;
+  margin: 0 auto;
+}
+
+/* ===== Summary: Totals (full width, no QR sidebar) ===== */
 .a4-summary {
   display: flex;
   flex-direction: row;
   direction: rtl;
   gap: 4mm;
   align-items: flex-start;
+  justify-content: flex-end;
   margin-bottom: 16mm;
-}
-.a4-qr-box {
-  text-align: center;
-  flex-shrink: 0;
-  width: 38mm;
 }
 .a4-qr {
   width: 34mm;
@@ -502,9 +513,13 @@ html, body {
   .a4-summary {
     flex-direction: column;
   }
+  .a4-qr-row {
+    margin: 0 0 4mm;
+  }
   .a4-qr-box {
     width: 100%;
     max-width: 38mm;
+    margin: 0 auto;
   }
   .a4-totals {
     width: 100%;

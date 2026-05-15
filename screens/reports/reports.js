@@ -17,5 +17,9 @@ window.addEventListener('DOMContentLoaded', () => {
     location.href = '/screens/reports/subscriptions-report/subscriptions-report.html';
   });
 
+  document.getElementById('cardTypesReport').addEventListener('click', () => {
+    location.href = '/screens/reports/types-report/types-report.html';
+  });
+
   if (typeof I18N !== 'undefined') I18N.apply();
 });

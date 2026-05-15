@@ -2780,15 +2780,26 @@ html, body {
 .a4m-td-num { text-align: center; direction: ltr; font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
 .a4m-td-name { text-align: start; }
 .a4m-td-en { font-size: 6.5pt; font-weight: 700; color: #000; display: block; direction: ltr; }
+/* ===== QR row (centered on page) ===== */
+.a4m-qr-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 4mm;
+}
+.a4m-qr-box { text-align: center; flex-shrink: 0; width: 35mm; margin: 0 auto; }
+
+/* ===== Summary: Totals (full width, no QR sidebar) ===== */
 .a4m-summary {
   display: flex;
   flex-direction: row;
   direction: rtl;
   gap: 4mm;
   align-items: flex-start;
+  justify-content: flex-end;
   margin-bottom: 14mm;
 }
-.a4m-qr-box { text-align: center; flex-shrink: 0; width: 35mm; }
 .a4m-qr { width: 30mm; height: 30mm; margin: 0 auto 1mm; border: 2px solid #000; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; }
 .a4m-qr svg { display: block; width: 26mm !important; height: 26mm !important; max-width: none !important; }
 .a4m-qr-label { font-size: 6.5pt; font-weight: 700; color: #000; }
@@ -5427,6 +5438,20 @@ html, body {
   margin: 3px 0 4px;
   line-height: 1.5;
   word-break: break-all;
+}
+.inv-cn-refund-row {
+  text-align: center;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  color: #000;
+  border-top: 1px dashed #94a3b8;
+  border-bottom: 1px dashed #94a3b8;
+  padding: 3px 4px;
+  margin: 0 0 4px;
+  line-height: 1.5;
+  word-break: break-word;
+  background: #fff;
 }
 
 @media (max-width: 480px) {

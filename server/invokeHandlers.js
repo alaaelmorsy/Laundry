@@ -1086,6 +1086,20 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'getTypesReport': {
+      try {
+        const { dateFrom, dateTo, productId, serviceId } = payload || {};
+        if (!dateFrom || !dateTo) {
+          return { success: false, message: 'يرجى تحديد تاريخ البداية والنهاية' };
+        }
+        const result = await db.getTypesReport({ dateFrom, dateTo, productId, serviceId });
+        return { success: true, rows: result.rows, totals: result.totals };
+      } catch (err) {
+        console.error('getTypesReport', err);
+        return { success: false, message: err.message || 'خطأ في الخادم' };
+      }
+    }
+
     case 'zatcaSubmitOrder': {
       try {
         const { orderId } = payload || {};

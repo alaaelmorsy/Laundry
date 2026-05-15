@@ -271,6 +271,8 @@ ${bodyStyle}
 .inv-grand-label{font-size:12px;font-weight:700;color:#000}
 .inv-grand-val{font-size:13px;font-weight:700;color:#000}
 .inv-mixed-cash-row,.inv-mixed-card-row{border-top:1px dashed #ccc;padding:2px 8px}
+.inv-barcode-wrap{text-align:center;margin:4px 0 2px;width:100%;display:flex;justify-content:center}
+.inv-barcode-wrap svg{max-width:100%;height:auto}
 .inv-qr-wrap{text-align:center;margin:8px 0 4px}
 .inv-qr{display:inline-block;background:#fff;line-height:0}
 .inv-qr svg{display:block;max-width:130px;max-height:130px}
@@ -315,8 +317,9 @@ ${bodyStyle}
 .a4m-td-num{text-align:center;direction:ltr;font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
 .a4m-td-name{text-align:start}
 .a4m-td-en{font-size:6.5pt;font-weight:700;color:#000;display:block;direction:ltr}
-.a4m-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;margin-bottom:14mm}
-.a4m-qr-box{text-align:center;flex-shrink:0;width:35mm}
+.a4m-qr-row{display:flex;justify-content:center;align-items:center;width:100%;margin:0 0 4mm}
+.a4m-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:flex-end;margin-bottom:14mm}
+.a4m-qr-box{text-align:center;flex-shrink:0;width:35mm;margin:0 auto}
 .a4m-qr{width:30mm;height:30mm;margin:0 auto 1mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
 .a4m-qr svg{display:block;width:26mm!important;height:26mm!important;max-width:none!important}
 .a4m-qr-label{font-size:6.5pt;font-weight:700;color:#000}
@@ -368,8 +371,9 @@ ${bodyStyle}
 .a4-td-num{text-align:center;direction:ltr;font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
 .a4-td-name{text-align:start}
 .a4-td-en{font-size:7.5pt;font-weight:700;color:#000;display:block;direction:ltr}
-.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;margin-bottom:16mm}
-.a4-qr-box{text-align:center;flex-shrink:0;width:38mm}
+.a4-qr-row{display:flex;justify-content:center;align-items:center;width:100%;margin:0 0 4mm}
+.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:flex-end;margin-bottom:16mm}
+.a4-qr-box{text-align:center;flex-shrink:0;width:38mm;margin:0 auto}
 .a4-qr{width:34mm;height:34mm;margin:0 auto 1.5mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
 .a4-qr svg{display:block;width:30mm!important;height:30mm!important;max-width:none!important}
 .a4-qr-label{font-size:7pt;font-weight:700;color:#000}
@@ -654,6 +658,42 @@ async function exportSubscriptionsReport(type, filters = {}) {
   throw new Error('نوع التصدير غير مدعوم');
 }
 
+async function exportTypesReport(type, filters = {}) {
+  const [data, branding] = await Promise.all([
+    db.getTypesReport(filters),
+    loadAppBrandingForReceipts().catch(() => ({}))
+  ]);
+  const f = cairoFonts();
+
+  if (type === 'excel') {
+    const wb = XLSX.utils.book_new();
+    const sheets = reportHtml.buildTypesReportExcelSheets(data, filters, branding);
+    sheets.forEach(({ name, rows, cols, freezeRow }) => {
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = cols;
+      ws['!sheetViews'] = [{
+        rightToLeft: true,
+        state: freezeRow ? 'frozen' : undefined,
+        ySplit: freezeRow || undefined,
+        topLeftCell: freezeRow ? `A${freezeRow + 1}` : undefined,
+      }];
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `types-report_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  if (type === 'pdf') {
+    const html = reportHtml.buildPdfHtmlForTypesReport(
+      data, filters, f.cairoRegularB64, f.cairoBoldB64, f.saudiRiyalB64, branding
+    );
+    const buffer = await htmlToPdfBuffer(html, { landscape: false });
+    return { buffer, filename: `types-report_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
 module.exports = {
   exportExpenses,
   exportCustomers,
@@ -670,6 +710,7 @@ module.exports = {
   exportReport,
   exportAllInvoicesReport,
   exportSubscriptionsReport,
+  exportTypesReport,
   MAX_PRODUCT_IMAGE_RAW_BYTES,
   cairoFonts
 };

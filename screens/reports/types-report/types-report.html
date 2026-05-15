@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-types-report">تقرير الأنواع - ادارة المغسلة</title>
+  <link rel="stylesheet" href="../../../assets/tailwind.css" />
+  <link rel="stylesheet" href="types-report.css" />
+  <link rel="stylesheet" href="../../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-types-report">
+  <div class="page-wrapper">
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="types-report-header">تقرير الأنواع</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="btn-action btn-excel" id="btnExcelExport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12 a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span data-i18n="types-report-excel">Excel</span>
+        </button>
+        <button class="btn-action btn-pdf" id="btnPdfExport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <span data-i18n="types-report-pdf">PDF</span>
+        </button>
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+          <span data-i18n="types-report-back">رجوع</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <div class="filter-inner">
+        <div class="filter-fields">
+          <div class="date-pair-wrap">
+            <div class="filter-field" id="wrapDateFrom">
+              <span class="filter-label" data-i18n="types-report-from">من:</span>
+              <input class="filter-input" type="datetime-local" id="filterDateFrom" />
+            </div>
+            <div class="filter-field" id="wrapDateTo">
+              <span class="filter-label" data-i18n="types-report-to">إلى:</span>
+              <input class="filter-input" type="datetime-local" id="filterDateTo" />
+            </div>
+          </div>
+          <div class="filter-pair-wrap">
+            <div class="filter-field" id="wrapProduct">
+              <span class="filter-label" data-i18n="types-report-product">الصنف:</span>
+              <select class="filter-input filter-select" id="filterProduct">
+                <option value="" data-i18n="types-report-product-all">— الكل —</option>
+              </select>
+            </div>
+            <div class="filter-field" id="wrapService">
+              <span class="filter-label" data-i18n="types-report-service">العملية:</span>
+              <select class="filter-input filter-select" id="filterService">
+                <option value="" data-i18n="types-report-service-all">— الكل —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <button class="btn-apply" id="btnApplyFilter">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span data-i18n="types-report-show">عرض التقرير</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content" id="mainContent">
+      <div class="empty-prompt" id="emptyPrompt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <p data-i18n="types-report-empty">اختر الفترة الزمنية واضغط "عرض التقرير"</p>
+      </div>
+      <div class="loading-state" id="loadingState" style="display:none;">
+        <div class="spinner"></div>
+        <p data-i18n="types-report-loading">جاري تحميل البيانات…</p>
+      </div>
+      <div id="reportContent" style="display:none;">
+        <div class="period-info-bar" id="periodInfoBar"></div>
+        <div class="report-section" style="margin-top:14px;">
+          <div class="section-header">
+            <div class="section-title-wrap">
+              <span class="section-title" data-i18n="types-report-details">تفاصيل الأنواع والعمليات</span>
+              <span class="section-badge" id="rowCountBadge">0</span>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="report-table" id="typesTable">
+              <thead>
+                <tr>
+                  <th class="th-seq" data-i18n="types-report-col-seq">#</th>
+                  <th data-i18n="types-report-col-product">اسم الصنف</th>
+                  <th data-i18n="types-report-col-service">العملية</th>
+                  <th class="th-num" data-i18n="types-report-col-qty">العدد</th>
+                  <th class="th-num" data-i18n="types-report-col-gross">الإجمالي الشامل</th>
+                </tr>
+              </thead>
+              <tbody id="typesTableBody">
+              </tbody>
+            </table>
+          </div>
+          <div class="totals-footer" id="totalsFooter">
+            <div class="totals-grid">
+              <div class="total-item total-item--qty">
+                <span class="total-label" data-i18n="types-report-total-qty">إجمالي العدد</span>
+                <span class="total-value" id="totalQty">0</span>
+              </div>
+              <div class="total-item total-item--gross">
+                <span class="total-label" data-i18n="types-report-total-gross">الإجمالي الشامل</span>
+                <span class="total-value" id="totalGross">
+                  <span class="sar">&#xE900;</span> 0.00
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../../assets/web-api.js"></script>
+  <script src="../../../assets/auth-guard.js"></script>
+  <script src="../../../assets/i18n.js"></script>
+  <script src="types-report.js"></script>
+</body>
+</html>

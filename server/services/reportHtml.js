@@ -1486,7 +1486,11 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
 .a4-td-num{text-align:center;direction:ltr;font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
 .a4-td-name{text-align:start}
 .a4-td-en{font-size:7.5pt;font-weight:700;color:#000;display:block;direction:ltr}
-.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;margin-bottom:16mm}
+.a4-qr-row{display:flex;justify-content:center;align-items:center;width:100%;margin:0 0 4mm}
+.a4-qr-box{text-align:center;flex-shrink:0;width:38mm;margin:0 auto}
+.a4-qr{width:34mm;height:34mm;margin:0 auto 1.5mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
+.a4-qr svg{display:block;width:30mm!important;height:30mm!important;max-width:none!important}
+.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:flex-end;margin-bottom:16mm}
 .a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0;margin-inline-end:auto}
 .a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;margin-inline-end:auto;background:#fff;direction:rtl}
 .a4-trow{display:flex;justify-content:space-between;align-items:center;padding:0;font-size:9pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
@@ -1877,6 +1881,173 @@ function buildReportExcelSheets(data, filters, branding) {
   ];
 }
 
+function buildPdfHtmlForTypesReport({ rows, totals }, filters, cairoRegularB64, cairoBoldB64, saudiRiyalB64, branding) {
+  const br = branding || {};
+  const shopName = br.laundryNameAr || br.laundryNameEn || 'نظام المغسلة';
+
+  const now = new Date();
+  const printDate = formatDateSimple(now.toISOString());
+  const pad = (x) => String(x).padStart(2, '0');
+  const printTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  const filterParts = [];
+  if (filters.dateFrom || filters.dateTo) {
+    const from = filters.dateFrom ? formatDateSimple(filters.dateFrom) : '—';
+    const to   = filters.dateTo   ? formatDateSimple(filters.dateTo)   : '—';
+    filterParts.push(`الفترة: ${from} — ${to}`);
+  }
+  if (filters.productId) filterParts.push('تصفية حسب الصنف');
+  if (filters.serviceId) filterParts.push('تصفية حسب العملية');
+
+  const Rv = (n) => `<span class="sar">&#xE900;</span> ${fmt(n)}`;
+
+  const rowsHtml = (rows || []).length
+    ? rows.map((r, i) => {
+        const isZero = Number(r.total_qty || 0) === 0;
+        return `
+          <tr class="${isZero ? 'dim' : ''}${i % 2 === 0 ? ' even' : ''}">
+            <td class="ctr">${i + 1}</td>
+            <td class="prod">${escHtmlPdf(r.product_name_ar || r.product_name_en || '—')}</td>
+            <td>${escHtmlPdf(r.service_name_ar || r.service_name_en || '—')}</td>
+            <td class="num">${r.total_qty}</td>
+            <td class="num gross">${Rv(r.total_gross)}</td>
+          </tr>`;
+      }).join('') + `
+          <tr class="tbl-foot">
+            <td colspan="3">الإجمالي: ${rows.length} صنف × عملية</td>
+            <td class="num">${totals.total_qty}</td>
+            <td class="num">${Rv(totals.total_gross)}</td>
+          </tr>`
+    : '<tr><td colspan="5" class="empty-msg">لا توجد بيانات في هذه الفترة</td></tr>';
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<style>
+@font-face{font-family:'Cairo';font-weight:400;src:url('data:font/woff2;base64,${cairoRegularB64}') format('woff2')}
+@font-face{font-family:'Cairo';font-weight:700;src:url('data:font/woff2;base64,${cairoBoldB64}') format('woff2')}
+@font-face{font-family:'SaudiRiyal';font-weight:400;src:url('data:font/woff;base64,${saudiRiyalB64}') format('woff')}
+.sar{font-family:'SaudiRiyal';font-weight:400;font-size:1.1em;vertical-align:middle;display:inline-block;line-height:1}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif}
+body{direction:rtl;background:#fff;color:#000;padding:14px 16px;font-size:10px}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #f59e0b;padding-bottom:10px;margin-bottom:12px}
+.hdr-title{font-size:16px;font-weight:700;color:#d97706}
+.hdr-sub{font-size:9px;color:#475569;margin-top:3px}
+.hdr-right{text-align:left;direction:ltr}
+.hdr-date{font-size:9px;font-weight:700;color:#1e293b}
+.info-bar{background:linear-gradient(90deg,rgba(245,158,11,.08),rgba(217,119,6,.05));border:1px solid rgba(245,158,11,.25);border-radius:6px;padding:6px 12px;font-size:9px;color:#92400e;font-weight:700;text-align:center;margin-bottom:10px}
+.totals-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:12px}
+.tot-item{border:1px solid #e2e8f0;border-radius:7px;padding:7px 9px;text-align:center;border-top:2px solid #f59e0b}
+.tot-lbl{font-size:8px;color:#64748b;font-weight:700;margin-bottom:3px}
+.tot-val{font-size:11px;font-weight:700;color:#1e293b}
+.tot-val.qty{color:#1d4ed8}.tot-val.sales{color:#15803d}.tot-val.vat{color:#9333ea}.tot-val.gross{color:#b45309}
+.sec-hdr{background:linear-gradient(90deg,#d97706,#f59e0b);color:#fff;padding:6px 10px;border-radius:6px 6px 0 0;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.sec-badge{background:rgba(255,255,255,.25);border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700}
+table{width:100%;border-collapse:collapse;margin-bottom:14px}
+thead tr{background:linear-gradient(90deg,rgba(245,158,11,.12),rgba(217,119,6,.08))}
+thead th{padding:7px 7px;font-size:9px;font-weight:700;color:#d97706;text-align:right;white-space:nowrap;border-bottom:2px solid #fed7aa}
+tbody tr{border-bottom:1px solid #f1f5f9}
+tbody tr:last-child{border-bottom:none}
+tbody tr.even{background:#f8fafc}
+tbody tr.dim{opacity:.55}
+tbody td{padding:6px 7px;font-size:9px;color:#475569;text-align:right}
+.ctr{text-align:center}
+.prod{font-weight:700;color:#1e293b}
+.num{text-align:left;direction:ltr;font-weight:700;white-space:nowrap}
+.tax{color:#000}.gross{color:#000}
+.tbl-foot td{background:#fefce8;font-weight:900;font-size:9px;color:#92400e;border-top:2px solid #fde68a;padding:6px 7px}
+.tbl-foot td.num{color:#d97706!important}
+.empty-msg{text-align:center;color:#94a3b8;padding:16px;font-size:9.5px}
+.footer{border-top:2px solid #e2e8f0;padding:6px 12px;background:#f8fafc;display:flex;justify-content:space-between;margin-top:10px;font-size:8.5px;color:#64748b}
+@media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div>
+    <div class="hdr-title">تقرير الأنواع — ${shopName}</div>
+    <div class="hdr-sub">${filterParts.join(' &nbsp;·&nbsp; ') || 'جميع الأصناف والعمليات'}</div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-date">🖨️ طُبع: ${printDate} ${printTime}</div>
+  </div>
+</div>
+
+${filterParts.length ? `<div class="info-bar">${filterParts.join(' &nbsp;·&nbsp; ')}</div>` : ''}
+
+<div class="totals-grid">
+  <div class="tot-item">
+    <div class="tot-lbl">إجمالي العدد</div>
+    <div class="tot-val qty">${totals.total_qty || 0}</div>
+  </div>
+  <div class="tot-item">
+    <div class="tot-lbl">الإجمالي الشامل</div>
+    <div class="tot-val gross">${Rv(totals.total_gross)}</div>
+  </div>
+</div>
+
+<div class="sec-hdr">
+  <span>تفاصيل الأنواع والعمليات</span>
+  <span class="sec-badge">${(rows || []).length} صنف × عملية</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th class="ctr">#</th>
+      <th>اسم الصنف</th>
+      <th>العملية</th>
+      <th class="num">العدد</th>
+      <th class="num">الإجمالي الشامل</th>
+    </tr>
+  </thead>
+  <tbody>${rowsHtml}</tbody>
+</table>
+
+<div class="footer">
+  <span>نظام المغسلة — تقرير الأنواع</span>
+  <span>تم الإنشاء: ${printDate} ${printTime}</span>
+</div>
+</body>
+</html>`;
+}
+
+function buildTypesReportExcelSheets({ rows, totals }, filters, branding) {
+  const br = branding || {};
+  const shopName = br.laundryNameAr || br.laundryNameEn || 'نظام المغسلة';
+  const printDate = formatDateSimple(new Date().toISOString());
+
+  const headerRows = [
+    [`تقرير الأنواع — ${shopName}`],
+    [`تاريخ التصدير: ${printDate}`],
+  ];
+  if (filters.dateFrom || filters.dateTo) {
+    headerRows.push([`الفترة: ${filters.dateFrom || '—'} إلى ${filters.dateTo || '—'}`]);
+  }
+  headerRows.push([]);
+
+  const dataRows = [
+    ['#', 'اسم الصنف', 'العملية', 'العدد', 'الإجمالي الشامل'],
+    ...(rows || []).map((r, i) => [
+      i + 1,
+      (r.product_name_ar || r.product_name_en || '—'),
+      (r.service_name_ar  || r.service_name_en  || '—'),
+      Number(r.total_qty   || 0),
+      Number(r.total_gross || 0).toFixed(2),
+    ]),
+    [],
+    ['', '', 'الإجمالي', Number(totals.total_qty || 0), Number(totals.total_gross || 0).toFixed(2)],
+  ];
+
+  const allRows = [...headerRows, ...dataRows];
+  return [{
+    name: 'تقرير الأنواع',
+    rows: allRows,
+    cols: [{ wch: 6 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }],
+    freezeRow: headerRows.length,
+  }];
+}
+
 module.exports = {
   formatDateSimple,
   buildExcelData,
@@ -1905,6 +2076,8 @@ module.exports = {
   buildPdfHtmlForAllInvoicesReport,
   buildExcelDataForSubscriptionsReport,
   buildPdfHtmlForSubscriptionsReport,
+  buildPdfHtmlForTypesReport,
+  buildTypesReportExcelSheets,
 };
 
 function fmt(n) { return Number(n || 0).toFixed(2); }

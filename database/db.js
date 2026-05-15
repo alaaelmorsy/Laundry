@@ -4254,7 +4254,34 @@ async function getCreditNoteById(id) {
     ORDER BY id ASC
   `, [id]);
 
-  return { creditNote: cn, items };
+  // جلب قيد استرجاع الاشتراك المرتبط بإشعار الدائن إن وُجد
+  let subscriptionRefund = null;
+  try {
+    const [[refRow]] = await pool.query(`
+      SELECT sl.amount, sl.balance_after, sl.notes, sl.subscription_period_id,
+             c.subscription_number, pp.name_ar AS package_name
+        FROM subscription_ledger sl
+        INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
+        INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
+        INNER JOIN customers c ON c.id = cs.customer_id
+        INNER JOIN prepaid_packages pp ON pp.id = sp.package_id
+       WHERE sl.ref_type = 'credit_note' AND sl.ref_id = ? AND sl.entry_type = 'refund'
+       ORDER BY sl.id DESC
+       LIMIT 1
+    `, [id]);
+    if (refRow) {
+      subscriptionRefund = {
+        amount: Number(refRow.amount) || 0,
+        newBalance: Number(refRow.balance_after) || 0,
+        note: refRow.notes || '',
+        subscriptionNumber: refRow.subscription_number || '',
+        packageName: refRow.package_name || '',
+        originalInvoiceSeq: cn.original_invoice_seq || null
+      };
+    }
+  } catch (_) {}
+
+  return { creditNote: cn, items, subscriptionRefund };
 }
 
 async function getInvoiceBySeq(invoiceSeq) {
@@ -4269,7 +4296,7 @@ async function getInvoiceBySeq(invoiceSeq) {
            o.vat_rate, o.vat_amount, o.total_amount, o.payment_method, o.payment_status,
            o.paid_amount, o.remaining_amount, o.price_display_mode,
            o.created_at, o.created_by, o.starch, o.bluing,
-           c.id AS customer_id, c.customer_name, c.phone
+           c.id AS customer_id, c.customer_name, c.phone, c.subscription_number
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
     WHERE o.invoice_seq = ?
@@ -4326,7 +4353,7 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
     await conn.beginTransaction();
 
     const [[orderRow]] = await conn.query(
-      `SELECT id, invoice_seq, order_number, payment_status FROM orders WHERE id = ? FOR UPDATE`,
+      `SELECT id, invoice_seq, order_number, payment_status, payment_method FROM orders WHERE id = ? FOR UPDATE`,
       [originalOrderId]
     );
     if (!orderRow) {
@@ -4399,6 +4426,53 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       `, params);
     }
 
+    // ── استرجاع رصيد الاشتراك إذا كانت الفاتورة الأصلية مدفوعة بالاشتراك ──
+    let subscriptionRefund = null;
+    if (orderRow.payment_method === 'subscription') {
+      try {
+        const [[ledgerRow]] = await conn.query(
+          `SELECT sl.subscription_period_id, sl.amount
+             FROM subscription_ledger sl
+            WHERE sl.ref_type = 'order' AND sl.ref_id = ? AND sl.entry_type = 'consumption'
+            ORDER BY sl.id DESC
+            LIMIT 1`,
+          [originalOrderId]
+        );
+        if (ledgerRow) {
+          const periodId = Number(ledgerRow.subscription_period_id);
+          const refundAmount = Number(ledgerRow.amount) || 0;
+
+          const [[periodRow]] = await conn.query(
+            `SELECT credit_remaining FROM subscription_periods WHERE id = ? FOR UPDATE`,
+            [periodId]
+          );
+          if (periodRow && refundAmount > 0) {
+            const newBalance = Number(periodRow.credit_remaining) + refundAmount;
+            await conn.query(
+              `UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?`,
+              [newBalance, periodId]
+            );
+            const refundNote = `إرجاع المبلغ المرتبط بالفاتورة رقم ${orderRow.invoice_seq} (إشعار دائن ${cnNumber})`;
+            await conn.query(
+              `INSERT INTO subscription_ledger
+                 (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
+               VALUES (?, 'refund', ?, ?, 'credit_note', ?, ?, ?)`,
+              [periodId, refundAmount, newBalance, cnId, refundNote, createdBy || 'system']
+            );
+            subscriptionRefund = {
+              amount: refundAmount,
+              newBalance,
+              periodId,
+              originalInvoiceSeq: orderRow.invoice_seq,
+              note: refundNote
+            };
+          }
+        }
+      } catch (refErr) {
+        console.error('subscription refund on credit note error:', refErr);
+      }
+    }
+
     await conn.commit();
     return {
       success: true,
@@ -4406,7 +4480,8 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       creditNoteNumber: cnNumber,
       creditNoteSeq: cnSeq,
       originalInvoiceSeq: orderRow.invoice_seq,
-      originalOrderNumber: orderRow.order_number
+      originalOrderNumber: orderRow.order_number,
+      subscriptionRefund
     };
   } catch (e) {
     await conn.rollback();
@@ -4709,7 +4784,58 @@ module.exports = {
   getReportData,
   getAllInvoicesReport,
   getSubscriptionsReport,
+  getTypesReport,
 };
+
+async function getTypesReport(filters = {}) {
+  const dateFrom = toSqlDateTime(filters.dateFrom) || '1970-01-01 00:00:00';
+  const dateTo   = toSqlDateTime(filters.dateTo)   || '9999-12-31 23:59:59';
+  const params = [dateFrom, dateTo];
+  const conditions = [
+    'o.created_at >= ?',
+    'o.created_at <= ?'
+  ];
+  if (filters.productId) {
+    conditions.push('oi.product_id = ?');
+    params.push(Number(filters.productId));
+  }
+  if (filters.serviceId) {
+    conditions.push('oi.laundry_service_id = ?');
+    params.push(Number(filters.serviceId));
+  }
+  const where = conditions.join(' AND ');
+  const sql = `
+    SELECT
+      oi.product_id,
+      p.name_ar                       AS product_name_ar,
+      p.name_en                       AS product_name_en,
+      oi.laundry_service_id           AS service_id,
+      ls.name_ar                      AS service_name_ar,
+      ls.name_en                      AS service_name_en,
+      SUM(oi.quantity)                AS total_qty,
+      SUM(oi.line_total)              AS total_sales,
+      SUM(oi.line_total *
+          IFNULL(o.vat_rate, 0) / 100) AS total_vat,
+      SUM(oi.line_total *
+          (1 + IFNULL(o.vat_rate, 0) / 100)) AS total_gross
+    FROM order_items oi
+    JOIN orders           o  ON o.id = oi.order_id
+    JOIN products         p  ON p.id = oi.product_id
+    LEFT JOIN laundry_services ls ON ls.id = oi.laundry_service_id
+    WHERE ${where}
+    GROUP BY oi.product_id, oi.laundry_service_id
+    ORDER BY total_sales DESC, p.name_ar, ls.name_ar
+  `;
+  const [rows] = await pool.query(sql, params);
+  const totals = rows.reduce((acc, r) => {
+    acc.total_qty    += Number(r.total_qty    || 0);
+    acc.total_sales  += Number(r.total_sales  || 0);
+    acc.total_vat    += Number(r.total_vat    || 0);
+    acc.total_gross  += Number(r.total_gross  || 0);
+    return acc;
+  }, { total_qty: 0, total_sales: 0, total_vat: 0, total_gross: 0 });
+  return { rows, totals };
+}
 
 async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const params = [];

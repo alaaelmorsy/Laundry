@@ -295,6 +295,17 @@ async function start() {
     }
   });
 
+  app.post('/api/export/types-report', authMiddleware, async (req, res) => {
+    try {
+      const { type, filters = {} } = req.body || {};
+      const result = await exportsService.exportTypesReport(type, filters);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/api/export/hanger-ticket', authMiddleware, async (req, res) => {
     try {
       const { orderId } = req.body || {};

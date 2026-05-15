@@ -100,6 +100,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   btnBack.addEventListener('click', () => window.api.navigateBack());
 
+  // إغلاق قائمة خيارات الاشتراك عند النقر خارجها
+  document.addEventListener('click', (e) => {
+    const openDetails = document.querySelector('details.sub-actions-more[open]');
+    if (!openDetails) return;
+    if (openDetails.contains(e.target)) return;
+    openDetails.removeAttribute('open');
+  });
+
   function escHtml(s) {
     if (s == null) return '';
     return String(s)

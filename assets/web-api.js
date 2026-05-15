@@ -314,6 +314,8 @@
     getReportData: (filters) => invoke('getReportData', filters),
     getAllInvoicesReport: (filters) => invoke('getAllInvoicesReport', filters),
     getSubscriptionsReport: (filters) => invoke('getSubscriptionsReport', filters),
+    getTypesReport: (filters) => invoke('getTypesReport', filters),
+    exportTypesReport: (data) => exportBinary('/api/export/types-report', data),
     exportReport: (data) => exportBinary('/api/export/report', data),
     exportAllInvoicesReport: (data) => exportBinary('/api/export/all-invoices-report', data),
     exportSubscriptionsReport: (data) => exportBinary('/api/export/subscriptions-report', data),

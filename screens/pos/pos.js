@@ -272,6 +272,8 @@
     invTypeLabel:          document.getElementById('invTypeLabel'),
     invCNRefRow:           document.getElementById('invCNRefRow'),
     invCNRefText:          document.getElementById('invCNRefText'),
+    invCNRefundRow:        document.getElementById('invCNRefundRow'),
+    invCNRefundText:       document.getElementById('invCNRefundText'),
     invOrderNumRow:        document.getElementById('invOrderNumRow'),
   };
 
@@ -1900,6 +1902,7 @@
     state._creditNoteModalMode = false;
     if (els.invTypeLabel)   els.invTypeLabel.textContent = 'فاتورة ضريبية مبسطة';
     if (els.invCNRefRow)    els.invCNRefRow.style.display = 'none';
+    if (els.invCNRefundRow) els.invCNRefundRow.style.display = 'none';
     if (els.invOrderNumRow) els.invOrderNumRow.style.display = '';
 
     /* ── Invoice meta ── */
@@ -2586,6 +2589,28 @@
       els.chipSubscription.style.display = 'none';
       els.selectedCustomerChip.style.display = 'flex';
       els.chipSubNumber.style.display = 'none';
+
+      if (invoice.customer_id && invoice.payment_method === 'subscription') {
+        window.api.getCustomerActiveSubscription({ customerId: invoice.customer_id })
+          .then(function (res) {
+            if (res && res.success && res.subscription) {
+              var sub = res.subscription;
+              var status = sub.display_status;
+              var remaining = parseFloat(sub.credit_remaining) || 0;
+              if (status === 'active' || status === 'expired') {
+                els.chipSubLabel.textContent = sub.package_name || 'اشتراك';
+                els.chipSubBalance.innerHTML = 'متبقي: <span>' + remaining.toFixed(2) + '</span> <span class="sar">&#xE900;</span>';
+                els.chipSubscription.className = 'chip-subscription ' + (status === 'active' ? 'chip-sub-active' : 'chip-sub-expired');
+                els.chipSubscription.style.display = 'flex';
+              }
+              if (invoice.subscription_number) {
+                els.chipSubNumber.textContent = 'اشتراك: ' + invoice.subscription_number;
+                els.chipSubNumber.style.display = '';
+              }
+            }
+          })
+          .catch(function () {});
+      }
     }
 
     const discAmt  = parseFloat(invoice.discount_amount || 0);
@@ -2772,6 +2797,7 @@
     if (els.invCNRefRow)    els.invCNRefRow.style.display = '';
     if (els.invCNRefText)   els.invCNRefText.textContent = 'رقم الإشعار: ' + cnNum + ' — الفاتورة الأصلية: ' + origNum;
     if (els.invOrderNumRow) els.invOrderNumRow.style.display = 'none';
+    if (els.invCNRefundRow) els.invCNRefundRow.style.display = 'none';
 
     var cnSeq = cnRes.creditNoteSeq;
     els.invOrderNum.textContent = cnRes.creditNoteNumber || String(cnSeq);
@@ -2795,9 +2821,18 @@
       } else {
         els.invCustPhoneRow.style.display = 'none';
       }
-      els.invSubBalRow.style.display = 'none';
     } else {
       els.invCustomerSection.style.display = 'none';
+    }
+
+    // عرض الرصيد المتبقي بعد الاسترجاع
+    var subRefund = cnRes && cnRes.subscriptionRefund;
+    if (subRefund && Number(subRefund.amount) > 0) {
+      els.invCustomerSection.style.display = '';
+      els.invSubBalance.innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(subRefund.newBalance);
+      els.invSubBalRow.style.display = '';
+    } else {
+      els.invSubBalRow.style.display = 'none';
     }
     if (els.invSubSection) els.invSubSection.style.display = 'none';
 
@@ -2937,7 +2972,7 @@
         date: formatInvoiceDate(new Date().toISOString()),
         payment: pmLabels[inv.payment_method] || inv.payment_method || 'إرجاع',
         custName: inv.customer_name || '', custPhone: inv.phone || '',
-        subPackageName: '', subBalance: null,
+        subPackageName: '', subBalance: (cnRes.subscriptionRefund && Number(cnRes.subscriptionRefund.amount) > 0) ? Number(cnRes.subscriptionRefund.newBalance) : null,
         cleanedAt: inv.cleaning_date ? formatInvoiceDate(inv.cleaning_date) : '',
         deliveredAt: inv.delivery_date ? formatInvoiceDate(inv.delivery_date) : '',
         paidAt: inv.paid_at ? formatInvoiceDate(inv.paid_at) : formatInvoiceDate(new Date().toISOString()),

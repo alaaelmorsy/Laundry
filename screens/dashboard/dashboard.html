@@ -10,7 +10,7 @@
 </head>
 <body class="dashboard-page bg-[#f8fafc] flex h-full max-h-[100dvh] flex-col overflow-hidden select-none text-[#1e293b]" data-page-title="page-title-dashboard">
 
-  <header class="header-bar flex shrink-0 flex-wrap items-center justify-between gap-2" dir="ltr">
+  <header class="header-bar flex shrink-0 flex-wrap items-center justify-between gap-2 relative" dir="ltr">
     <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
       <div class="h-8 w-8 shrink-0 rounded-full flex items-center justify-center sm:h-9 sm:w-9" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
         <svg class="h-4 w-4 text-white sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -18,10 +18,30 @@
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
       </div>
-      <span class="truncate text-sm font-bold text-[#1e293b] sm:text-base md:text-lg" data-i18n="app-name">نظام إدارة المغسلة</span>
+      <span class="truncate text-sm font-bold text-[#1e293b] sm:text-base md:text-lg" data-i18n="app-name">ادارة المغسلة</span>
+    </div>
+
+    <div class="pos-header-center">
+      <a href="/screens/pos/pos.html" class="pos-header-btn">
+        <svg class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+          <path d="M6 8h.01M10 8h4M6 12h12"/>
+        </svg>
+        <span data-i18n="pos-header-title">نقطة البيع</span>
+      </a>
     </div>
 
     <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3 md:gap-4">
+      <a href="/screens/pos/pos.html" class="pos-header-btn-mobile">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+          <path d="M6 8h.01M10 8h4M6 12h12"/>
+        </svg>
+        <span data-i18n="pos-header-title">نقطة البيع</span>
+      </a>
+
       <div class="hidden items-center gap-2 text-sm text-[#64748b] md:flex">
         <svg class="h-4 w-4 shrink-0 text-[#6366f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -120,17 +140,6 @@
         <p class="card-desc" data-i18n="card-pos-desc">إتمام البيع وإصدار الفواتير</p>
       </div>
 
-      <div class="menu-card" data-screen="settings">
-        <div class="card-icon" style="background:linear-gradient(135deg,#6b7280,#4b5563)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </div>
-        <h3 class="card-title" data-i18n="card-settings-title">الإعدادات</h3>
-        <p class="card-desc" data-i18n="card-settings-desc">ضبط إعدادات النظام</p>
-      </div>
-
       <div class="menu-card" data-screen="zatca-settings">
         <div class="card-icon" style="background:linear-gradient(135deg,#111827,#374151)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -210,6 +219,17 @@
         </div>
         <h3 class="card-title" data-i18n="card-offers-title">العروض</h3>
         <p class="card-desc" data-i18n="card-offers-desc">إدارة العروض والتخفيضات على المنتجات</p>
+      </div>
+
+      <div class="menu-card" data-screen="settings">
+        <div class="card-icon" style="background:linear-gradient(135deg,#6b7280,#4b5563)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </div>
+        <h3 class="card-title" data-i18n="card-settings-title">الإعدادات</h3>
+        <p class="card-desc" data-i18n="card-settings-desc">ضبط إعدادات النظام</p>
       </div>
 
     </div>

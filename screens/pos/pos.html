@@ -967,6 +967,10 @@
         <div id="invCNRefRow" class="inv-cn-ref-row" style="display:none">
           <span id="invCNRefText"></span>
         </div>
+        <!-- Subscription refund row (visible only when CN refunded to a subscription) -->
+        <div id="invCNRefundRow" class="inv-cn-refund-row" style="display:none">
+          <span id="invCNRefundText"></span>
+        </div>
         <div class="inv-meta-row" id="invOrderNumRow">
           <span class="inv-meta-label">رقم الفاتورة</span>
           <span class="inv-meta-val" id="invOrderNum" dir="ltr"></span>
@@ -1201,6 +1205,11 @@
         </table>
         </div>
 
+        <section class="a4m-qr-row">
+          <div class="a4m-qr-box">
+            <div id="a4mQR" class="a4m-qr"></div>
+          </div>
+        </section>
         <section class="a4m-summary">
           <div class="a4m-totals-col">
             <div class="a4m-totals">
@@ -1243,9 +1252,6 @@
               <span class="a4m-notes-title">الشروط والأحكام / Terms & Conditions</span>
               <span class="a4m-notes-content" id="a4mNotesContent"></span>
             </div>
-          </div>
-          <div class="a4m-qr-box">
-            <div id="a4mQR" class="a4m-qr"></div>
           </div>
         </section>
 

@@ -833,11 +833,11 @@ window.addEventListener('DOMContentLoaded', () => {
           if (orderRes && orderRes.success) order = orderRes.order || null;
         } catch (_) {}
       }
-      renderCreditNoteModal(res.creditNote, res.items || [], order);
+      renderCreditNoteModal(res.creditNote, res.items || [], order, res.subscriptionRefund || null);
     } catch { showToast(I18N.t('all-invoices-cn-load-error'), 'error'); }
   };
 
-  function renderCreditNoteModal(cn, items, order) {
+  function renderCreditNoteModal(cn, items, order, subscriptionRefund) {
     const s = _appSettings || {};
     const shopName = s.laundryNameAr || s.laundryNameEn || I18N.t('shop-name-default');
     const addressParts = [s.streetNameAr, s.districtAr, s.cityAr].filter(Boolean);
@@ -860,6 +860,23 @@ window.addEventListener('DOMContentLoaded', () => {
     if (el('cnOrigInv'))  el('cnOrigInv').textContent  = cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || '—');
     if (el('cnDate'))     el('cnDate').textContent     = formatInvoiceDate(cn.created_at);
     if (el('cnPayment'))  el('cnPayment').textContent  = order ? payLabel(order.payment_method) : '—';
+
+    // سطر استرجاع رصيد الاشتراك
+    var cnRefundRow = el('cnRefundRow');
+    var cnRefundText = el('cnRefundText');
+    if (cnRefundRow && cnRefundText) {
+      if (subscriptionRefund && Number(subscriptionRefund.amount) > 0) {
+        var rAmt = Number(subscriptionRefund.amount).toFixed(2);
+        var rInv = subscriptionRefund.originalInvoiceSeq || cn.original_invoice_seq || '—';
+        cnRefundText.innerHTML =
+          'الرصيد المتبقى: ' +
+          '<span class="sar">&#xE900;</span> ' + Number(subscriptionRefund.newBalance).toFixed(2);
+        cnRefundRow.style.display = '';
+      } else {
+        cnRefundRow.style.display = 'none';
+        cnRefundText.textContent = '';
+      }
+    }
 
     const setRow = (rowId, val, valId) => {
       const row = el(rowId);
@@ -892,6 +909,25 @@ window.addEventListener('DOMContentLoaded', () => {
       if (cn.phone && cnCustPhoneRow && cnCustPhone) { cnCustPhone.textContent = cn.phone; cnCustPhoneRow.style.display = ''; } else if (cnCustPhoneRow) cnCustPhoneRow.style.display = 'none';
     } else {
       if (cnCustomerSection) cnCustomerSection.style.display = 'none';
+    }
+
+    const cnSubRefRow = el('cnSubRefRow');
+    const cnSubRef = el('cnSubRef');
+    const cnSubBalRow = el('cnSubBalRow');
+    const cnSubBalance = el('cnSubBalance');
+    if (subscriptionRefund && Number(subscriptionRefund.amount) > 0) {
+      if (cnCustomerSection) cnCustomerSection.style.display = '';
+      if (cnSubRefRow && cnSubRef && subscriptionRefund.subscriptionNumber) {
+        cnSubRef.textContent = subscriptionRefund.subscriptionNumber;
+        cnSubRefRow.style.display = '';
+      } else if (cnSubRefRow) cnSubRefRow.style.display = 'none';
+      if (cnSubBalRow && cnSubBalance) {
+        cnSubBalance.innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(subscriptionRefund.newBalance);
+        cnSubBalRow.style.display = '';
+      }
+    } else {
+      if (cnSubRefRow) cnSubRefRow.style.display = 'none';
+      if (cnSubBalRow) cnSubBalRow.style.display = 'none';
     }
 
     const cnItemsTbody = el('cnItemsTbody');
