@@ -294,6 +294,7 @@
       paidCash:         isMixed ? pc : 0,
       paidCard:         isMixed ? pd : 0,
       priceDisplayMode: isInclusive ? 'inclusive' : 'exclusive',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       paidAmount:       paidAmount,
       remainingAmount:  remainingAmount,
       createdBy:        order.created_by || '',
@@ -472,6 +473,24 @@
     setText('invShopPhone', data.shopPhone ? 'هاتف: ' + data.shopPhone : '');
     setText('invVatNumber', data.vatNumber ? 'الرقم الضريبي: ' + data.vatNumber : '');
     setText('invShopEmail', data.shopEmail);
+
+    /* Custom fields */
+    var invCfHng = document.getElementById('invCustomFields');
+    if (invCfHng) {
+      var cfsHng = Array.isArray(data.customFields) ? data.customFields : [];
+      if (cfsHng.length > 0) {
+        var cfHtmlHng = '';
+        cfsHng.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlHng += '<div class="inv-shop-sub">' + escapeHtml(label) + '</div>';
+        });
+        invCfHng.innerHTML = cfHtmlHng;
+        invCfHng.style.display = cfHtmlHng ? '' : 'none';
+      } else {
+        invCfHng.innerHTML = '';
+        invCfHng.style.display = 'none';
+      }
+    }
 
     const logoEl = document.getElementById('invLogo');
     const logoWrap = document.getElementById('invLogoWrap');
@@ -663,6 +682,29 @@
     a4mText('a4mShopEmail',     data.shopEmail);
     a4mText('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4mText('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
+
+    /* Custom fields (A4) */
+    var hngA4mCFElAr = document.getElementById('a4mCustomFieldsAr');
+    var hngA4mCFElEn = document.getElementById('a4mCustomFieldsEn');
+    var cfsHngA4 = Array.isArray(data.customFields) ? data.customFields : [];
+    if (hngA4mCFElAr) {
+      if (cfsHngA4.length) {
+        var cfHtmlArHng = '';
+        cfsHngA4.forEach(function(cf) {
+          if (cf.labelAr) cfHtmlArHng += '<div class="a4m-brand-sub">' + escapeHtml(cf.labelAr) + '</div>';
+        });
+        hngA4mCFElAr.innerHTML = cfHtmlArHng;
+      } else { hngA4mCFElAr.innerHTML = ''; }
+    }
+    if (hngA4mCFElEn) {
+      if (cfsHngA4.length) {
+        var cfHtmlEnHng = '';
+        cfsHngA4.forEach(function(cf) {
+          if (cf.labelEn) cfHtmlEnHng += '<div class="a4m-brand-sub">' + escapeHtml(cf.labelEn) + '</div>';
+        });
+        hngA4mCFElEn.innerHTML = cfHtmlEnHng;
+      } else { hngA4mCFElEn.innerHTML = ''; }
+    }
 
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {

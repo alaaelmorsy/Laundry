@@ -209,7 +209,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .a4m-qr svg{display:block;width:26mm!important;height:26mm!important;max-width:none!important}
 .a4m-totals{border:3px solid #000;width:95mm;flex-shrink:0;background:#fff}
 .a4m-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0;margin-inline-end:auto}
-.a4m-notes-box{width:95mm;background:#fff;padding:2mm 0 0 0;font-size:8pt;font-weight:700;color:#000;line-height:1.7;direction:rtl}
+.a4m-notes-box{width:100%;background:#fff;padding:2mm 0 0 0;font-size:8pt;font-weight:700;color:#000;line-height:1.7;direction:rtl;text-align:center}
 .a4m-notes-title{font-size:8.5pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
 .a4m-notes-content{font-size:7.5pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
 .a4m-trow{display:flex;justify-content:space-between;align-items:stretch;padding:0;font-size:8.5pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}

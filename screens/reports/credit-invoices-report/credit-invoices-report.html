@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-credit-invoices-report">تقرير الفواتير الدائنة - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../../assets/tailwind.css" />
+  <link rel="stylesheet" href="credit-invoices-report.css" />
+  <link rel="stylesheet" href="../../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-credit-invoices-report">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon" style="background:linear-gradient(135deg,#c084fc,#7e22ce)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <path d="M8 14h8M8 18h5"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="credit-invoices-report-header">تقرير الفواتير الدائنة</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="btn-action btn-excel" id="btnExcelExport" data-i18n-title="credit-invoices-report-export-excel" title="تصدير Excel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="btn-label" data-i18n="credit-invoices-report-export-excel">Excel</span>
+        </button>
+        <button class="btn-action btn-pdf" id="btnPdfExport" data-i18n-title="credit-invoices-report-export-pdf" title="تصدير PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span class="btn-label" data-i18n="credit-invoices-report-export-pdf">PDF</span>
+        </button>
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="reports-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="filter-bar no-print">
+      <div class="filter-inner">
+        <div class="filter-fields">
+          <div class="date-pair-wrap">
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="credit-invoices-report-from">من:</span>
+              <input type="datetime-local" id="filterDateFrom" class="filter-input" />
+            </label>
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="credit-invoices-report-to">إلى:</span>
+              <input type="datetime-local" id="filterDateTo" class="filter-input" />
+            </label>
+          </div>
+        </div>
+        <button id="btnApplyFilter" class="btn-apply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span data-i18n="credit-invoices-report-show">عرض التقرير</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content" id="mainContent">
+
+      <div id="emptyPrompt" class="empty-prompt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+          <path d="M8 14h8M8 18h5"/>
+        </svg>
+        <p data-i18n="credit-invoices-report-empty">اختر الفترة الزمنية واضغط "عرض التقرير"</p>
+      </div>
+
+      <div id="loadingState" class="loading-state" style="display:none">
+        <div class="spinner"></div>
+        <p data-i18n="credit-invoices-report-loading">جارٍ تحميل التقرير...</p>
+      </div>
+
+      <div id="reportContent" style="display:none">
+
+        <div class="print-header">
+          <div class="print-title" data-i18n="credit-invoices-report-header">تقرير الفواتير الدائنة</div>
+          <div class="print-meta" id="printMeta"></div>
+        </div>
+
+        <div class="period-info-bar" id="periodInfoBar"></div>
+
+        <!-- Summary Cards -->
+        <div class="report-section">
+          <div class="section-header">
+            <h2 class="section-title" data-i18n="credit-invoices-report-summary">الملخص</h2>
+          </div>
+          <div class="pay-grid" id="summaryGrid">
+            <div class="pay-card-item" style="border-right-color:#8b5cf6">
+              <div class="pay-card-icon" style="color:#8b5cf6">📊</div>
+              <div class="pay-card-info">
+                <div class="pay-card-label" data-i18n="credit-summary-total-before">إجمالي المرتجعات (قبل الضريبة)</div>
+                <div class="pay-card-count" id="summaryCount">0 سجل</div>
+              </div>
+              <div class="pay-card-amounts">
+                <div class="pay-card-main" id="summaryTotalBefore">0.00 <span class="sar">&#xE900;</span></div>
+              </div>
+            </div>
+            <div class="pay-card-item" style="border-right-color:#f59e0b">
+              <div class="pay-card-icon" style="color:#f59e0b">📋</div>
+              <div class="pay-card-info">
+                <div class="pay-card-label" data-i18n="credit-summary-tax">إجمالي الضريبة (15%)</div>
+                <div class="pay-card-count"></div>
+              </div>
+              <div class="pay-card-amounts">
+                <div class="pay-card-main" id="summaryTax">0.00 <span class="sar">&#xE900;</span></div>
+              </div>
+            </div>
+            <div class="pay-card-item" style="border-right-color:#10b981">
+              <div class="pay-card-icon" style="color:#10b981">✅</div>
+              <div class="pay-card-info">
+                <div class="pay-card-label" data-i18n="credit-summary-grand-total">الإجمالي شامل الضريبة</div>
+                <div class="pay-card-count"></div>
+              </div>
+              <div class="pay-card-amounts">
+                <div class="pay-card-main" id="summaryGrandTotal">0.00 <span class="sar">&#xE900;</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Credit Invoices Table Section -->
+        <div class="report-section">
+          <div class="section-header">
+            <h2 class="section-title" data-i18n="credit-invoices-report-details">تفاصيل الفواتير الدائنة</h2>
+            <span class="section-badge" id="badgeCreditInvoices">0</span>
+          </div>
+          <div class="table-container">
+            <table class="report-table detail-table">
+              <thead>
+                <tr>
+                  <th class="center" style="width:40px">#</th>
+                  <th data-i18n="credit-col-number">رقم الإشعار</th>
+                  <th class="center" data-i18n="credit-col-orig-invoice">الفاتورة الأصلية</th>
+                  <th class="center" data-i18n="credit-col-date">التاريخ</th>
+                  <th data-i18n="credit-col-customer">العميل</th>
+                  <th class="center" data-i18n="credit-col-phone">الهاتف</th>
+                  <th class="center num-cell" data-i18n="credit-col-subtotal">المبلغ</th>
+                  <th class="center num-cell" data-i18n="credit-col-tax">الضريبة</th>
+                  <th class="center num-cell" data-i18n="credit-col-total">الإجمالي</th>
+                  <th data-i18n="credit-col-notes">ملاحظات</th>
+                  <th class="center" data-i18n="credit-col-created-by">بواسطة</th>
+                </tr>
+              </thead>
+              <tbody id="creditInvoicesTableBody"></tbody>
+            </table>
+          </div>
+          <div class="section-footer" id="creditInvoicesFooter"></div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../../../assets/web-api.js"></script>
+  <script src="../../../assets/auth-guard.js"></script>
+  <script src="../../../assets/i18n.js"></script>
+  <script src="credit-invoices-report.js"></script>
+</body>
+</html>

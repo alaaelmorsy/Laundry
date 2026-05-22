@@ -228,6 +228,29 @@
     a4t('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4t('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* Custom fields (A4) */
+    var a4mCFElAr = document.getElementById('a4mCustomFieldsAr');
+    var a4mCFElEn = document.getElementById('a4mCustomFieldsEn');
+    var cfsA4ci = Array.isArray(data.customFields) ? data.customFields : [];
+    if (a4mCFElAr) {
+      if (cfsA4ci.length) {
+        var cfHtmlArCi = '';
+        cfsA4ci.forEach(function(cf) {
+          if (cf.labelAr) cfHtmlArCi += '<div class="a4m-brand-sub">' + escHtml(cf.labelAr) + '</div>';
+        });
+        a4mCFElAr.innerHTML = cfHtmlArCi;
+      } else { a4mCFElAr.innerHTML = ''; }
+    }
+    if (a4mCFElEn) {
+      if (cfsA4ci.length) {
+        var cfHtmlEnCi = '';
+        cfsA4ci.forEach(function(cf) {
+          if (cf.labelEn) cfHtmlEnCi += '<div class="a4m-brand-sub">' + escHtml(cf.labelEn) + '</div>';
+        });
+        a4mCFElEn.innerHTML = cfHtmlEnCi;
+      } else { a4mCFElEn.innerHTML = ''; }
+    }
+
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
       if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
@@ -343,6 +366,29 @@
     a4t('ShopEmail',     data.shopEmail);
     a4t('VatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4t('CrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
+
+    /* Custom fields (CN A4) */
+    var cnA4mCFElAr = document.getElementById('cnA4mCustomFieldsAr');
+    var cnA4mCFElEn = document.getElementById('cnA4mCustomFieldsEn');
+    var cfsCnA4 = Array.isArray(data.customFields) ? data.customFields : [];
+    if (cnA4mCFElAr) {
+      if (cfsCnA4.length) {
+        var cfHtmlArCn = '';
+        cfsCnA4.forEach(function(cf) {
+          if (cf.labelAr) cfHtmlArCn += '<div class="a4m-brand-sub">' + escHtml(cf.labelAr) + '</div>';
+        });
+        cnA4mCFElAr.innerHTML = cfHtmlArCn;
+      } else { cnA4mCFElAr.innerHTML = ''; }
+    }
+    if (cnA4mCFElEn) {
+      if (cfsCnA4.length) {
+        var cfHtmlEnCn = '';
+        cfsCnA4.forEach(function(cf) {
+          if (cf.labelEn) cfHtmlEnCn += '<div class="a4m-brand-sub">' + escHtml(cf.labelEn) + '</div>';
+        });
+        cnA4mCFElEn.innerHTML = cfHtmlEnCn;
+      } else { cnA4mCFElEn.innerHTML = ''; }
+    }
 
     const logoEl = document.getElementById('cnA4mLogo');
     if (logoEl) {
@@ -461,6 +507,13 @@
     }
 
     await loadData();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewId = urlParams.get('view');
+    if (viewId) {
+      openCreditNote(Number(viewId));
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }
 
   /* ========== LOAD DATA ========== */
@@ -723,6 +776,24 @@
     els.invShopEmail.textContent  = s.email || '';
     els.invVatNumber.textContent  = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
+    /* Custom fields */
+    var invCfCi = document.getElementById('invCustomFields');
+    if (invCfCi) {
+      var cfsCi = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsCi.length > 0) {
+        var cfHtmlCi = '';
+        cfsCi.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlCi += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+        });
+        invCfCi.innerHTML = cfHtmlCi;
+        invCfCi.style.display = cfHtmlCi ? '' : 'none';
+      } else {
+        invCfCi.innerHTML = '';
+        invCfCi.style.display = 'none';
+      }
+    }
+
     if (s.commercialRegister) { els.invCR.textContent = s.commercialRegister; els.invCRRow.style.display = ''; }
     else els.invCRRow.style.display = 'none';
 
@@ -893,6 +964,7 @@
       paidCash: isMixed ? pc : 0, paidCard: isMixed ? pd : 0,
       starch: order.starch || '', bluing: order.bluing || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       commercialRegister: s.commercialRegister || '', vatNumber: s.vatNumber || '',
       qrPayload: vatRate > 0 ? {
         sellerName: shopName, vatNumber: s.vatNumber || '', timestamp: isoTimestamp(order.created_at),
@@ -948,6 +1020,24 @@
     els.cnShopPhone.textContent   = s.phone ? 'هاتف: ' + s.phone : '';
     els.cnShopEmail.textContent   = s.email || '';
     els.cnVatNumber.textContent   = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
+
+    /* Custom fields (credit note) */
+    var cnCfEl = document.getElementById('cnCustomFields');
+    if (cnCfEl) {
+      var cfsCn = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsCn.length > 0) {
+        var cfHtmlCn = '';
+        cfsCn.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlCn += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+        });
+        cnCfEl.innerHTML = cfHtmlCn;
+        cnCfEl.style.display = cfHtmlCn ? '' : 'none';
+      } else {
+        cnCfEl.innerHTML = '';
+        cnCfEl.style.display = 'none';
+      }
+    }
 
     if (s.commercialRegister) { els.cnCR.textContent = s.commercialRegister; els.cnCRRow.style.display = ''; }
     else els.cnCRRow.style.display = 'none';
@@ -1126,6 +1216,7 @@
       paidCash: isMixed ? pc : 0, paidCard: isMixed ? pd : 0,
       starch: order ? (order.starch || '') : '', bluing: order ? (order.bluing || '') : '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       commercialRegister: s.commercialRegister || '', vatNumber: s.vatNumber || '',
       qrPayload: vatRate > 0 ? {
         sellerName: shopName, vatNumber: s.vatNumber || '', timestamp: isoTimestamp(cn.created_at),

@@ -52,6 +52,29 @@
     setText('a4VatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     setText('a4CrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* Custom fields */
+    var a4CFElAr = document.getElementById('a4CustomFieldsAr');
+    var a4CFElEn = document.getElementById('a4CustomFieldsEn');
+    var cfsA4 = Array.isArray(data.customFields) ? data.customFields : [];
+    if (a4CFElAr) {
+      if (cfsA4.length) {
+        var cfHtmlAr = '';
+        cfsA4.forEach(function(cf) {
+          if (cf.labelAr) cfHtmlAr += '<div class="a4-brand-sub">' + esc(cf.labelAr) + '</div>';
+        });
+        a4CFElAr.innerHTML = cfHtmlAr;
+      } else { a4CFElAr.innerHTML = ''; }
+    }
+    if (a4CFElEn) {
+      if (cfsA4.length) {
+        var cfHtmlEn = '';
+        cfsA4.forEach(function(cf) {
+          if (cf.labelEn) cfHtmlEn += '<div class="a4-brand-sub">' + esc(cf.labelEn) + '</div>';
+        });
+        a4CFElEn.innerHTML = cfHtmlEn;
+      } else { a4CFElEn.innerHTML = ''; }
+    }
+
     /* ── Logo ── */
     var logoEl = document.getElementById('a4Logo');
     if (logoEl) {

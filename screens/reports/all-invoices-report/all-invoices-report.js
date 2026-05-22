@@ -640,6 +640,24 @@ window.addEventListener('DOMContentLoaded', () => {
     if (el('invVatNumber'))   el('invVatNumber').textContent   = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
     if (el('invShopEmail'))   el('invShopEmail').textContent   = s.email || '';
 
+    /* Custom fields */
+    const invCfAir = el('invCustomFields');
+    if (invCfAir) {
+      const cfsAir = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsAir.length > 0) {
+        let cfHtmlAir = '';
+        cfsAir.forEach(cf => {
+          const label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlAir += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+        });
+        invCfAir.innerHTML = cfHtmlAir;
+        invCfAir.style.display = cfHtmlAir ? '' : 'none';
+      } else {
+        invCfAir.innerHTML = '';
+        invCfAir.style.display = 'none';
+      }
+    }
+
     const invLogoWrap = el('invLogoWrap');
     const invLogo = el('invLogo');
     if (invLogoWrap && invLogo) {

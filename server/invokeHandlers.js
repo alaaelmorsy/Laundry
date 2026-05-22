@@ -395,6 +395,40 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'getProductsForPosNoImages': {
+      try {
+        const products = await db.getPosProducts();
+        return { success: true, products };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getProductImageById': {
+      try {
+        const { productId } = payload || {};
+        if (!productId) return { success: false, imageDataUrl: '' };
+
+        const rows = await db.getProductImageRowsByIds([Number(productId)]);
+        if (!rows || rows.length === 0) {
+          return { success: true, productId, imageDataUrl: null };
+        }
+        const row = rows[0];
+        if (!row.image_blob) {
+          return { success: true, productId, imageDataUrl: null };
+        }
+        try {
+          const raw = zlib.gunzipSync(row.image_blob);
+          const imageDataUrl = `data:${row.image_mime || 'image/jpeg'};base64,${raw.toString('base64')}`;
+          return { success: true, productId, imageDataUrl };
+        } catch (_) {
+          return { success: true, productId, imageDataUrl: null };
+        }
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'getProduct': {
       try {
         const data = await db.getProductById(payload.id);
@@ -1062,6 +1096,15 @@ async function invoke(method, payload, _user) {
     case 'getReportData': {
       try {
         const data = await db.getReportData(payload || {});
+        return { success: true, ...data };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getWorkerReport': {
+      try {
+        const data = await db.getWorkerReportData(payload || {});
         return { success: true, ...data };
       } catch (err) {
         return { success: false, message: err.message };

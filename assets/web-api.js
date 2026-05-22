@@ -176,6 +176,8 @@
       }),
 
     getProducts: (filters) => invoke('getProducts', filters),
+    getProductsForPosNoImages: () => invoke('getProductsForPosNoImages'),
+    getProductImageById: (productId) => invoke('getProductImageById', { productId }),
     getProduct: (data) => invoke('getProduct', data),
     saveProduct: (data) => invoke('saveProduct', data),
     deleteProduct: (data) => invoke('deleteProduct', data),
@@ -312,11 +314,13 @@
     deleteOffer: (data) => invoke('deleteOffer', data),
 
     getReportData: (filters) => invoke('getReportData', filters),
+    getWorkerReport: (filters) => invoke('getWorkerReport', filters),
     getAllInvoicesReport: (filters) => invoke('getAllInvoicesReport', filters),
     getSubscriptionsReport: (filters) => invoke('getSubscriptionsReport', filters),
     getTypesReport: (filters) => invoke('getTypesReport', filters),
     exportTypesReport: (data) => exportBinary('/api/export/types-report', data),
     exportReport: (data) => exportBinary('/api/export/report', data),
+    exportWorkerReport: (data) => exportBinary('/api/export/worker-report', data),
     exportAllInvoicesReport: (data) => exportBinary('/api/export/all-invoices-report', data),
     exportSubscriptionsReport: (data) => exportBinary('/api/export/subscriptions-report', data),
 

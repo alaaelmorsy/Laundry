@@ -192,6 +192,29 @@
     a4mText('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4mText('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* Custom fields (A4) */
+    const a4mCFElAr = document.getElementById('a4mCustomFieldsAr');
+    const a4mCFElEn = document.getElementById('a4mCustomFieldsEn');
+    const cfsA4m = Array.isArray(data.customFields) ? data.customFields : [];
+    if (a4mCFElAr) {
+      if (cfsA4m.length) {
+        let cfHtmlAr = '';
+        cfsA4m.forEach(cf => {
+          if (cf.labelAr) cfHtmlAr += '<div class="a4m-brand-sub">' + escHtml(cf.labelAr) + '</div>';
+        });
+        a4mCFElAr.innerHTML = cfHtmlAr;
+      } else { a4mCFElAr.innerHTML = ''; }
+    }
+    if (a4mCFElEn) {
+      if (cfsA4m.length) {
+        let cfHtmlEn = '';
+        cfsA4m.forEach(cf => {
+          if (cf.labelEn) cfHtmlEn += '<div class="a4m-brand-sub">' + escHtml(cf.labelEn) + '</div>';
+        });
+        a4mCFElEn.innerHTML = cfHtmlEn;
+      } else { a4mCFElEn.innerHTML = ''; }
+    }
+
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
       if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
@@ -624,6 +647,24 @@
       els.invLogoWrap.style.display = 'none';
     }
 
+    /* Custom fields */
+    var invCFInv = document.getElementById('invCustomFields');
+    if (invCFInv) {
+      var cfsInv = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsInv.length > 0) {
+        var cfHtmlInv = '';
+        cfsInv.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlInv += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+        });
+        invCFInv.innerHTML = cfHtmlInv;
+        invCFInv.style.display = cfHtmlInv ? '' : 'none';
+      } else {
+        invCFInv.innerHTML = '';
+        invCFInv.style.display = 'none';
+      }
+    }
+
     /* Invoice meta */
     els.invOrderNum.textContent = displaySeq ? String(displaySeq) : (order.order_number || '—');
     els.invDate.textContent = formatInvoiceDate(order.created_at);
@@ -918,6 +959,7 @@
       starch:           order.starch || '',
       bluing:           order.bluing || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       qrPayload: vatRate > 0 ? {
         sellerName:  shopName,
         vatNumber:   s.vatNumber || '',

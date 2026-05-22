@@ -23,14 +23,14 @@ function formatDateSimple(dateStr) {
 function buildExcelData(expenses, summary, filters) {
   const printDate = formatDateSimple(new Date().toISOString());
   const rows = [
-    ['تقرير المصروفات - نظام المغسلة'],
+    ['تقرير المصروفات'],
     [`تاريخ الطباعة: ${printDate}`],
   ];
   if (filters.dateFrom || filters.dateTo) {
     rows.push([`الفترة: ${filters.dateFrom || '—'} إلى ${filters.dateTo || '—'}`]);
   }
   rows.push([]);
-  rows.push(['#', 'العنوان', 'الفئة', 'التاريخ', 'المبلغ قبل الضريبة (\uE900)', 'ضريبة؟', 'الضريبة 15% (\uE900)', 'الإجمالي (\uE900)', 'ملاحظات']);
+  rows.push(['#', 'العنوان', 'الفئة', 'التاريخ', 'المبلغ قبل الضريبة', 'ضريبة؟', 'الضريبة 15%', 'الإجمالي', 'ملاحظات']);
   expenses.forEach((e, i) => {
     rows.push([
       i + 1,
@@ -56,14 +56,15 @@ function buildPdfHtml(expenses, summary, filters, cairoRegularB64, cairoBoldB64,
 
   const tableRows = expenses.map((e, i) => `
     <tr class="${i % 2 === 0 ? 'even' : ''}">
-      <td class="center">${i + 1}</td>
-      <td>${e.title || '—'}</td>
-      <td>${e.category || '—'}</td>
-      <td class="center">${formatDateSimple(e.expense_date)}</td>
-      <td class="num"><span class="sar">&#xE900;</span> ${Number(e.amount).toFixed(2)}</td>
-      <td class="center">${e.is_taxable ? '<span class="badge yes">نعم</span>' : '<span class="badge no">لا</span>'}</td>
-      <td class="num tax"><span class="sar">&#xE900;</span> ${Number(e.tax_amount).toFixed(2)}</td>
-      <td class="num total"><span class="sar">&#xE900;</span> ${Number(e.total_amount).toFixed(2)}</td>
+      <td class="ctr">${i + 1}</td>
+      <td class="txt">${e.title || '—'}</td>
+      <td class="txt">${e.category || '—'}</td>
+      <td class="ctr">${formatDateSimple(e.expense_date)}</td>
+      <td class="num">${Number(e.amount).toFixed(2)} <span class="sar">&#xE900;</span></td>
+      <td class="ctr">${e.is_taxable ? '<span class="badge yes">نعم</span>' : '<span class="badge no">لا</span>'}</td>
+      <td class="num">${Number(e.tax_amount).toFixed(2)} <span class="sar">&#xE900;</span></td>
+      <td class="num">${Number(e.total_amount).toFixed(2)} <span class="sar">&#xE900;</span></td>
+      <td class="txt">${e.notes || '—'}</td>
     </tr>
   `).join('');
 
@@ -79,35 +80,34 @@ function buildPdfHtml(expenses, summary, filters, cairoRegularB64, cairoBoldB64,
 @font-face{font-family:'Cairo';font-weight:400;src:url('data:font/woff2;base64,${cairoRegularB64}') format('woff2')}
 @font-face{font-family:'Cairo';font-weight:700;src:url('data:font/woff2;base64,${cairoBoldB64}') format('woff2')}
 @font-face{font-family:'SaudiRiyal';font-weight:400;src:url('data:font/woff;base64,${saudiRiyalB64}') format('woff')}
-.sar{font-family:'SaudiRiyal';font-weight:400;font-style:normal;font-size:1.2em;vertical-align:middle;display:inline-block;line-height:1}
+.sar{font-family:'SaudiRiyal';font-weight:400;font-style:normal;font-size:1.15em;vertical-align:middle;display:inline-block;line-height:1}
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif}
-body{direction:rtl;background:#fff;color:#000;padding:16px;font-size:11px}
-.header{text-align:center;margin-bottom:18px;border-bottom:2px solid #f43f5e;padding-bottom:12px}
-.header h1{font-size:18px;font-weight:700;color:#f43f5e}
-.header p{font-size:10px;color:#000;margin-top:4px}
-.sub{font-size:10px;color:#000;margin-top:2px}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}
+body{direction:rtl;background:#fff;color:#000;padding:14px 16px;font-size:10px}
+.header{text-align:center;margin-bottom:14px;border-bottom:2px solid #f43f5e;padding-bottom:10px}
+.header h1{font-size:17px;font-weight:700;color:#f43f5e}
+.header p{font-size:9px;color:#000;margin-top:3px}
+.sub{font-size:9px;color:#000;margin-top:2px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px;table-layout:fixed}
 thead tr{background:linear-gradient(90deg,#f43f5e,#e11d48);color:#fff}
-thead th{padding:9px 10px;font-size:10px;font-weight:700;text-align:right;white-space:nowrap}
+thead th{padding:8px 6px;font-size:9px;font-weight:700;text-align:center;white-space:nowrap;border-bottom:2px solid #fda4af}
 tbody tr{border-bottom:1px solid #f1f5f9}
 tbody tr.even{background:#fafbfc}
-tbody td{padding:8px 10px;font-size:10px;color:#000;text-align:right}
-td.center,th.center{text-align:center}
-td.num{font-weight:700;color:#000;text-align:left;direction:ltr}
-td.tax{color:#000}
-td.total{color:#000}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700}
-.badge.yes{background:rgba(245,158,11,.1);color:#000}
-.badge.no{background:rgba(100,116,139,.1);color:#000}
-.summary{display:flex;gap:16px;margin-top:12px}
-.summary-card{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;text-align:center}
+tbody td{padding:7px 6px;font-size:9px;color:#000}
+.ctr{text-align:center}
+.txt{text-align:right}
+.num{text-align:center;font-weight:700;white-space:nowrap;direction:rtl}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:8px;font-weight:700}
+.badge.yes{background:rgba(245,158,11,.15);color:#000}
+.badge.no{background:rgba(100,116,139,.12);color:#000}
+.summary{display:flex;gap:12px;margin-top:10px}
+.summary-card{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center}
 .summary-card.c1{border-top:3px solid #6366f1}
 .summary-card.c2{border-top:3px solid #f59e0b}
 .summary-card.c3{border-top:3px solid #10b981}
-.s-label{font-size:9px;color:#000;font-weight:700;margin-bottom:6px}
-.s-value{font-size:15px;font-weight:700;color:#000}
-.s-currency{font-size:14px;color:#000}
-.footer{text-align:center;font-size:9px;color:#000;margin-top:20px;border-top:1px solid #e2e8f0;padding-top:8px}
+.s-label{font-size:8px;color:#000;font-weight:700;margin-bottom:4px}
+.s-value{font-size:14px;font-weight:700;color:#000;display:inline-flex;align-items:center;gap:3px;flex-direction:row}
+.s-currency{font-size:13px;color:#000}
+.footer{text-align:center;font-size:8px;color:#000;margin-top:16px;border-top:1px solid #e2e8f0;padding-top:6px}
 @media print{
   @page{size:A4 landscape;margin:1cm}
   body{padding:0}
@@ -118,22 +118,34 @@ td.total{color:#000}
 </head>
 <body>
 <div class="header">
-  <h1>تقرير المصروفات - نظام المغسلة</h1>
+  <h1>تقرير المصروفات</h1>
   <p>تاريخ الطباعة: ${printDate} &nbsp;|&nbsp; عدد السجلات: ${expenses.length.toLocaleString()}</p>
   ${filterInfo}
 </div>
 
 <table>
+  <colgroup>
+    <col style="width:4%">
+    <col style="width:16%">
+    <col style="width:12%">
+    <col style="width:12%">
+    <col style="width:10%">
+    <col style="width:8%">
+    <col style="width:10%">
+    <col style="width:12%">
+    <col style="width:16%">
+  </colgroup>
   <thead>
     <tr>
-      <th class="center" style="width:40px">#</th>
-      <th>العنوان</th>
-      <th>الفئة</th>
-      <th class="center">التاريخ</th>
-      <th>المبلغ (<span class="sar">&#xE900;</span>)</th>
-      <th class="center">ضريبة؟</th>
-      <th>الضريبة 15%</th>
-      <th>الإجمالي (<span class="sar">&#xE900;</span>)</th>
+      <th class="ctr">#</th>
+      <th class="txt">العنوان</th>
+      <th class="txt">الفئة</th>
+      <th class="ctr">التاريخ</th>
+      <th class="num">المبلغ</th>
+      <th class="ctr">ضريبة؟</th>
+      <th class="num">الضريبة 15%</th>
+      <th class="num">الإجمالي</th>
+      <th class="txt">ملاحظات</th>
     </tr>
   </thead>
   <tbody>${tableRows}</tbody>
@@ -154,7 +166,7 @@ td.total{color:#000}
   </div>
 </div>
 
-<div class="footer">نظام إدارة المغسلة — تم إنشاء هذا التقرير بتاريخ ${printDate}</div>
+<div class="footer">تم إنشاء هذا التقرير بتاريخ ${printDate}</div>
 </body>
 </html>`;
 }
@@ -1487,12 +1499,12 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
 .a4-td-name{text-align:start}
 .a4-td-en{font-size:7.5pt;font-weight:700;color:#000;display:block;direction:ltr}
 .a4-qr-row{display:flex;justify-content:center;align-items:center;width:100%;margin:0 0 4mm}
-.a4-qr-box{text-align:center;flex-shrink:0;width:38mm;margin:0 auto}
+.a4-qr-box{text-align:center;flex-shrink:0;width:38mm}
 .a4-qr{width:34mm;height:34mm;margin:0 auto 1.5mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
 .a4-qr svg{display:block;width:30mm!important;height:30mm!important;max-width:none!important}
-.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:flex-end;margin-bottom:16mm}
-.a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0;margin-inline-end:auto}
-.a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;margin-inline-end:auto;background:#fff;direction:rtl}
+.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:space-between;margin-bottom:16mm}
+.a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0}
+.a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;background:#fff;direction:rtl}
 .a4-trow{display:flex;justify-content:space-between;align-items:center;padding:0;font-size:9pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
 .a4-trow:last-child{border-bottom:none}
 .a4-trow span{color:#000;padding:2mm 3mm;flex:1}
@@ -1504,6 +1516,9 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
   .a4-mixed-row{border-top:1px dashed #000}
   .a4-mixed-row span{color:#000;font-size:0.88em}
   .a4-mixed-row b{color:#000;font-size:0.9em}
+.a4-notes-box{width:100%;background:#fff;padding:2.5mm 0 0 0;font-size:8.5pt;font-weight:700;color:#000;line-height:1.7;direction:rtl;text-align:center}
+.a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
+.a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
 @media print{
   @page{size:A4 portrait;margin:0}
   html,body{background:#fff!important}
@@ -1597,7 +1612,9 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
         ${mixedRows}
       </div>
     </div>
+    ${qrHtml}
   </section>
+  ${notesHtml}
 </div>
 </body>
 </html>`;
@@ -2078,6 +2095,8 @@ module.exports = {
   buildPdfHtmlForSubscriptionsReport,
   buildPdfHtmlForTypesReport,
   buildTypesReportExcelSheets,
+  buildWorkerReportExcelSheets,
+  buildPdfHtmlForWorkerReport,
 };
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
@@ -3170,4 +3189,27 @@ ${filterParts.length ? `<div class="info-bar">${filterParts.join(' &nbsp;·&nbsp
 </div>
 </body>
 </html>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   تقرير العمال — Excel + PDF (wrappers around period report)
+   ═══════════════════════════════════════════════════════════ */
+function buildWorkerReportExcelSheets(data, filters, branding) {
+  const sheets = buildReportExcelSheets(data, filters, branding);
+  if (sheets[0] && Array.isArray(sheets[0].rows)) {
+    sheets[0].rows = sheets[0].rows.map((row) => {
+      if (!Array.isArray(row)) return row;
+      return row.map((cell) =>
+        typeof cell === 'string'
+          ? cell.replace(/التقرير المالي الشامل/g, 'تقرير العمال')
+          : cell
+      );
+    });
+  }
+  return sheets;
+}
+
+function buildPdfHtmlForWorkerReport(data, filters, cairoRegularB64, cairoBoldB64, saudiRiyalB64, branding) {
+  const html = buildPdfHtmlForReport(data, filters, cairoRegularB64, cairoBoldB64, saudiRiyalB64, branding);
+  return html.replace(/التقرير المالي الشامل/g, 'تقرير العمال');
 }

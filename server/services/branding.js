@@ -13,6 +13,7 @@ async function loadAppBrandingForReceipts() {
         logoDataUrl = '';
       }
     }
+    const customFields = Array.isArray(s.customFields) ? s.customFields : [];
     return {
       laundryNameAr: s.laundryNameAr || '',
       laundryNameEn: s.laundryNameEn || '',
@@ -24,7 +25,8 @@ async function loadAppBrandingForReceipts() {
       districtAr: s.districtAr || '',
       cityAr: s.cityAr || '',
       postalCode: s.postalCode || '',
-      additionalNumber: s.additionalNumber || ''
+      additionalNumber: s.additionalNumber || '',
+      customFields
     };
   } catch (_) {
     return {
@@ -38,7 +40,8 @@ async function loadAppBrandingForReceipts() {
       districtAr: '',
       cityAr: '',
       postalCode: '',
-      additionalNumber: ''
+      additionalNumber: '',
+      customFields: []
     };
   }
 }

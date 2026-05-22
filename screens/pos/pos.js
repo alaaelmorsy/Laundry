@@ -29,6 +29,7 @@
     deferredFilteredInvoices: [],
     deferredPayingOrder: null,
     viewingDeferredInvoice: null,
+    cameraScanner: null,
     viewingOrderId: null,
     lastA4Data: null,
     mixedCash: 0,
@@ -225,6 +226,12 @@
     defSummaryCount:       document.getElementById('defSummaryCount'),
     defSummaryTotal:       document.getElementById('defSummaryTotal'),
     deferredBarcodeInput: document.getElementById('deferredBarcodeInput'),
+    btnCameraScan:         document.getElementById('btnCameraScan'),
+    cameraScannerModal:    document.getElementById('cameraScannerModal'),
+    cameraScannerView:     document.getElementById('cameraScannerView'),
+    cameraScannerStatus:   document.getElementById('cameraScannerStatus'),
+    cameraScannerResult:   document.getElementById('cameraScannerResult'),
+    btnCloseCameraScanner: document.getElementById('btnCloseCameraScanner'),
     payDeferredModal:      document.getElementById('payDeferredModal'),
     payDeferredOrderId:    document.getElementById('payDeferredOrderId'),
     payDeferredError:      document.getElementById('payDeferredError'),
@@ -407,17 +414,64 @@
 
   async function loadProducts() {
     showProductsLoading(true);
-    const res = await window.api.getPosProducts();
-    showProductsLoading(false);
-    if (!res || !res.success) {
-      showToast(t('pos-err-load'), 'error');
-      renderProductsEmpty(t('pos-err-load'));
-      return;
+
+    try {
+      const res = await window.api.getProductsForPosNoImages();
+
+      if (!res || !res.success) {
+        const fallback = await window.api.getPosProducts();
+        state.products = (fallback && fallback.products) ? fallback.products : [];
+      } else {
+        state.products = res.products || [];
+      }
+
+    } catch (e) {
+      try {
+        const fallback = await window.api.getPosProducts();
+        state.products = (fallback && fallback.products) ? fallback.products : [];
+      } catch (_) {
+        state.products = [];
+      }
     }
-    state.products = res.products || [];
+
+    showProductsLoading(false);
     renderProducts();
-    // Start background prefetch of remaining images (non-blocking)
-    try { schedulePrefetch(); } catch (_) {}
+
+    _loadImagesBackground(state.products.slice());
+  }
+
+  async function _loadImagesBackground(products) {
+    if (!products || !products.length) return;
+
+    const BATCH = 4;
+
+    for (let i = 0; i < products.length; i += BATCH) {
+      const batch = products.slice(i, i + BATCH);
+
+      await Promise.all(batch.map(async (product) => {
+        try {
+          const imgRes = await window.api.getProductImageById(product.id);
+
+          if (imgRes && imgRes.success && imgRes.imageDataUrl) {
+            const idx = state.products.findIndex(p => p.id === product.id);
+            if (idx !== -1) {
+              state.products[idx].imageDataUrl = imgRes.imageDataUrl;
+            }
+
+            const wrap = document.querySelector(`.product-img-wrap-lazy[data-product-id="${product.id}"]`);
+            if (wrap && imgRes.imageDataUrl) {
+              wrap.innerHTML = `<img data-product-id="${product.id}" src="${imgRes.imageDataUrl}" alt="${escHtml(product.name_ar || product.name_en || '')}" loading="lazy" decoding="async" style="opacity:1" />`;
+            }
+          }
+        } catch (_err) {
+          // ignore individual image errors
+        }
+      }));
+
+      if (i + BATCH < products.length) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+    }
   }
 
   function showProductsLoading(show) {
@@ -668,7 +722,7 @@
   function applyImageToWrap(wrap, productId, dataUrl) {
     if (dataUrl) {
       const altText = wrap.dataset.alt || '';
-      wrap.innerHTML = `<img src="${dataUrl}" alt="${escHtml(altText)}" loading="lazy" decoding="async" />`;
+      wrap.innerHTML = `<img data-product-id="${productId}" src="${dataUrl}" alt="${escHtml(altText)}" loading="lazy" decoding="async" />`;
     } else {
       wrap.innerHTML = PLACEHOLDER_SVG;
     }
@@ -1667,6 +1721,29 @@
     a4mText('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4mText('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* ── Custom fields (A4) ── */
+    var a4mCFElAr = document.getElementById('a4mCustomFieldsAr');
+    var a4mCFElEn = document.getElementById('a4mCustomFieldsEn');
+    var cfsA4 = Array.isArray(data.customFields) ? data.customFields : [];
+    if (a4mCFElAr) {
+      if (cfsA4.length) {
+        var cfHtmlAr = '';
+        cfsA4.forEach(function(cf) {
+          if (cf.labelAr) cfHtmlAr += '<div class="a4m-brand-sub">' + escHtml(cf.labelAr) + '</div>';
+        });
+        a4mCFElAr.innerHTML = cfHtmlAr;
+      } else { a4mCFElAr.innerHTML = ''; }
+    }
+    if (a4mCFElEn) {
+      if (cfsA4.length) {
+        var cfHtmlEn = '';
+        cfsA4.forEach(function(cf) {
+          if (cf.labelEn) cfHtmlEn += '<div class="a4m-brand-sub">' + escHtml(cf.labelEn) + '</div>';
+        });
+        a4mCFElEn.innerHTML = cfHtmlEn;
+      } else { a4mCFElEn.innerHTML = ''; }
+    }
+
     var logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
       if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
@@ -1890,6 +1967,26 @@
     els.invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (locationFallback || '');
     els.invShopPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
     els.invShopEmail.textContent = s.email || '';
+
+    /* ── Custom fields ── */
+    var invCF = document.getElementById('invCustomFields');
+    if (invCF) {
+      var cfs = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfs.length > 0) {
+        var cfHtml = '';
+        cfs.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) {
+            cfHtml += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+          }
+        });
+        invCF.innerHTML = cfHtml;
+        invCF.style.display = cfHtml ? '' : 'none';
+      } else {
+        invCF.innerHTML = '';
+        invCF.style.display = 'none';
+      }
+    }
 
     if (s.logoDataUrl) {
       els.invLogo.src = s.logoDataUrl;
@@ -2269,6 +2366,7 @@
       priceDisplayMode: displayModeA4,
       invoiceNotes: invoiceNotes || '',
       settingsNotes: s.invoiceNotes || '',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       qrPayload: state.vatRate > 0 ? {
         sellerName:  shopName,
         vatNumber:   s.vatNumber || '',
@@ -2784,6 +2882,26 @@
     els.invShopPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
     els.invShopEmail.textContent = s.email || '';
 
+    /* ── Custom fields (credit note) ── */
+    var invCFCn = document.getElementById('invCustomFields');
+    if (invCFCn) {
+      var cfsCn = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsCn.length > 0) {
+        var cfHtmlCn = '';
+        cfsCn.forEach(function(cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) {
+            cfHtmlCn += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+          }
+        });
+        invCFCn.innerHTML = cfHtmlCn;
+        invCFCn.style.display = cfHtmlCn ? '' : 'none';
+      } else {
+        invCFCn.innerHTML = '';
+        invCFCn.style.display = 'none';
+      }
+    }
+
     if (s.logoDataUrl) {
       els.invLogo.src = s.logoDataUrl;
       els.invLogoWrap.style.display = '';
@@ -2987,6 +3105,7 @@
         paidCash: inv.payment_method === 'mixed' ? parseFloat(inv.paid_cash || 0) : 0,
         paidCard: inv.payment_method === 'mixed' ? parseFloat(inv.paid_card || 0) : 0,
         starch: '', bluing: '', priceDisplayMode: 'exclusive',
+        customFields: Array.isArray(s.customFields) ? s.customFields : [],
         invoiceNotes: inv.notes || '',
         settingsNotes: s.invoiceNotes || '',
         qrPayload: vatRate > 0 ? { sellerName: shopName, vatNumber: s.vatNumber || '', timestamp: ts,
@@ -3355,6 +3474,18 @@
         if (e.key === 'Enter') handleDeferredBarcodeScan();
       });
     }
+    // Camera barcode scanner
+    if (els.btnCameraScan) {
+      els.btnCameraScan.addEventListener('click', openCameraScanner);
+    }
+    if (els.btnCloseCameraScanner) {
+      els.btnCloseCameraScanner.addEventListener('click', closeCameraScanner);
+    }
+    if (els.cameraScannerModal) {
+      els.cameraScannerModal.addEventListener('click', (e) => {
+        if (e.target === els.cameraScannerModal) closeCameraScanner();
+      });
+    }
     if (els.deferredStatusFilter) {
       els.deferredStatusFilter.addEventListener('change', () => {
         state.deferredStatusFilter = els.deferredStatusFilter.value || 'unpaid';
@@ -3408,6 +3539,7 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (els.cameraScannerModal && els.cameraScannerModal.style.display !== 'none') { closeCameraScanner(); return; }
         if (els.payDeferredModal.style.display !== 'none') { closePayDeferredModal(); return; }
         if (els.invoiceModal.style.display !== 'none') { closeInvoiceModal(); return; }
         if (els.addCustomerModal.style.display !== 'none') { closeAddCustomerModal(); return; }
@@ -4092,6 +4224,108 @@
       els.deferredBarcodeInput.value = '';
       els.deferredBarcodeInput.focus();
     }
+  }
+
+  /* ========== CAMERA BARCODE SCANNER ========== */
+
+  /**
+   * Open camera scanner — live stream like a real barcode scanner.
+   * Works on HTTPS/localhost. Mobile users are auto-redirected to HTTPS by the server.
+   */
+  async function openCameraScanner() {
+    if (typeof Html5Qrcode === 'undefined') {
+      showTopToast('مكتبة المسح غير متاحة — تحقق من الاتصال بالإنترنت', 'error');
+      return;
+    }
+
+    if (!els.cameraScannerModal) return;
+
+    els.cameraScannerModal.style.display = 'flex';
+    els.cameraScannerResult.style.display = 'none';
+    els.cameraScannerStatus.style.display = 'flex';
+    els.cameraScannerStatus.className = 'camera-scanner-status scanning-active';
+    els.cameraScannerStatus.querySelector('span').textContent = 'جاري تشغيل الكاميرا...';
+
+    // Cleanup any previous instance
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+      els.cameraScannerView.innerHTML = '';
+    }
+
+    try {
+      var html5QrCode = new Html5Qrcode('cameraScannerView');
+      state.cameraScanner = html5QrCode;
+
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 280, height: 100 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+        },
+        onCameraScanSuccess,
+        function() {} // ignore continuous non-reads
+      );
+
+      els.cameraScannerStatus.querySelector('span').textContent = 'وجّه الكاميرا نحو الباركود...';
+    } catch (err) {
+      console.error('Camera error:', err);
+      els.cameraScannerStatus.className = 'camera-scanner-status camera-error';
+      var errMsg = 'تعذر فتح الكاميرا';
+      if (err && err.name === 'NotAllowedError') {
+        errMsg = 'تم رفض صلاحية الكاميرا — فعّلها من إعدادات المتصفح';
+      } else if (err && err.name === 'NotFoundError') {
+        errMsg = 'لم يتم العثور على كاميرا على هذا الجهاز';
+      } else if (!window.isSecureContext) {
+        errMsg = 'الكاميرا تتطلب اتصال آمن — افتح التطبيق من الرابط الآمن (HTTPS)';
+      }
+      els.cameraScannerStatus.querySelector('span').textContent = errMsg;
+    }
+  }
+
+  async function closeCameraScanner() {
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+    }
+    if (els.cameraScannerView) els.cameraScannerView.innerHTML = '';
+    if (els.cameraScannerModal) els.cameraScannerModal.style.display = 'none';
+  }
+
+  async function onCameraScanSuccess(decodedText) {
+    // Stop camera immediately to prevent repeated scans
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+    }
+
+    // Show result
+    if (els.cameraScannerStatus) els.cameraScannerStatus.style.display = 'none';
+    if (els.cameraScannerResult) {
+      els.cameraScannerResult.style.display = 'flex';
+      els.cameraScannerResult.className = 'camera-scanner-result scan-success';
+      els.cameraScannerResult.textContent = '✓ تم مسح الباركود: ' + decodedText;
+    }
+
+    // Parse the barcode value
+    var barcodeVal = String(decodedText || '').trim();
+    if (barcodeVal.startsWith('INV-')) {
+      var parts = barcodeVal.replace('INV-', '').split('|');
+      barcodeVal = parts[0] || barcodeVal;
+    }
+
+    // Put value in barcode input
+    if (els.deferredBarcodeInput) {
+      els.deferredBarcodeInput.value = barcodeVal;
+    }
+
+    // Close modal and execute barcode scan logic
+    setTimeout(async function() {
+      await closeCameraScanner();
+      handleDeferredBarcodeScan();
+    }, 600);
   }
 
   /* ========== DEFERRED INVOICE PREVIEW ========== */

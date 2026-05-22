@@ -2839,9 +2839,8 @@ function normalizeCustomFieldsJson(raw) {
     const id = String(x.id || `cf_${i}_${Date.now()}`).slice(0, 64);
     const labelAr = String(x.labelAr || x.label_ar || '').trim().slice(0, 120);
     const labelEn = String(x.labelEn || x.label_en || '').trim().slice(0, 120);
-    const value = String(x.value || '').trim().slice(0, 500);
-    if (!labelAr && !labelEn && !value) continue;
-    out.push({ id, labelAr, labelEn, value });
+    if (!labelAr && !labelEn) continue;
+    out.push({ id, labelAr, labelEn });
   }
   return out;
 }
@@ -4782,6 +4781,7 @@ module.exports = {
   createOffersTable, getAllOffers, getActiveOffers, createOffer, updateOffer, toggleOfferStatus, deleteOffer,
   // Report functions
   getReportData,
+  getWorkerReportData,
   getAllInvoicesReport,
   getSubscriptionsReport,
   getTypesReport,
@@ -4869,6 +4869,188 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const cnParams        = [...params];
   const subWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'sl.created_at')}`;
   const subParams       = [...params];
+
+  const [[ordersSummary]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(o.subtotal) - SUM(o.vat_amount), 0) AS sales_before_tax,
+      COALESCE(SUM(o.vat_amount), 0)                  AS sales_tax,
+      COALESCE(SUM(o.subtotal), 0)                    AS sales_after_tax,
+      COALESCE(SUM(o.discount_amount), 0)             AS discount_total,
+      COUNT(o.id)                                     AS invoice_count
+    FROM orders o
+    ${invoicesWhere}
+  `, invoicesParams);
+
+  const [[expSummary]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount), 0)       AS exp_before_tax,
+      COALESCE(SUM(tax_amount), 0)   AS exp_tax,
+      COALESCE(SUM(total_amount), 0) AS exp_after_tax
+    FROM expenses
+    ${expWhere}
+  `, expParams);
+
+  const [[cnSummary]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(cn.total_amount - cn.vat_amount), 0)  AS cn_before_tax,
+      COALESCE(SUM(cn.vat_amount), 0)                    AS cn_tax,
+      COALESCE(SUM(cn.total_amount), 0)                  AS cn_after_tax
+    FROM credit_notes cn
+    ${cnWhere}
+  `, cnParams);
+
+  const [paymentMethods] = await pool.query(`
+    SELECT
+      COALESCE(o.payment_method, 'cash')          AS method,
+      COUNT(*)                                     AS count,
+      COALESCE(SUM(o.total_amount), 0)             AS total_after_tax,
+      COALESCE(SUM(o.total_amount - o.vat_amount), 0) AS total_before_tax,
+      COALESCE(SUM(o.vat_amount), 0)               AS total_tax
+    FROM orders o
+    ${pmWhere}
+    GROUP BY COALESCE(o.payment_method, 'cash')
+    ORDER BY total_after_tax DESC
+  `, pmParams);
+
+  const [invoices] = await pool.query(`
+    SELECT o.id, o.invoice_seq, o.order_number, o.subtotal, o.discount_amount,
+           o.vat_amount, o.total_amount, o.payment_method, o.created_at,
+           c.customer_name, c.phone
+    FROM orders o
+    LEFT JOIN customers c ON c.id = o.customer_id
+    ${invoicesWhere}
+    ORDER BY o.id DESC
+  `, invoicesParams);
+
+  const [expenses] = await pool.query(`
+    SELECT id, title, category, expense_date AS created_at, amount, tax_amount, total_amount, notes
+    FROM expenses
+    ${expWhere}
+    ORDER BY expense_date DESC, id DESC
+  `, expParams);
+
+  const [creditNotes] = await pool.query(`
+    SELECT cn.id, cn.credit_note_seq, cn.credit_note_number,
+           cn.original_invoice_seq, cn.subtotal, cn.discount_amount,
+           cn.vat_amount, cn.total_amount, cn.created_at,
+           c.customer_name, c.phone
+    FROM credit_notes cn
+    LEFT JOIN customers c ON c.id = cn.customer_id
+    ${cnWhere}
+    ORDER BY cn.id DESC
+  `, cnParams);
+
+  const [[subSummary]] = await pool.query(`
+    SELECT COALESCE(SUM(sp.prepaid_price_paid), 0) AS sub_total
+    FROM subscription_ledger sl
+    INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
+    ${subWhere} AND sl.entry_type IN ('purchase', 'renewal')
+  `, subParams);
+
+  const [subscriptions] = await pool.query(`
+    SELECT c.phone, c.subscription_number, cs.subscription_ref, sp.prepaid_price_paid AS amount, sl.entry_type, sl.created_at
+    FROM subscription_ledger sl
+    INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
+    INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
+    INNER JOIN customers c ON c.id = cs.customer_id
+    ${subWhere} AND sl.entry_type IN ('purchase', 'renewal')
+    ORDER BY sl.created_at DESC
+  `, subParams);
+
+  const salesBeforeTax  = Number(ordersSummary.sales_before_tax);
+  const salesTax        = Number(ordersSummary.sales_tax);
+  const salesAfterTax   = Number(ordersSummary.sales_after_tax);
+  const discountTotal   = Number(ordersSummary.discount_total);
+  const expBeforeTax    = Number(expSummary.exp_before_tax);
+  const expTax          = Number(expSummary.exp_tax);
+  const expAfterTax     = Number(expSummary.exp_after_tax);
+  const cnBeforeTax     = Number(cnSummary.cn_before_tax);
+  const cnTax           = Number(cnSummary.cn_tax);
+  const cnAfterTax      = Number(cnSummary.cn_after_tax);
+
+  const salesNetBeforeTax = salesBeforeTax - discountTotal;
+  const salesNetTax       = salesTax;
+  const salesNetAfterTax  = salesAfterTax - discountTotal;
+
+  const totalNetBeforeTax = salesNetBeforeTax - cnBeforeTax;
+  const totalNetTax       = salesNetTax - cnTax;
+  const totalNetAfterTax  = salesNetAfterTax - cnAfterTax;
+
+  const subAfterTax  = Number(subSummary.sub_total);
+  const subBeforeTax = subAfterTax / 1.15;
+  const subTax       = subAfterTax - subBeforeTax;
+
+  const netBeforeTax = totalNetBeforeTax + subBeforeTax - expBeforeTax;
+  const netTax       = totalNetTax + subTax - expTax;
+  const netAfterTax  = totalNetAfterTax + subAfterTax - expAfterTax;
+
+  return {
+    summary: {
+      sales:           { beforeTax: salesBeforeTax,  tax: salesTax,  afterTax: salesAfterTax },
+      discounts:       { beforeTax: discountTotal,   tax: 0,         afterTax: discountTotal },
+      salesAfterDisc:  { beforeTax: salesNetBeforeTax, tax: salesNetTax, afterTax: salesNetAfterTax },
+      creditNotes:     { beforeTax: cnBeforeTax,     tax: cnTax,     afterTax: cnAfterTax },
+      totalNet:        { beforeTax: totalNetBeforeTax, tax: totalNetTax, afterTax: totalNetAfterTax },
+      subscriptions:   { beforeTax: subBeforeTax,  tax: subTax,    afterTax: subAfterTax },
+      expenses:        { beforeTax: expBeforeTax,    tax: expTax,    afterTax: expAfterTax },
+      net:             { beforeTax: netBeforeTax,    tax: netTax,    afterTax: netAfterTax },
+    },
+    paymentMethods: paymentMethods.map((r) => ({
+      method:         r.method,
+      count:          Number(r.count),
+      totalAfterTax:  Number(r.total_after_tax),
+      totalBeforeTax: Number(r.total_before_tax),
+      totalTax:       Number(r.total_tax),
+    })),
+    invoices,
+    expenses,
+    creditNotes,
+    subscriptions,
+    invoiceCount: Number(ordersSummary.invoice_count),
+  };
+}
+
+async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } = {}) {
+  const params = [];
+  let dateWhere = '';
+  const isDatetime = (s) => s && (s.includes('T') || (s.includes(' ') && s.includes(':')));
+  if (dateFrom) {
+    if (isDatetime(dateFrom)) {
+      dateWhere += ' AND created_at >= ?';
+    } else {
+      dateWhere += ' AND DATE(created_at) >= ?';
+    }
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    if (isDatetime(dateTo)) {
+      dateWhere += ' AND created_at <= ?';
+    } else {
+      dateWhere += ' AND DATE(created_at) <= ?';
+    }
+    params.push(dateTo);
+  }
+
+  const userWhere = userId ? ' AND created_by = ?' : '';
+  const userOrdersWhere = userId ? ' AND o.created_by = ?' : '';
+  const userCnWhere = userId ? ' AND cn.created_by = ?' : '';
+  const userSubWhere = userId ? ' AND sl.created_by = ?' : '';
+
+  const dateOrdersWhere = dateWhere.replace(/\bcreated_at\b/g, 'o.created_at');
+  const invoicesWhere   = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription')`;
+  const pmWhere         = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere}`;
+  const invoicesParams  = [...params];
+  const pmParams        = [...params];
+  if (userId) { invoicesParams.push(userId); pmParams.push(userId); }
+  const expWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'expense_date')}${userWhere}`;
+  const expParams       = [...params];
+  if (userId) expParams.push(userId);
+  const cnWhere         = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'cn.created_at')}${userCnWhere}`;
+  const cnParams        = [...params];
+  if (userId) cnParams.push(userId);
+  const subWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'sl.created_at')}${userSubWhere}`;
+  const subParams       = [...params];
+  if (userId) subParams.push(userId);
 
   const [[ordersSummary]] = await pool.query(`
     SELECT

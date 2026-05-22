@@ -2788,7 +2788,7 @@ html, body {
   width: 100%;
   margin: 0 0 4mm;
 }
-.a4m-qr-box { text-align: center; flex-shrink: 0; width: 35mm; margin: 0 auto; }
+.a4m-qr-box { text-align: center; flex-shrink: 0; width: 35mm; }
 
 /* ===== Summary: Totals (full width, no QR sidebar) ===== */
 .a4m-summary {
@@ -2797,15 +2797,15 @@ html, body {
   direction: rtl;
   gap: 4mm;
   align-items: flex-start;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 14mm;
 }
 .a4m-qr { width: 30mm; height: 30mm; margin: 0 auto 1mm; border: 2px solid #000; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; }
 .a4m-qr svg { display: block; width: 26mm !important; height: 26mm !important; max-width: none !important; }
 .a4m-qr-label { font-size: 6.5pt; font-weight: 700; color: #000; }
 .a4m-totals { border: 3px solid #000; width: 95mm; flex-shrink: 0; background: #fff; }
-.a4m-totals-col { display: flex; flex-direction: column; gap: 3mm; flex-shrink: 0; margin-inline-end: auto; }
-.a4m-notes-box { width: 95mm; background: #fff; padding: 2mm 0 0 0; font-size: 8pt; font-weight: 700; color: #000; line-height: 1.7; direction: rtl; }
+.a4m-totals-col { display: flex; flex-direction: column; gap: 3mm; flex-shrink: 0; }
+.a4m-notes-box { width: 100%; background: #fff; padding: 2mm 0 0 0; font-size: 8pt; font-weight: 700; color: #000; line-height: 1.7; direction: rtl; text-align: center; }
 .a4m-notes-title { font-size: 8.5pt; font-weight: 900; color: #000; border-bottom: 1.5px solid #000; padding-bottom: 1mm; margin-bottom: 2mm; display: block; }
 .a4m-notes-content { font-size: 7.5pt; font-weight: 700; color: #000; white-space: pre-wrap; line-height: 1.8; }
 .a4m-trow {
@@ -3586,6 +3586,149 @@ html, body {
   min-width: 0;
 }
 .deferred-barcode-input::placeholder { color: #86efac; }
+
+/* ── Camera Scan Button ── */
+.btn-camera-scan {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 10px rgba(99,102,241,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+  position: relative;
+}
+.btn-camera-scan:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(99,102,241,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
+  background: linear-gradient(135deg, #818cf8 0%, #4338ca 100%);
+}
+.btn-camera-scan:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(99,102,241,0.3);
+}
+.btn-camera-scan svg {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15));
+}
+
+/* ── Camera Scanner Modal ── */
+.camera-scanner-box {
+  max-width: 440px;
+  width: 95vw;
+  overflow: hidden;
+}
+.camera-scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.camera-scanner-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e293b;
+}
+.camera-scanner-title-row svg { color: #22c55e; flex-shrink: 0; }
+.camera-scanner-body { padding: 0 !important; }
+.camera-scanner-view {
+  width: 100%;
+  min-height: 300px;
+  background: #0f172a;
+  overflow: hidden;
+  position: relative;
+}
+/* Ensure the video from html5-qrcode fills the container */
+.camera-scanner-view video {
+  width: 100% !important;
+  height: auto !important;
+  object-fit: cover;
+}
+.camera-scanner-view #qr-shaded-region {
+  border-color: rgba(34,197,94,0.5) !important;
+}
+.camera-scanner-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #22c55e;
+  background: #f0fdf4;
+  border-top: 1px solid #dcfce7;
+}
+.camera-scanner-status.scanning-active {
+  animation: cameraPulse 1.5s ease-in-out infinite;
+}
+@keyframes cameraPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.camera-scanner-status.camera-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-top-color: #fecaca;
+  animation: none;
+}
+.camera-scanner-result {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.camera-scanner-result.scan-success {
+  color: #15803d;
+  background: #f0fdf4;
+  border-top: 1px solid #dcfce7;
+}
+.camera-scanner-result.scan-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-top: 1px solid #fecaca;
+}
+
+/* Retry button when scan fails */
+.btn-camera-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Cairo', sans-serif;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-camera-retry:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.btn-camera-retry:active { transform: translateY(0); }
+
+/* Captured image in scanner view */
+.camera-scanner-view img {
+  background: #f8fafc;
+}
 
 .btn-deferred-search {
   display: inline-flex;
@@ -5456,14 +5599,15 @@ html, body {
 
 @media (max-width: 480px) {
   .inv-proc-idle {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   .inv-proc-input-wrap {
-    flex: 1 1 100%;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .btn-process-invoice {
-    width: 100%;
-    justify-content: center;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .cn-detail-row {
     flex-direction: column;

@@ -317,17 +317,12 @@ window.addEventListener('DOMContentLoaded', () => {
         <label class="flbl" data-i18n="settings-custom-label-en"></label>
         <div class="fwrap"><input type="text" class="finp cf-label-en" dir="ltr" style="text-align:left" /></div>
       </div>
-      <div class="fld">
-        <label class="flbl" data-i18n="settings-custom-value"></label>
-        <div class="fwrap"><input type="text" class="finp cf-value" /></div>
-      </div>
       <div>
         <button type="button" class="btn-danger btn-remove-cf" data-i18n="settings-custom-remove"></button>
       </div>
     `;
     row.querySelector('.cf-label-ar').value = cf.labelAr || '';
     row.querySelector('.cf-label-en').value = cf.labelEn || '';
-    row.querySelector('.cf-value').value = cf.value || '';
     row.querySelector('.btn-remove-cf').addEventListener('click', () => row.remove());
     customFieldsContainer.appendChild(row);
     I18N.apply();
@@ -340,8 +335,7 @@ window.addEventListener('DOMContentLoaded', () => {
       out.push({
         id: row.dataset.id || `cf_${out.length}`,
         labelAr: row.querySelector('.cf-label-ar')?.value?.trim() || '',
-        labelEn: row.querySelector('.cf-label-en')?.value?.trim() || '',
-        value: row.querySelector('.cf-value')?.value?.trim() || ''
+        labelEn: row.querySelector('.cf-label-en')?.value?.trim() || ''
       });
     });
     return out;

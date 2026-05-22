@@ -78,6 +78,29 @@ window.addEventListener('DOMContentLoaded', async () => {
     a4mText('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     a4mText('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* Custom fields (A4) */
+    const drA4mCFElAr = document.getElementById('a4mCustomFieldsAr');
+    const drA4mCFElEn = document.getElementById('a4mCustomFieldsEn');
+    const cfsDrA4 = Array.isArray(data.customFields) ? data.customFields : [];
+    if (drA4mCFElAr) {
+      if (cfsDrA4.length) {
+        let cfHtmlArDr = '';
+        cfsDrA4.forEach(cf => {
+          if (cf.labelAr) cfHtmlArDr += '<div class="a4m-brand-sub">' + escapeHtml(cf.labelAr) + '</div>';
+        });
+        drA4mCFElAr.innerHTML = cfHtmlArDr;
+      } else { drA4mCFElAr.innerHTML = ''; }
+    }
+    if (drA4mCFElEn) {
+      if (cfsDrA4.length) {
+        let cfHtmlEnDr = '';
+        cfsDrA4.forEach(cf => {
+          if (cf.labelEn) cfHtmlEnDr += '<div class="a4m-brand-sub">' + escapeHtml(cf.labelEn) + '</div>';
+        });
+        drA4mCFElEn.innerHTML = cfHtmlEnDr;
+      } else { drA4mCFElEn.innerHTML = ''; }
+    }
+
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
       if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
@@ -403,6 +426,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (invShopEmail) invShopEmail.textContent = s.email || '';
     if (invVatNumber) invVatNumber.textContent = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
 
+    /* Custom fields */
+    const invCFDr = document.getElementById('invCustomFields');
+    if (invCFDr) {
+      const cfsDr = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfsDr.length > 0) {
+        let cfHtmlDr = '';
+        cfsDr.forEach(cf => {
+          const label = cf.labelAr || cf.labelEn;
+          if (label) cfHtmlDr += '<div class="inv-shop-sub">' + escapeHtml(label) + '</div>';
+        });
+        invCFDr.innerHTML = cfHtmlDr;
+        invCFDr.style.display = cfHtmlDr ? '' : 'none';
+      } else {
+        invCFDr.innerHTML = '';
+        invCFDr.style.display = 'none';
+      }
+    }
+
     if (s.commercialRegister && invCRRow && invCR) {
       invCR.textContent = s.commercialRegister;
       invCRRow.style.display = '';
@@ -682,6 +723,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       starch:           order.starch || '',
       bluing:           order.bluing || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
+      customFields: Array.isArray(s.customFields) ? s.customFields : [],
       qrPayload: vatRate > 0 ? {
         sellerName:  shopName,
         vatNumber:   s.vatNumber || '',
@@ -739,7 +781,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         <td>${cn.phone || '—'}</td>
         <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
         <td class="neg-cell">-${SAR(cn.total_amount, false)}</td>
-        <td class="no-print"><button class="view-btn" onclick="location.href='/screens/credit-invoices/credit-invoices.html'">${I18N.t('all-invoices-view')}</button></td>
+        <td class="no-print"><button class="view-btn" onclick="showCreditNoteModal(${cn.id})">${I18N.t('all-invoices-view')}</button></td>
       </tr>`;
     }).join('');
   }
@@ -880,6 +922,291 @@ window.addEventListener('DOMContentLoaded', async () => {
     const r = await window.api.exportReport({ type: 'pdf', filters });
     btnPdfExport.disabled = false;
     if (!r.success) showToast(r.message || I18N.t('all-invoices-err-export'), 'error');
+  });
+
+  /* ── Credit Note Modal ── */
+  window.showCreditNoteModal = async function(id) {
+    if (!_reportAppSettings) {
+      const sres = await window.api.getAppSettings().catch(() => null);
+      _reportAppSettings = (sres && sres.success && sres.settings) ? sres.settings : {};
+    }
+    try {
+      const res = await window.api.getCreditNoteById({ id });
+      if (!res || !res.success || !res.creditNote) { showToast(I18N.t('all-invoices-cant-load-cn') || 'خطأ في التحميل', 'error'); return; }
+      let order = null;
+      if (res.creditNote && res.creditNote.original_order_id) {
+        try {
+          const orderRes = await window.api.getOrderById({ id: res.creditNote.original_order_id });
+          if (orderRes && orderRes.success) order = orderRes.order || null;
+        } catch (_) {}
+      }
+      renderCreditNoteModal(res.creditNote, res.items || [], order, res.subscriptionRefund || null);
+    } catch { showToast(I18N.t('all-invoices-cn-load-error') || 'خطأ', 'error'); }
+  };
+
+  function renderCreditNoteModal(cn, items, order, subscriptionRefund) {
+    const s = _reportAppSettings || {};
+    const shopName = s.laundryNameAr || s.laundryNameEn || I18N.t('shop-name-default');
+    const addressParts = [s.streetNameAr, s.districtAr, s.cityAr].filter(Boolean);
+    const el = (id) => document.getElementById(id);
+    const fmtLtr = (n) => Number(n || 0).toFixed(2);
+    const sarFmtA = (n) => `<span class="sar">&#xE900;</span> ${fmtLtr(n)}`;
+    const formatInvoiceDate = (dateStr) => {
+      if (!dateStr) return '';
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('en-US', { year:'numeric', month:'2-digit', day:'2-digit' }) + ' ' +
+               d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:true });
+      } catch { return dateStr; }
+    };
+    const escHtml = (str) => String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const payLabel = (pm) => pm || '—';
+
+    if (el('cnShopName'))    el('cnShopName').textContent    = shopName;
+    if (el('cnShopAddress')) el('cnShopAddress').textContent = addressParts.join('، ') || s.locationAr || '';
+    if (el('cnShopPhone'))   el('cnShopPhone').textContent   = s.phone ? (I18N.t('all-invoices-phone') || 'هاتف') + ': ' + s.phone : '';
+    if (el('cnVatNumber'))   el('cnVatNumber').textContent   = s.vatNumber ? (I18N.t('all-invoices-vat') || 'الرقم الضريبي') + ': ' + s.vatNumber : '';
+    if (el('cnShopEmail'))   el('cnShopEmail').textContent   = s.email || '';
+
+    const cnLogoWrap = el('cnLogoWrap');
+    const cnLogo = el('cnLogo');
+    if (cnLogoWrap && cnLogo) {
+      if (s.logoDataUrl) { cnLogo.src = s.logoDataUrl; cnLogoWrap.style.display = ''; }
+      else { cnLogoWrap.style.display = 'none'; }
+    }
+
+    if (el('cnNoteNum'))  el('cnNoteNum').textContent  = cn.credit_note_number || cn.credit_note_seq || '';
+    if (el('cnOrigInv'))  el('cnOrigInv').textContent  = cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || '—');
+    if (el('cnDate'))     el('cnDate').textContent     = formatInvoiceDate(cn.created_at);
+    if (el('cnPayment'))  el('cnPayment').textContent  = order ? payLabel(order.payment_method) : '—';
+
+    var cnRefundRow = el('cnRefundRow');
+    var cnRefundText = el('cnRefundText');
+    if (cnRefundRow && cnRefundText) {
+      if (subscriptionRefund && Number(subscriptionRefund.amount) > 0) {
+        cnRefundText.innerHTML = 'الرصيد المتبقى: <span class="sar">&#xE900;</span> ' + Number(subscriptionRefund.newBalance).toFixed(2);
+        cnRefundRow.style.display = '';
+      } else {
+        cnRefundRow.style.display = 'none';
+        cnRefundText.textContent = '';
+      }
+    }
+
+    const setRow = (rowId, val, valId) => {
+      const row = el(rowId);
+      const valEl = valId ? el(valId) : null;
+      if (val) { if (valEl) valEl.textContent = formatInvoiceDate(val); if (row) row.style.display = ''; }
+      else if (row) row.style.display = 'none';
+    };
+    setRow('cnPaidAtRow', order && order.paid_at, 'cnPaidAt');
+    setRow('cnCleanedAtRow', order && order.cleaning_date, 'cnCleanedAt');
+    setRow('cnDeliveredAtRow', order && order.delivery_date, 'cnDeliveredAt');
+
+    const cnCRRow = el('cnCRRow');
+    const cnCR = el('cnCR');
+    if (s.commercialRegister && cnCRRow && cnCR) { cnCR.textContent = s.commercialRegister; cnCRRow.style.display = ''; }
+    else if (cnCRRow) cnCRRow.style.display = 'none';
+
+    const cnCreatedByRow = el('cnCreatedByRow');
+    const cnCreatedBy = el('cnCreatedBy');
+    if (cn.created_by && cnCreatedByRow && cnCreatedBy) { cnCreatedBy.textContent = cn.created_by; cnCreatedByRow.style.display = ''; }
+    else if (cnCreatedByRow) cnCreatedByRow.style.display = 'none';
+
+    const cnCustomerSection = el('cnCustomerSection');
+    const cnCustNameRow = el('cnCustNameRow');
+    const cnCustName = el('cnCustName');
+    const cnCustPhoneRow = el('cnCustPhoneRow');
+    const cnCustPhone = el('cnCustPhone');
+    if (cn.customer_name || cn.phone) {
+      if (cnCustomerSection) cnCustomerSection.style.display = '';
+      if (cn.customer_name && cnCustNameRow && cnCustName) { cnCustName.textContent = cn.customer_name; cnCustNameRow.style.display = ''; } else if (cnCustNameRow) cnCustNameRow.style.display = 'none';
+      if (cn.phone && cnCustPhoneRow && cnCustPhone) { cnCustPhone.textContent = cn.phone; cnCustPhoneRow.style.display = ''; } else if (cnCustPhoneRow) cnCustPhoneRow.style.display = 'none';
+    } else {
+      if (cnCustomerSection) cnCustomerSection.style.display = 'none';
+    }
+
+    const cnSubRefRow = el('cnSubRefRow');
+    const cnSubRef = el('cnSubRef');
+    const cnSubBalRow = el('cnSubBalRow');
+    const cnSubBalance = el('cnSubBalance');
+    if (subscriptionRefund && Number(subscriptionRefund.amount) > 0) {
+      if (cnCustomerSection) cnCustomerSection.style.display = '';
+      if (cnSubRefRow && cnSubRef && subscriptionRefund.subscriptionNumber) {
+        cnSubRef.textContent = subscriptionRefund.subscriptionNumber;
+        cnSubRefRow.style.display = '';
+      } else if (cnSubRefRow) cnSubRefRow.style.display = 'none';
+      if (cnSubBalRow && cnSubBalance) {
+        cnSubBalance.innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(subscriptionRefund.newBalance);
+        cnSubBalRow.style.display = '';
+      }
+    } else {
+      if (cnSubRefRow) cnSubRefRow.style.display = 'none';
+      if (cnSubBalRow) cnSubBalRow.style.display = 'none';
+    }
+
+    const cnItemsTbody = el('cnItemsTbody');
+    if (cnItemsTbody) {
+      cnItemsTbody.innerHTML = (items || []).map(item => `<tr>
+        <td class="inv-td-name">${escHtml(item.product_name_ar || '')}</td>
+        <td class="inv-td-num">${item.quantity}</td>
+        <td class="inv-td-amt">${fmtLtr(item.line_total)}</td>
+        <td class="inv-td-name">${escHtml(item.service_name_ar || '—')}</td>
+      </tr>`).join('');
+    }
+
+    const subtotal  = parseFloat(cn.subtotal || 0);
+    const discount  = parseFloat(cn.discount_amount || 0);
+    const vatRate   = parseFloat(cn.vat_rate || 0);
+    const vatAmount = parseFloat(cn.vat_amount || 0);
+    const total     = parseFloat(cn.total_amount || 0);
+    const isInclusive = cn.price_display_mode === 'inclusive';
+
+    const cnSubtotalLabel = el('cnSubtotalLabel');
+    const cnSubtotal = el('cnSubtotal');
+    const cnDiscRow = el('cnDiscRow');
+    const cnDiscount = el('cnDiscount');
+    const cnVatRow = el('cnVatRow');
+    const cnVatLabel = el('cnVatLabel');
+    const cnVat = el('cnVat');
+    const cnTotalLabel = el('cnTotalLabel');
+    const cnTotalEl = el('cnTotal');
+    const cnPaidRow = el('cnPaidRow');
+    const cnPaidAmount = el('cnPaidAmount');
+    const cnRemainingRow = el('cnRemainingRow');
+    const cnRemainingAmount = el('cnRemainingAmount');
+
+    if (isInclusive && vatRate > 0) {
+      if (cnSubtotal) cnSubtotal.innerHTML = sarFmtA(subtotal * 100 / (100 + vatRate));
+    } else {
+      if (cnSubtotal) cnSubtotal.innerHTML = sarFmtA(subtotal);
+    }
+
+    if (discount > 0 && cnDiscRow && cnDiscount) {
+      cnDiscount.innerHTML = sarFmtA(discount);
+      cnDiscRow.style.display = '';
+    } else if (cnDiscRow) { cnDiscRow.style.display = 'none'; }
+
+    if (vatRate > 0 && vatAmount > 0) {
+      if (cnVatLabel) cnVatLabel.textContent = `${I18N.t('invoice-vat-label-short') || 'ضريبة القيمة المضافة'} (${vatRate}%)`;
+      if (cnVat) cnVat.innerHTML = sarFmtA(vatAmount);
+      if (cnVatRow) cnVatRow.style.display = '';
+      if (cnSubtotalLabel) cnSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax') || 'المجموع قبل الضريبة';
+      if (cnTotalLabel) cnTotalLabel.textContent = I18N.t('invoice-grand-total-tax') || 'الإجمالي شامل الضريبة';
+    } else {
+      if (cnVatRow) cnVatRow.style.display = 'none';
+      if (cnSubtotalLabel) cnSubtotalLabel.textContent = I18N.t('invoice-subtotal') || 'المجموع';
+      if (cnTotalLabel) cnTotalLabel.textContent = I18N.t('invoice-total') || 'الإجمالي';
+    }
+
+    if (cnTotalEl) cnTotalEl.innerHTML = sarFmtA(total);
+
+    const paidAmount = order ? parseFloat(order.paid_amount || 0) : 0;
+    const remainingAmount = order ? parseFloat(order.remaining_amount || 0) : 0;
+    const isDeferred = order && (String(order.payment_method || '') === 'credit' || remainingAmount > 0);
+    if (isDeferred && cnPaidRow && cnRemainingRow) {
+      if (cnPaidAmount) cnPaidAmount.innerHTML = sarFmtA(paidAmount);
+      if (cnRemainingAmount) cnRemainingAmount.innerHTML = sarFmtA(remainingAmount);
+      cnPaidRow.style.display = ''; cnRemainingRow.style.display = '';
+    } else {
+      if (cnPaidRow) cnPaidRow.style.display = 'none';
+      if (cnRemainingRow) cnRemainingRow.style.display = 'none';
+    }
+
+    const cnQR = el('cnQR');
+    if (vatRate > 0 && cnQR) {
+      cnQR.innerHTML = '';
+      const isoTs = (ds) => {
+        const d = ds ? new Date(ds) : new Date();
+        return (isNaN(d.getTime()) ? new Date() : d).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      };
+      window.api.generateZatcaQR({
+        sellerName: shopName, vatNumber: s.vatNumber || '',
+        timestamp: isoTs(cn.created_at),
+        totalAmount: fmtLtr(total), vatAmount: fmtLtr(vatAmount)
+      }).then(res => { if (res && res.success && res.svg) cnQR.innerHTML = res.svg; }).catch(() => {});
+    } else if (cnQR) { cnQR.innerHTML = ''; }
+
+    const cnBarcodeEl = document.getElementById('cnBarcode');
+    if (cnBarcodeEl && cn.original_invoice_seq) {
+      try { JsBarcode(cnBarcodeEl, String(cn.original_invoice_seq), { format: 'CODE128', width: 3, height: 50, displayValue: true, fontSize: 14, margin: 0, background: 'transparent' }); } catch(e) { cnBarcodeEl.innerHTML = ''; }
+    } else if (cnBarcodeEl) { cnBarcodeEl.innerHTML = ''; }
+
+    const cnNotesSection = el('cnNotesSection');
+    const cnNotes = el('cnNotes');
+    if (cn.notes && cnNotesSection && cnNotes) { cnNotes.textContent = cn.notes; cnNotesSection.style.display = ''; }
+    else if (cnNotesSection) cnNotesSection.style.display = 'none';
+
+    const cnFooterNotes = el('cnFooterNotes');
+    if (cnFooterNotes) {
+      if (s.invoiceNotes) {
+        const cnNotesContent = el('cnNotesContent');
+        if (cnNotesContent) cnNotesContent.textContent = s.invoiceNotes;
+        cnFooterNotes.style.display = '';
+      } else { cnFooterNotes.style.display = 'none'; }
+    }
+
+    document.getElementById('cnViewModal').style.display = 'flex';
+    const cnDialogBody = document.querySelector('#cnViewModal .inv-dialog-body');
+    if (cnDialogBody) cnDialogBody.scrollTop = 0;
+  }
+
+  window.closeCreditNoteModal = function() {
+    document.getElementById('cnViewModal').style.display = 'none';
+  };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCreditNoteModal(); });
+
+  const btnCnClose = document.getElementById('btnCnClose');
+  const btnCnPrint = document.getElementById('btnCnPrint');
+  const btnCnExportPdf = document.getElementById('btnCnExportPdf');
+  const cnViewModal = document.getElementById('cnViewModal');
+  if (btnCnClose) btnCnClose.addEventListener('click', closeCreditNoteModal);
+  if (cnViewModal) cnViewModal.addEventListener('click', (e) => { if (e.target === cnViewModal) closeCreditNoteModal(); });
+  if (btnCnPrint) btnCnPrint.addEventListener('click', () => {
+    const copies = Number(_reportAppSettings && _reportAppSettings.printCopies);
+    const intCopies = (!Number.isFinite(copies) || copies < 1) ? 1 : Math.min(20, Math.floor(copies));
+    let currentCopy = 0;
+    function printNextCopy() {
+      if (currentCopy >= intCopies) return;
+      currentCopy++;
+      let handled = false;
+      function handleAfterPrint() {
+        if (handled) return; handled = true;
+        window.removeEventListener('afterprint', handleAfterPrint);
+        if (currentCopy < intCopies) setTimeout(printNextCopy, 120);
+      }
+      window.addEventListener('afterprint', handleAfterPrint);
+      window.print();
+      setTimeout(handleAfterPrint, 2500);
+    }
+    printNextCopy();
+  });
+  if (btnCnExportPdf) btnCnExportPdf.addEventListener('click', async () => {
+    try {
+      btnCnExportPdf.disabled = true;
+      btnCnExportPdf.innerHTML = `<span>${I18N.t('exporting') || 'جاري التصدير...'}</span>`;
+      const paperEl = document.getElementById('cnPaper');
+      if (!paperEl) {
+        showToast(I18N.t('toast-cn-content-not-found') || 'خطأ', 'error');
+        btnCnExportPdf.disabled = false;
+        btnCnExportPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg><span>' + (I18N.t('export-pdf') || 'تصدير PDF') + '</span>';
+        return;
+      }
+      const invoiceHTML = paperEl.outerHTML;
+      const noteNum = document.getElementById('cnNoteNum') ? document.getElementById('cnNoteNum').textContent : '';
+      const result = await window.api.exportInvoicePdfFromHtml({ html: invoiceHTML, paperType: 'thermal', orderNum: noteNum });
+      if (result.success) {
+        showToast(I18N.t('toast-pdf-success') || 'تم التصدير بنجاح', 'success');
+      } else {
+        showToast(result.message || I18N.t('all-invoices-err-export') || 'خطأ في التصدير', 'error');
+      }
+      btnCnExportPdf.disabled = false;
+      btnCnExportPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg><span>' + (I18N.t('export-pdf') || 'تصدير PDF') + '</span>';
+    } catch (err) {
+      showToast(I18N.t('export-error-generic') || 'خطأ', 'error');
+      btnCnExportPdf.disabled = false;
+      btnCnExportPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg><span>' + (I18N.t('export-pdf') || 'تصدير PDF') + '</span>';
+    }
   });
 
   /* Invoice modal bindings */

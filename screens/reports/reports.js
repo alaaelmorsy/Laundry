@@ -9,6 +9,14 @@ window.addEventListener('DOMContentLoaded', () => {
     location.href = '/screens/reports/period-report/period-report.html';
   });
 
+  document.getElementById('cardExpensesReport').addEventListener('click', () => {
+    location.href = '/screens/reports/expenses-report/expenses-report.html';
+  });
+
+  document.getElementById('cardCreditInvoicesReport').addEventListener('click', () => {
+    location.href = '/screens/reports/credit-invoices-report/credit-invoices-report.html';
+  });
+
   document.getElementById('cardAllInvoicesReport').addEventListener('click', () => {
     location.href = '/screens/reports/all-invoices-report/all-invoices-report.html';
   });
@@ -19,6 +27,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('cardTypesReport').addEventListener('click', () => {
     location.href = '/screens/reports/types-report/types-report.html';
+  });
+
+  document.getElementById('cardWorkerReport').addEventListener('click', () => {
+    location.href = '/screens/reports/worker-report/worker-report.html';
   });
 
   if (typeof I18N !== 'undefined') I18N.apply();

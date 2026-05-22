@@ -34,18 +34,18 @@ async function exportExpenses(type, filters = {}) {
     const wb = XLSX.utils.book_new();
     const wsData = reportHtml.buildExcelData(expenses, summary, filters);
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 24 }];
+    ws['!cols'] = [{ wch: 4 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 24 }];
     if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
     ws['!sheetViews'][0].rightToLeft = true;
     XLSX.utils.book_append_sheet(wb, ws, 'المصروفات');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    return { buffer: Buffer.from(buf), filename: `expenses_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+    return { buffer: Buffer.from(buf), filename: `مصروفات_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
   }
 
   if (type === 'pdf') {
     const html = reportHtml.buildPdfHtml(expenses, summary, filters, f.cairoRegularB64, f.cairoBoldB64, f.saudiRiyalB64);
     const buffer = await htmlToPdfBuffer(html, { landscape: true });
-    return { buffer, filename: `expenses_${ts()}.pdf`, mimeType: 'application/pdf' };
+    return { buffer, filename: `مصروفات_${ts()}.pdf`, mimeType: 'application/pdf' };
   }
 
   throw new Error('نوع التصدير غير مدعوم');
@@ -323,9 +323,9 @@ ${bodyStyle}
 .a4m-qr{width:30mm;height:30mm;margin:0 auto 1mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
 .a4m-qr svg{display:block;width:26mm!important;height:26mm!important;max-width:none!important}
 .a4m-qr-label{font-size:6.5pt;font-weight:700;color:#000}
-.a4m-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0;margin-inline-end:auto}
+.a4m-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0}
 .a4m-totals{border:3px solid #000;width:95mm;flex-shrink:0;background:#fff}
-.a4m-notes-box{width:95mm;background:#fff;padding:2mm 0 0 0;font-size:8pt;font-weight:700;color:#000;line-height:1.7;direction:rtl}
+.a4m-notes-box{width:100%;background:#fff;padding:2mm 0 0 0;font-size:8pt;font-weight:700;color:#000;line-height:1.7;direction:rtl;text-align:center}
 .a4m-notes-title{font-size:8.5pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
 .a4m-notes-content{font-size:7.5pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
 .a4m-trow{display:flex;justify-content:space-between;align-items:stretch;padding:0;font-size:8.5pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
@@ -372,14 +372,14 @@ ${bodyStyle}
 .a4-td-name{text-align:start}
 .a4-td-en{font-size:7.5pt;font-weight:700;color:#000;display:block;direction:ltr}
 .a4-qr-row{display:flex;justify-content:center;align-items:center;width:100%;margin:0 0 4mm}
-.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:flex-end;margin-bottom:16mm}
-.a4-qr-box{text-align:center;flex-shrink:0;width:38mm;margin:0 auto}
+.a4-summary{display:flex;flex-direction:row;direction:rtl;gap:4mm;align-items:flex-start;justify-content:space-between;margin-bottom:16mm}
+.a4-qr-box{text-align:center;flex-shrink:0;width:38mm}
 .a4-qr{width:34mm;height:34mm;margin:0 auto 1.5mm;border:2px solid #000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
 .a4-qr svg{display:block;width:30mm!important;height:30mm!important;max-width:none!important}
 .a4-qr-label{font-size:7pt;font-weight:700;color:#000}
-.a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;margin-inline-end:auto;background:#fff;direction:rtl}
-.a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0;margin-inline-end:auto}
-.a4-notes-box{width:95mm;background:#fff;direction:rtl;padding:2.5mm 0 0 0;font-size:8.5pt;font-weight:700;color:#000;line-height:1.7}
+.a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;background:#fff;direction:rtl}
+.a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0}
+.a4-notes-box{width:100%;background:#fff;direction:rtl;padding:2.5mm 0 0 0;font-size:8.5pt;font-weight:700;color:#000;line-height:1.7;text-align:center}
 .a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
 .a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
 .a4-trow{display:flex;justify-content:space-between;align-items:center;padding:0;font-size:9pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
@@ -477,28 +477,125 @@ async function buildThermalHangerTicketHtml(orderId) {
 async function exportCreditNotes(type, filters = {}) {
   const { creditNotes } = await db.getCreditNotes({ ...filters, page: 1, pageSize: 100000 });
   const f = cairoFonts();
+  const branding = await loadAppBrandingForReceipts().catch(() => ({}));
+
+  const shopName = branding.laundryNameAr || branding.laundryNameEn || 'نظام المغسلة';
+  const printDate = new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const printTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  let period = 'اليوم';
+  if (filters.dateFrom && filters.dateTo) {
+    period = `من ${filters.dateFrom} إلى ${filters.dateTo}`;
+  } else if (filters.dateFrom) {
+    period = `من ${filters.dateFrom}`;
+  } else if (filters.dateTo) {
+    period = `إلى ${filters.dateTo}`;
+  }
 
   if (type === 'excel') {
     const wb = XLSX.utils.book_new();
-    const rows = [
-      ['#', 'رقم الإشعار', 'رقم الفاتورة الأصلية', 'التاريخ', 'العميل', 'الهاتف', 'الإجمالي', 'ضريبة', 'الإجمالي شامل الضريبة', 'بواسطة']
-    ];
+    const rows = [];
+    const merges = [];
+    let r = 0;
+
+    const addMergedRow = (text, cols) => {
+      rows.push([text]);
+      merges.push({ s: { r, c: 0 }, e: { r, c: cols - 1 } });
+      r++;
+    };
+
+    // Header info
+    addMergedRow(shopName, 11);
+    if (branding.vatNumber) {
+      addMergedRow(`الرقم الضريبي: ${branding.vatNumber}`, 11);
+    }
+    if (branding.commercialRegister) {
+      addMergedRow(`السجل التجاري: ${branding.commercialRegister}`, 11);
+    }
+    const addressStr = [branding.buildingNumber, branding.streetNameAr, branding.districtAr, branding.cityAr, branding.postalCode].filter(Boolean).join('، ');
+    if (addressStr) {
+      addMergedRow(`العنوان: ${addressStr}`, 11);
+    }
+    addMergedRow('تقرير الفواتير الدائنة (المرتجعات)', 11);
+    addMergedRow(`الفترة: ${period}`, 11);
+    addMergedRow(`تاريخ الطباعة: ${printDate} ${printTime}`, 11);
+
+    rows.push([]); r++; // blank row
+
+    // Table Headers
+    rows.push([
+      '#',
+      'رقم الإشعار',
+      'رقم الفاتورة الأصلية',
+      'التاريخ',
+      'العميل',
+      'الهاتف',
+      'المبلغ (قبل الضريبة)',
+      'الضريبة (15%)',
+      'الإجمالي شامل الضريبة',
+      'ملاحظات',
+      'بواسطة'
+    ]);
+    r++;
+
+    let totalSubtotal = 0;
+    let totalVat = 0;
+    let totalAmount = 0;
+
     creditNotes.forEach((cn, i) => {
+      const sub = Number(cn.subtotal || 0);
+      const vat = Number(cn.vat_amount || 0);
+      const tot = Number(cn.total_amount || 0);
+
+      totalSubtotal += sub;
+      totalVat += vat;
+      totalAmount += tot;
+
       rows.push([
         i + 1,
         cn.credit_note_number || '',
-        cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || ''),
+        cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || '—'),
         cn.created_at ? new Date(cn.created_at).toLocaleDateString('en-US') : '',
         cn.customer_name || '—',
         cn.phone || '—',
-        Number(cn.subtotal || 0).toFixed(2),
-        Number(cn.vat_amount || 0).toFixed(2),
-        Number(cn.total_amount || 0).toFixed(2),
+        sub.toFixed(2),
+        vat.toFixed(2),
+        tot.toFixed(2),
+        cn.notes || '—',
         cn.created_by || ''
       ]);
+      r++;
     });
+
+    rows.push([]); r++; // blank row
+
+    // Summary/Footer Row
+    rows.push([
+      `الإجمالي: ${creditNotes.length} إشعار`,
+      '', '', '', '', '',
+      totalSubtotal.toFixed(2),
+      totalVat.toFixed(2),
+      totalAmount.toFixed(2),
+      '',
+      ''
+    ]);
+    r++;
+
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 16 }];
+    ws['!cols'] = [
+      { wch: 5 },  // #
+      { wch: 15 }, // رقم الإشعار
+      { wch: 18 }, // رقم الفاتورة الأصلية
+      { wch: 18 }, // التاريخ
+      { wch: 22 }, // العميل
+      { wch: 15 }, // الهاتف
+      { wch: 18 }, // قبل الضريبة
+      { wch: 15 }, // الضريبة
+      { wch: 22 }, // شامل الضريبة
+      { wch: 25 }, // ملاحظات
+      { wch: 16 }  // بواسطة
+    ];
+    ws['!merges'] = merges;
     if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
     ws['!sheetViews'][0].rightToLeft = true;
     XLSX.utils.book_append_sheet(wb, ws, 'الفواتير الدائنة');
@@ -507,41 +604,201 @@ async function exportCreditNotes(type, filters = {}) {
   }
 
   if (type === 'pdf') {
-    const sarSymbol = '\uE900';
-    const cairoB64 = f.cairoBoldB64;
-    const saudiB64 = f.saudiRiyalB64;
+    const sarSymbol = '&#xE900;';
+    const cairoRegularB64 = f.cairoRegularB64;
+    const cairoBoldB64 = f.cairoBoldB64;
+    const saudiRiyalB64 = f.saudiRiyalB64;
 
-    const rows = creditNotes.map((cn, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td dir="ltr">${cn.credit_note_number || ''}</td>
-        <td dir="ltr">${cn.original_invoice_seq || cn.original_order_number || '—'}</td>
-        <td dir="ltr">${cn.created_at ? new Date(cn.created_at).toLocaleDateString('en-US') : ''}</td>
-        <td>${cn.customer_name || '—'}</td>
-        <td dir="ltr">${cn.phone || '—'}</td>
-        <td dir="ltr"><span class="sar">${sarSymbol}</span> ${Number(cn.total_amount || 0).toFixed(2)}</td>
-      </tr>
-    `).join('');
+    let totalSubtotal = 0;
+    let totalVat = 0;
+    let totalAmount = 0;
 
-    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
-      <style>
-        @font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${cairoB64}') format('woff2');font-weight:700}
-        @font-face{font-family:'SaudiRiyal';src:url('data:font/woff;base64,${saudiB64}') format('woff')}
-        *{font-family:'Cairo',sans-serif;font-weight:700;box-sizing:border-box}
-        body{margin:16px;color:#1e293b;direction:rtl}
-        h1{font-size:18px;margin-bottom:12px;text-align:center}
-        table{width:100%;border-collapse:collapse;font-size:11px}
-        th{background:#8b5cf6;color:#fff;padding:7px 10px;text-align:right;white-space:nowrap}
-        td{padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right}
-        tr:nth-child(even) td{background:#f8fafc}
-        .sar{font-family:'SaudiRiyal';font-size:1.1em}
-      </style></head><body>
-      <h1>الفواتير الدائنة</h1>
-      <table><thead><tr>
-        <th>#</th><th>رقم الإشعار</th><th>فاتورة أصلية</th><th>التاريخ</th>
-        <th>العميل</th><th>الهاتف</th><th>الإجمالي</th>
-      </tr></thead><tbody>${rows}</tbody></table>
-    </body></html>`;
+    const tableRowsHtml = creditNotes.map((cn, i) => {
+      const sub = Number(cn.subtotal || 0);
+      const vat = Number(cn.vat_amount || 0);
+      const tot = Number(cn.total_amount || 0);
+
+      totalSubtotal += sub;
+      totalVat += vat;
+      totalAmount += tot;
+
+      const origInvoice = cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || '—');
+
+      return `
+        <tr class="${i % 2 !== 0 ? 'alt' : ''}">
+          <td>${i + 1}</td>
+          <td dir="ltr" style="font-weight:bold;">${cn.credit_note_number || ''}</td>
+          <td dir="ltr">${origInvoice}</td>
+          <td dir="ltr">${cn.created_at ? new Date(cn.created_at).toLocaleDateString('en-US') + ' ' + new Date(cn.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}</td>
+          <td>${cn.customer_name || '—'}</td>
+          <td dir="ltr">${cn.phone || '—'}</td>
+          <td>${cn.created_by || ''}</td>
+          <td class="num"><span class="sar">${sarSymbol}</span> ${sub.toFixed(2)}</td>
+          <td class="num"><span class="sar">${sarSymbol}</span> ${vat.toFixed(2)}</td>
+          <td class="num" style="color:#7e22ce; font-weight: bold;"><span class="sar">${sarSymbol}</span> ${tot.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const logoHtml = branding.logoDataUrl
+      ? `<img src="${branding.logoDataUrl}" class="hdr-logo-img" alt="logo" />`
+      : `<svg class="hdr-logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+          <path d="M8 14h8M8 18h5"/>
+         </svg>`;
+
+    const shopAddress = [branding.streetNameAr, branding.districtAr, branding.cityAr].filter(Boolean).join('، ');
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<style>
+@font-face{font-family:'Cairo';font-weight:400;src:url('data:font/woff2;base64,${cairoRegularB64}') format('woff2')}
+@font-face{font-family:'Cairo';font-weight:700;src:url('data:font/woff2;base64,${cairoBoldB64}') format('woff2')}
+@font-face{font-family:'SaudiRiyal';font-weight:400;src:url('data:font/woff;base64,${saudiRiyalB64}') format('woff')}
+.sar{font-family:'SaudiRiyal';font-weight:400;font-style:normal;font-size:1.08em;vertical-align:middle;display:inline-block;line-height:1}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif}
+body{direction:rtl;background:#fff;color:#000;font-size:10px;padding:20px}
+@page{size:A4 landscape;margin:0.8cm}
+.page{background:#fff;width:100%}
+
+/* Header Style - Elegant Purple Gradient */
+.hdr{background:linear-gradient(135deg,#7e22ce 0%,#8b5cf6 55%,#a78bfa 100%);padding:18px 24px;color:#fff;border-radius:12px;display:flex;align-items:center;gap:15px;margin-bottom:15px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05)}
+.hdr-logo{width:55px;height:55px;border-radius:12px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+.hdr-logo-img{max-width:50px;max-height:50px;object-fit:contain}
+.hdr-logo-svg{width:32px;height:32px;color:#fff}
+.hdr-info{flex:1;min-width:0}
+.hdr-shop{font-size:19px;font-weight:900;line-height:1.2}
+.hdr-sub{font-size:10px;font-weight:400;opacity:.85;margin-top:4px}
+.hdr-right{margin-right:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.hdr-badge{background:rgba(255,255,255,.22);border-radius:20px;padding:5px 15px;font-size:10px;font-weight:700;white-space:nowrap}
+.hdr-ts{font-size:9px;opacity:.75;text-align:left}
+
+/* Metadata Bar */
+.info-bar{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px 20px;display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#4c1d95;font-weight:700;margin-bottom:15px}
+
+/* KPI Summary Cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 15px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,0.02)}
+.kpi-card.purple{border-left:4px solid #7e22ce;background:#faf5ff}
+.kpi-card.green{border-left:4px solid #10b981;background:#f0fdf4}
+.kpi-label{font-size:9.5px;color:#64748b;font-weight:700}
+.kpi-val{font-size:16px;font-weight:900;color:#1e293b}
+.kpi-val.purple-text{color:#7e22ce}
+.kpi-val.green-text{color:#0f766e}
+
+/* Table Style */
+.sec{border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.02)}
+.sec-hdr{background:linear-gradient(90deg,#7e22ce,#8b5cf6);padding:9px 16px;color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:space-between}
+.sec-badge{background:rgba(255,255,255,.25);border-radius:20px;padding:3px 12px;font-size:9.5px;font-weight:700;white-space:nowrap}
+.sec-body{background:#fff}
+
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+thead th{padding:9px 12px;background:#7e22ce;color:#fff;font-weight:700;text-align:right;white-space:nowrap}
+thead th.num{text-align:left;direction:ltr}
+tbody tr{border-bottom:1px solid #f1f5f9}
+tbody tr:last-child{border-bottom:none}
+tbody tr:nth-child(even){background:#fcfaff}
+tbody td{padding:8px 12px;color:#334155;text-align:right;vertical-align:middle}
+td.num{font-weight:700;color:#0f172a;text-align:left;direction:ltr;white-space:nowrap}
+.tbl-foot td{background:#faf5ff;font-weight:900;font-size:11px;color:#4c1d95;border-top:2px solid #ddd6fe;padding:9px 12px}
+.tbl-foot td.num{color:#7e22ce!important}
+
+/* Footer */
+.footer{border-top:1px solid #e2e8f0;padding:12px 5px;display:flex;justify-content:space-between;align-items:center;margin-top:20px;font-size:9.5px;color:#64748b}
+
+@media print{
+  *{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body{padding:0}
+  .page{width:100%;height:100%}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-logo">${logoHtml}</div>
+    <div class="hdr-info">
+      <div class="hdr-shop">${shopName}</div>
+      <div class="hdr-sub">تقرير الفواتير الدائنة (المرتجعات) ${shopAddress ? ' &nbsp;·&nbsp; ' + shopAddress : ''}</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-badge">📅 الفترة: ${period}</div>
+      <div class="hdr-ts">🖨️ طُبع في: ${printDate} ${printTime}</div>
+    </div>
+  </div>
+
+  <!-- Info Bar -->
+  <div class="info-bar">
+    <span>${branding.vatNumber ? 'الرقم الضريبي: ' + branding.vatNumber : ''}</span>
+    <span>${branding.commercialRegister ? 'السجل التجاري: ' + branding.commercialRegister : ''}</span>
+    <span>عدد الإشعارات: ${creditNotes.length}</span>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card purple">
+      <span class="kpi-label">عدد الفواتير الدائنة</span>
+      <span class="kpi-val purple-text">${creditNotes.length}</span>
+    </div>
+    <div class="kpi-card green">
+      <span class="kpi-label">إجمالي المرتجعات (قبل الضريبة)</span>
+      <span class="kpi-val green-text"><span class="sar">&#xE900;</span> ${totalSubtotal.toFixed(2)}</span>
+    </div>
+    <div class="kpi-card purple">
+      <span class="kpi-label">إجمالي الضريبة (15%)</span>
+      <span class="kpi-val purple-text"><span class="sar">&#xE900;</span> ${totalVat.toFixed(2)}</span>
+    </div>
+    <div class="kpi-card green">
+      <span class="kpi-label">الإجمالي شامل الضريبة</span>
+      <span class="kpi-val green-text"><span class="sar">&#xE900;</span> ${totalAmount.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <!-- Details Section -->
+  <div class="sec">
+    <div class="sec-hdr">
+      <span>تفاصيل الفواتير الدائنة (المرتجعات)</span>
+      <span class="sec-badge">${creditNotes.length} سجل</span>
+    </div>
+    <div class="sec-body">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>رقم الإشعار</th>
+            <th>الفاتورة الأصلية</th>
+            <th>التاريخ</th>
+            <th>العميل</th>
+            <th>الهاتف</th>
+            <th>بواسطة</th>
+            <th class="num">قبل الضريبة</th>
+            <th class="num">الضريبة</th>
+            <th class="num">الإجمالي</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRowsHtml.length ? tableRowsHtml : `<tr><td colspan="10" class="empty-msg" style="text-align:center;padding:20px;">لا توجد فواتير دائنة في هذه الفترة</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>نظام إدارة المغسلة الذكي</span>
+    <span>تصدير تقرير الفواتير الدائنة</span>
+  </div>
+
+</div>
+</body>
+</html>`;
 
     const buffer = await htmlToPdfBuffer(html, { landscape: true });
     return { buffer, filename: `credit_notes_${ts()}.pdf`, mimeType: 'application/pdf' };
@@ -582,6 +839,41 @@ async function exportReport(type, filters = {}) {
     const html = reportHtml.buildPdfHtmlForReport(data, filters, f.cairoRegularB64, f.cairoBoldB64, f.saudiRiyalB64, branding);
     const buffer = await htmlToPdfBuffer(html, { landscape: false });
     return { buffer, filename: `report_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
+async function exportWorkerReport(type, filters = {}) {
+  const [data, branding] = await Promise.all([
+    db.getWorkerReportData(filters),
+    loadAppBrandingForReceipts().catch(() => ({}))
+  ]);
+  const f = cairoFonts();
+
+  if (type === 'excel') {
+    const wb = XLSX.utils.book_new();
+    const sheets = reportHtml.buildWorkerReportExcelSheets(data, filters, branding);
+    sheets.forEach(({ name, rows, cols, merges, freezeRow }) => {
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = cols;
+      if (merges && merges.length) ws['!merges'] = merges;
+      ws['!sheetViews'] = [{
+        rightToLeft: true,
+        state: freezeRow ? 'frozen' : undefined,
+        ySplit: freezeRow || undefined,
+        topLeftCell: freezeRow ? `A${freezeRow + 1}` : undefined
+      }];
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `worker_report_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  if (type === 'pdf') {
+    const html = reportHtml.buildPdfHtmlForWorkerReport(data, filters, f.cairoRegularB64, f.cairoBoldB64, f.saudiRiyalB64, branding);
+    const buffer = await htmlToPdfBuffer(html, { landscape: false });
+    return { buffer, filename: `worker_report_${ts()}.pdf`, mimeType: 'application/pdf' };
   }
 
   throw new Error('نوع التصدير غير مدعوم');
@@ -708,6 +1000,7 @@ module.exports = {
   buildThermalHangerTicketHtml,
   exportCreditNotes,
   exportReport,
+  exportWorkerReport,
   exportAllInvoicesReport,
   exportSubscriptionsReport,
   exportTypesReport,

@@ -96,7 +96,7 @@ async function start() {
         maxAge,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production'
+        secure: req.secure || req.protocol === 'https'
       });
       return res.json({
         success: true,
@@ -262,6 +262,17 @@ async function start() {
     }
   });
 
+  app.post('/api/export/worker-report', authMiddleware, async (req, res) => {
+    try {
+      const { type, filters = {} } = req.body || {};
+      const result = await exportsService.exportWorkerReport(type, filters);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/api/export/credit-notes', authMiddleware, async (req, res) => {
     try {
       const { type, filters = {} } = req.body || {};
@@ -374,9 +385,55 @@ async function start() {
     }
   });
 
-  app.listen(PORT, () => {
+  // ── Start HTTPS server first (for mobile camera access) ──
+  let HTTPS_PORT = 0;
+  let localIP = 'localhost';
+  try {
+    const https = require('https');
+    const { ensureCerts } = require('./sslCert');
+    const sslOpts = ensureCerts();
+    HTTPS_PORT = parseInt(process.env.HTTPS_PORT || String(PORT + 443), 10);
+    https.createServer(sslOpts, app).listen(HTTPS_PORT, () => {
+      const os = require('os');
+      const nets = os.networkInterfaces();
+      for (const name in nets) {
+        for (const iface of nets[name]) {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            localIP = iface.address;
+            break;
+          }
+        }
+      }
+      console.log(`Laundry HTTPS server https://localhost:${HTTPS_PORT}`);
+      console.log(`📱 للدخول من الجوال: https://${localIP}:${HTTPS_PORT}`);
+      console.log(`⚠️  عند أول دخول من الجوال: اقبل التحذير الأمني للشهادة الذاتية (مرة واحدة فقط)`);
+    });
+  } catch (sslErr) {
+    console.warn('[SSL] HTTPS server failed to start:', sslErr.message);
+    console.warn('[SSL] Camera scanning will only work on localhost');
+  }
+
+  // ── Start HTTP server with auto-redirect for mobile ──
+  const http = require('http');
+  const httpHandler = (req, res) => {
+    // Check if request is from a non-localhost client (mobile on LAN)
+    // and HTTPS is available — redirect them to HTTPS for camera support
+    const host = req.headers.host || '';
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    if (!isLocalhost && HTTPS_PORT > 0) {
+      const hostname = host.split(':')[0];
+      const httpsUrl = `https://${hostname}:${HTTPS_PORT}${req.url}`;
+      res.writeHead(302, { Location: httpsUrl });
+      res.end();
+      return;
+    }
+    // Localhost requests use the normal Express app
+    app(req, res);
+  };
+  http.createServer(httpHandler).listen(PORT, () => {
     console.log(`Laundry web server http://localhost:${PORT}`);
   });
+
 }
 
 start().catch((e) => {
