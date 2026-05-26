@@ -949,6 +949,71 @@
   </div>
 </div>
 
+<!-- ===== CONSUMPTION RECEIPT MODAL ===== -->
+<div id="consumptionReceiptModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+  <div class="inv-dialog">
+    <div class="inv-dialog-footer no-print">
+      <button id="btnCrModalClose" class="btn-inv-action btn-inv-close" type="button" data-i18n="pos-invoice-close">إغلاق</button>
+      <button id="btnCrModalExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="12" y2="18"/>
+          <line x1="15" y1="15" x2="12" y2="18"/>
+        </svg>
+        <span>تصدير PDF</span>
+      </button>
+      <button id="btnCrModalPrint" class="btn-inv-action btn-inv-print" type="button">
+        <span data-i18n="pos-invoice-print">طباعة</span>
+      </button>
+    </div>
+    <div class="inv-dialog-body">
+      <div class="inv-paper" id="crModalPaper">
+        <div class="inv-logo-wrap" id="crModalLogoWrap" style="display:none">
+          <img id="crModalLogo" class="inv-logo" alt="" />
+        </div>
+        <div class="inv-shop-name" id="crModalShopName"></div>
+        <div class="inv-shop-sub" id="crModalShopAddress"></div>
+        <div class="inv-shop-sub" id="crModalShopPhone"></div>
+        <div class="inv-divider-thick inv-sep"></div>
+        <div class="inv-meta-row" style="justify-content:center">
+          <span class="inv-meta-label cr-receipt-title" data-i18n="consumption-receipt">إيصال استهلاك</span>
+        </div>
+        <div class="inv-meta-row">
+          <span class="inv-meta-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
+          <span class="inv-meta-val" id="crModalReceiptNum" dir="ltr"></span>
+        </div>
+        <div class="inv-meta-row">
+          <span class="inv-meta-label">التاريخ</span>
+          <span class="inv-meta-val" id="crModalDate" dir="ltr"></span>
+        </div>
+        <div class="inv-divider-thick inv-sep"></div>
+        <div class="inv-meta-row"><span class="inv-meta-label">العميل</span><span class="inv-meta-val" id="crModalCustomer"></span></div>
+        <div class="inv-meta-row"><span class="inv-meta-label">الجوال</span><span class="inv-meta-val" id="crModalPhone" dir="ltr"></span></div>
+        <div class="inv-meta-row"><span class="inv-meta-label">رقم الاشتراك</span><span class="inv-meta-val" id="crModalSubRef" dir="ltr"></span></div>
+        <div class="inv-meta-row"><span class="inv-meta-label">الباقة</span><span class="inv-meta-val" id="crModalPackage"></span></div>
+        <div class="inv-divider-thick inv-sep"></div>
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th class="inv-th-name">النوع</th>
+              <th class="inv-th-num">عدد</th>
+              <th class="inv-th-num">الإجمالي</th>
+              <th class="inv-th-name">العملية</th>
+            </tr>
+          </thead>
+          <tbody id="crModalItemsBody"></tbody>
+        </table>
+        <div class="inv-divider-thick inv-sep"></div>
+        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crModalConsumed" dir="ltr"></span></div>
+        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crModalBalBefore" dir="ltr"></span></div>
+        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crModalBalAfter" dir="ltr"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== INVOICE PREVIEW MODAL ===== -->
 <div id="invoiceModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
 
@@ -1311,6 +1376,7 @@
 <script src="../../assets/qrcode-min.js"></script>
 <script src="../../assets/JsBarcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="pos.js"></script>
+<script src="../invoiceRenderer.js"></script>
+  <script src="pos.js"></script>
 </body>
 </html>

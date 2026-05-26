@@ -2862,8 +2862,11 @@ html, body {
 /* Print media — show only the paper, hide dialog chrome */
 @media print {
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
-  body > *:not(#invoiceModal) { display: none !important; }
-  #invoiceModal {
+  body > *:not(#invoiceModal):not(#consumptionReceiptModal) { display: none !important; }
+  body.print-consumption-receipt #invoiceModal { display: none !important; }
+  body:not(.print-consumption-receipt) #consumptionReceiptModal { display: none !important; }
+  #invoiceModal,
+  #consumptionReceiptModal {
     position: static !important;
     background: none !important;
     padding: 0 !important;
@@ -2914,6 +2917,25 @@ html, body {
   body.invtype-a4 .a4m-items thead th { background: #fff !important; color: #000 !important; }
   body.invtype-a4 .a4m-title-band { background: #fff !important; }
   body.invtype-a4 .a4m-footer { background: #fff !important; }
+}
+
+/* إيصال الاستهلاك — نص أسود ثقيل موحّد */
+#consumptionReceiptModal .inv-shop-name,
+#consumptionReceiptModal .inv-shop-sub,
+#consumptionReceiptModal .inv-meta-label,
+#consumptionReceiptModal .inv-meta-val,
+#consumptionReceiptModal .inv-total-label,
+#consumptionReceiptModal .inv-total-val,
+#consumptionReceiptModal .inv-table th,
+#consumptionReceiptModal .inv-table td,
+#consumptionReceiptModal .cr-receipt-title,
+#consumptionReceiptModal .cr-vat-note {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+#consumptionReceiptModal .cr-warning-banner {
+  color: #000 !important;
+  font-weight: 700 !important;
 }
 
 /* A4 Modal Mobile — same layout, scroll to navigate */

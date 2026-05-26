@@ -10,6 +10,66 @@ const { LocalZatcaBridge } = require('./services/zatcaBridge');
 const MAX_PRODUCT_IMAGE_RAW_BYTES = 15 * 1024 * 1024;
 
 /**
+ * دالة مساعدة داخلية — تحسب الضريبة وتحفظ فاتورة اشتراك
+ */
+async function _createSubInvoice({
+  invoiceType, subscriptionId, periodId, customerId, packageId,
+  paymentMethod, paidCash, paidCard
+}) {
+  const settings = await db.getAppSettings();
+  const vatRate = Number(settings.vatRate) || 15;
+
+  // جلب اسم الباقة
+  const [[pkgRow]] = await db.pool.query(
+    'SELECT name_ar, prepaid_price FROM prepaid_packages WHERE id = ?',
+    [packageId]
+  );
+  if (!pkgRow) throw new Error('الباقة غير موجودة');
+
+  const packageNameAr = pkgRow.name_ar || '';
+  const prepaidPrice = Number(pkgRow.prepaid_price) || 0;
+
+  // الاشتراك دائماً شامل الضريبة (inclusive)
+  // prepaidPrice = السعر الشامل، totalAmount = الشامل، subtotal = الشامل
+  const totalAmount = prepaidPrice;
+  const vatAmount  = vatRate > 0 ? Math.round((totalAmount - totalAmount / (1 + vatRate / 100)) * 100) / 100 : 0;
+
+  const orderType = invoiceType === 'renewal' ? 'subscription_renewal' : 'subscription_new';
+
+  // توليد رقم الفاتورة
+  const orderNumber = 'SUB-' + Date.now();
+
+  // إنشاء فاتورة عادية في جدول orders
+  const orderResult = await db.createOrder({
+    orderNumber,
+    customerId,
+    items: [{
+      productId: null,
+      serviceId: null,
+      quantity: 1,
+      unitPrice: totalAmount,
+      lineTotal: totalAmount
+    }],
+    subtotal: totalAmount,
+    discountAmount: 0,
+    extraAmount: 0,
+    vatRate,
+    vatAmount,
+    totalAmount,
+    paymentMethod: paymentMethod || 'cash',
+    paidCash: paidCash || 0,
+    paidCard: paidCard || 0,
+    notes: packageNameAr,
+    createdBy: null,
+    priceDisplayMode: 'inclusive',
+    orderType,
+    subscriptionPeriodId: periodId,
+  });
+
+  return { id: orderResult.id, invoiceSeq: orderResult.invoiceSeq };
+}
+
+/**
  * @param {string} method camelCase API method (matches preload.js)
  * @param {object} payload
  * @param {object} _user JWT payload
@@ -594,7 +654,19 @@ async function invoke(method, payload, _user) {
 
     case 'createSubscription': {
       try {
+        // جلب vatRate من الإعدادات وتمريره
+        const settings = await db.getAppSettings();
+        payload.vatRate = Number(settings.vatRate) || 15;
         const result = await db.createSubscription(payload);
+        // الفاتورة تُنشأ الآن داخل createSubscription في db.js
+        // result يحتوي على: subscriptionId, periodId, orderId
+        if (result.orderId) {
+          result.invoiceId = result.orderId;
+          try {
+            const orderObj = await db.getOrderById(result.orderId).catch(() => null);
+            if (orderObj) result.invoice = { order: orderObj };
+          } catch (_) {}
+        }
         return { success: true, ...result };
       } catch (err) {
         return { success: false, message: err.message };
@@ -603,8 +675,20 @@ async function invoke(method, payload, _user) {
 
     case 'renewSubscription': {
       try {
+        // جلب vatRate من الإعدادات وتمريره
+        const settings = await db.getAppSettings();
+        payload.vatRate = Number(settings.vatRate) || 15;
         const result = await db.renewSubscription(payload);
-        return { success: true, ...result };
+        // الفاتورة تُنشأ الآن داخل renewSubscription في db.js
+        // result يحتوي على: periodId, customerId, packageId, subscriptionId, orderId
+        if (result.orderId) {
+          result.invoiceId = result.orderId;
+          try {
+            const orderObj = await db.getOrderById(result.orderId).catch(() => null);
+            if (orderObj) result.invoice = { order: orderObj };
+          } catch (_) {}
+        }
+        return result;
       } catch (err) {
         return { success: false, message: err.message };
       }
@@ -732,8 +816,8 @@ async function invoke(method, payload, _user) {
           createdBy: _user && _user.username ? _user.username : null,
           allowSubscriptionDebt: settings && settings.allowSubscriptionDebt === true
         });
-        // إرسال تلقائي لـ ZATCA إذا كان الربط مفعل
-        if (settings && settings.zatcaEnabled && result && result.id) {
+        // إرسال تلقائي لـ ZATCA — فقط للفواتير الضريبية (ليس إيصال استهلاك فقط)
+        if (settings && settings.zatcaEnabled && result && result.id && !result.isConsumptionOnly) {
           setImmediate(async () => {
             try {
               const bridge = LocalZatcaBridge.getInstance();
@@ -741,7 +825,15 @@ async function invoke(method, payload, _user) {
             } catch (_) { /* فشل صامت — المجدول سيعيد المحاولة */ }
           });
         }
-        return { success: true, ...result };
+        return {
+          success: true,
+          ...result,
+          isConsumptionOnly: result.isConsumptionOnly || false,
+          consumptionReceiptId: result.consumptionReceiptId || null,
+          consumptionReceiptSeq: result.consumptionReceiptSeq || null,
+          consumptionAmount: result.consumptionAmount || 0,
+          invoiceAmount: result.invoiceAmount || 0
+        };
       } catch (err) {
         return { success: false, message: err.message };
       }
@@ -769,6 +861,25 @@ async function invoke(method, payload, _user) {
       try {
         const result = await db.getSubscriptionInvoices(payload || {});
         return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getConsumptionReceipts': {
+      try {
+        const result = await db.getConsumptionReceipts(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getConsumptionReceiptById': {
+      try {
+        const receipt = await db.getConsumptionReceiptById(payload.id);
+        if (!receipt) return { success: false, message: 'إيصال غير موجود' };
+        return { success: true, receipt };
       } catch (err) {
         return { success: false, message: err.message };
       }
@@ -1202,6 +1313,102 @@ async function invoke(method, payload, _user) {
         return { success: true, processed: results.length, results };
       } catch (err) {
         console.error('[zatcaRetryUnsent]', err);
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getSubscriptionInvoiceData': {
+      try {
+        const { invoiceId } = payload;
+        const inv = await db.getSubscriptionInvoice(invoiceId);
+        if (!inv) return { success: false, message: 'الفاتورة غير موجودة' };
+
+        const settings = await db.getAppSettings();
+
+        // شعار المغسلة
+        let logoDataUrl = '';
+        if (settings.logoGzipBuffer && settings.logoGzipBuffer.length) {
+          try {
+            const raw = zlib.gunzipSync(settings.logoGzipBuffer);
+            logoDataUrl = `data:${settings.logoMime || 'image/png'};base64,${raw.toString('base64')}`;
+          } catch (_) {}
+        }
+
+        // QR ZATCA
+        let qrPayload = null;
+        if (settings.vatNumber) {
+          qrPayload = {
+            sellerName: settings.laundryNameAr || settings.laundryNameEn || '',
+            vatNumber: settings.vatNumber,
+            invoiceDate: inv.created_at,
+            totalAmount: String(Number(inv.total_amount).toFixed(2)),
+            vatAmount: String(Number(inv.vat_amount).toFixed(2)),
+          };
+        }
+
+        const p2 = (x) => String(x).padStart(2, '0');
+        const d = new Date(inv.created_at);
+        const dateStr = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+        const paymentLabels = { cash: 'نقداً', card: 'شبكة', mixed: 'نقد + شبكة', credit: 'آجل' };
+        const paymentLabel = paymentLabels[inv.payment_method] || inv.payment_method;
+
+        const invoiceData = {
+          // بيانات المغسلة
+          shopNameAr: settings.laundryNameAr || '',
+          shopNameEn: settings.laundryNameEn || '',
+          shopAddressAr: settings.locationAr || '',
+          shopAddressEn: settings.locationEn || '',
+          shopPhone: settings.phone || '',
+          shopEmail: settings.email || '',
+          vatNumber: settings.vatNumber || '',
+          commercialRegister: settings.commercialRegister || '',
+          logoDataUrl,
+
+          // بيانات الفاتورة
+          orderNum: String(inv.invoice_seq),
+          date: dateStr,
+          payment: paymentLabel,
+
+          // بيانات العميل
+          custName: inv.customer_name || '',
+          custPhone: inv.customer_phone || '',
+
+          // صنف الاشتراك (سطر واحد)
+          items: [{
+            productAr: inv.package_name_ar,
+            productEn: '',
+            serviceAr: inv.invoice_type === 'renewal' ? 'تجديد اشتراك' : 'اشتراك جديد',
+            serviceEn: inv.invoice_type === 'renewal' ? 'Subscription Renewal' : 'New Subscription',
+            qty: 1,
+            unitPrice: Number(inv.total_amount),
+            lineTotal: Number(inv.total_amount),
+          }],
+
+          // الإجماليات
+          vatRate: Number(inv.vat_rate),
+          priceDisplayMode: 'inclusive',
+          subtotal: Number(inv.net_amount),
+          vatAmount: Number(inv.vat_amount),
+          total: Number(inv.total_amount),
+          discount: 0,
+          extra: 0,
+
+          // دفع مختلط
+          paidCash: Number(inv.paid_cash || 0),
+          paidCard: Number(inv.paid_card || 0),
+
+          // QR
+          qrPayload,
+
+          // ملاحظات
+          invoiceNotes: settings.invoiceNotes || '',
+
+          // طباعة تلقائية
+          autoPrint: true,
+        };
+
+        return { success: true, invoiceData };
+      } catch (err) {
         return { success: false, message: err.message };
       }
     }

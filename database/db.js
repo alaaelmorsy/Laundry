@@ -71,6 +71,14 @@ async function initialize() {
   await backfillSortOrderIfNeeded();
   await refreshExpiredSubscriptionPeriods();
   await createOrdersTables();
+  // Ensure orders table can link to subscription periods
+  try {
+    await pool.query(`ALTER TABLE orders ADD COLUMN subscription_period_id INT NULL`);
+  } catch (_) {}
+  try {
+    await pool.query(`ALTER TABLE orders ADD CONSTRAINT fk_orders_sub_period FOREIGN KEY (subscription_period_id) REFERENCES subscription_periods(id) ON DELETE SET NULL`);
+  } catch (_) {};
+
   await migrateOrdersZatcaColumns();
   await migrateOrdersDeferredColumns();
   await migratePartialInvoicePayments();
@@ -80,6 +88,8 @@ async function initialize() {
   await backfillSettledCreditPaymentMethod();
   await backfillSubscriptionPaymentMethod();
   await migrateOrdersHangerColumn();
+  await migrateConsumptionReceipts();
+  await migrateOrdersConsumptionFlag();
   await migrateAppSettingsRequireHanger();
   await migrateAppSettingsRequireCustomerPhone();
   await migrateAppSettingsAllowSubscriptionDebt();
@@ -89,6 +99,10 @@ async function initialize() {
   await createCreditNotesTable();
   await createOffersTable();
   await migrateZatcaSettings();
+  await migrateSubscriptionInvoicesTable();
+  await migrateOrderTypeColumn();
+  await migrateOrderItemsNullable();
+  await migrateSubscriptionPeriodsOrderId();
 }
 
 async function migrateOrdersZatcaColumns() {
@@ -220,7 +234,6 @@ async function migrateZatcaSettings() {
     );
   } catch (_) {}
 }
-
 async function getZatcaSettings() {
   await migrateZatcaSettings();
   const [[row]] = await pool.query(
@@ -522,6 +535,67 @@ async function migrateOrdersHangerColumn() {
     }
   } catch (e) {
     console.error('migrateOrdersHangerColumn:', e);
+  }
+}
+
+async function migrateConsumptionReceipts() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS consumption_receipts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        receipt_seq INT NOT NULL,
+        order_id INT DEFAULT NULL,
+        customer_id INT NOT NULL,
+        subscription_id INT NOT NULL,
+        period_id INT NOT NULL,
+        package_name VARCHAR(200) DEFAULT NULL,
+        amount_consumed DECIMAL(10,2) NOT NULL DEFAULT 0,
+        balance_before DECIMAL(10,2) NOT NULL DEFAULT 0,
+        balance_after DECIMAL(10,2) NOT NULL DEFAULT 0,
+        items_json JSON DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        created_by VARCHAR(100) DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+        FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE RESTRICT,
+        FOREIGN KEY (period_id) REFERENCES subscription_periods(id) ON DELETE RESTRICT
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    await pool.query(`CREATE INDEX idx_cr_customer ON consumption_receipts(customer_id)`).catch(() => {});
+    await pool.query(`CREATE INDEX idx_cr_subscription ON consumption_receipts(subscription_id)`).catch(() => {});
+    await pool.query(`CREATE INDEX idx_cr_created ON consumption_receipts(created_at)`).catch(() => {});
+  } catch (e) {
+    console.error('migrateConsumptionReceipts:', e);
+  }
+}
+
+async function migrateOrdersConsumptionFlag() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders'`
+    );
+    const set = new Set(cols.map(r => r.COLUMN_NAME));
+    if (!set.has('is_consumption_only')) {
+      await pool.query(`
+        ALTER TABLE orders ADD COLUMN is_consumption_only TINYINT(1) NOT NULL DEFAULT 0
+        COMMENT '1 = الطلب بالكامل من رصيد الاشتراك — لا فاتورة ضريبية'
+      `);
+    }
+    if (!set.has('consumption_receipt_id')) {
+      await pool.query(`
+        ALTER TABLE orders ADD COLUMN consumption_receipt_id INT DEFAULT NULL
+        COMMENT 'مرجع إيصال الاستهلاك المرتبط'
+      `);
+    }
+    if (!set.has('consumption_amount')) {
+      await pool.query(`
+        ALTER TABLE orders ADD COLUMN consumption_amount DECIMAL(10,2) NOT NULL DEFAULT 0
+        COMMENT 'المبلغ المستهلك من رصيد الاشتراك'
+      `);
+    }
+  } catch (e) {
+    console.error('migrateOrdersConsumptionFlag:', e);
   }
 }
 
@@ -1961,6 +2035,7 @@ function subscriptionListSelectSql() {
       pp.service_credit_value AS package_credit_value,
       pp.duration_days AS package_duration_days,
       sp.id AS current_period_id,
+      sp.order_id AS current_order_id,
       sp.period_from,
       sp.period_to,
       sp.credit_remaining,
@@ -2196,6 +2271,7 @@ async function getCustomerActiveSubscription(customerId) {
     `SELECT
        cs.id,
        cs.subscription_ref,
+       c.subscription_number,
        pp.name_ar AS package_name,
        sp.credit_remaining,
        sp.credit_value_granted,
@@ -2204,6 +2280,7 @@ async function getCustomerActiveSubscription(customerId) {
        sp.status AS period_status,
        (${dsc}) AS display_status
      FROM customer_subscriptions cs
+     INNER JOIN customers c ON c.id = cs.customer_id
      LEFT JOIN prepaid_packages pp ON pp.id = cs.current_package_id
      LEFT JOIN subscription_periods sp ON sp.id = (
        SELECT sp2.id FROM subscription_periods sp2
@@ -2250,6 +2327,118 @@ async function getSubscriptionLedgerBySubscription(subscriptionId) {
     [Number(subscriptionId)]
   );
   return rows;
+}
+
+/**
+ * إنشاء فاتورة بيع للاشتراك داخل نفس الـ connection (transaction)
+ * تُستدعى من createSubscription و renewSubscription
+ */
+async function _createSubscriptionOrder(conn, {
+  customerId, packageId, packageNameAr, packageNameEn,
+  periodId, orderType, paymentMethod, paidCash, paidCard, vatRate
+}) {
+  // جلب سعر الباقة
+  const [[pkgRow]] = await conn.query(
+    'SELECT prepaid_price FROM prepaid_packages WHERE id = ?',
+    [packageId]
+  );
+  if (!pkgRow) throw new Error('الباقة غير موجودة');
+  const prepaidPrice = Number(pkgRow.prepaid_price) || 0;
+
+  // الاشتراك دائماً شامل الضريبة (inclusive)
+  const totalAmount = prepaidPrice;
+  const vatAmt = vatRate > 0 ? Math.round((totalAmount - totalAmount / (1 + vatRate / 100)) * 100) / 100 : 0;
+
+  // طريقة الدفع
+  let pm = paymentMethod || 'cash';
+  let dbPaidCash = 0;
+  let dbPaidCard = 0;
+  if (pm === 'mixed') {
+    dbPaidCash = Math.min(Number(paidCash || 0), totalAmount);
+    dbPaidCard = Math.max(0, totalAmount - dbPaidCash);
+  } else if (pm === 'card') {
+    dbPaidCard = totalAmount;
+  } else {
+    dbPaidCash = totalAmount;
+  }
+
+  // توليد invoice_seq
+  const [[seqRow]] = await conn.query('SELECT COALESCE(MAX(invoice_seq), 0) + 1 AS next_seq FROM orders');
+  const invoiceSeq = seqRow.next_seq;
+
+  // توليد order_number
+  const orderNumber = 'SUB-' + Date.now();
+
+  // إدراج الفاتورة
+  const [orderInsert] = await conn.query(
+    `INSERT INTO orders (
+       order_number, invoice_seq, order_type, subscription_period_id, customer_id,
+       subtotal, discount_amount, discount_label, extra_amount,
+       vat_rate, vat_amount, total_amount,
+       paid_amount, remaining_amount, paid_cash, paid_card,
+       payment_method, payment_status, paid_at,
+       notes, created_by, price_display_mode
+     ) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?, ?, 0, ?, ?, ?, 'paid', NOW(), ?, NULL, 'inclusive')`,
+    [
+      orderNumber, invoiceSeq, orderType, periodId, customerId || null,
+      totalAmount,  // subtotal (شامل الضريبة)
+      vatRate, vatAmt, totalAmount,
+      totalAmount,  // paid_amount
+      dbPaidCash, dbPaidCard,
+      pm,
+      packageNameAr  // notes = اسم الباقة
+    ]
+  );
+  const orderId = orderInsert.insertId;
+
+  // نوع الخدمة
+  const svcAr = orderType === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد';
+  const svcEn = orderType === 'subscription_renewal' ? 'Subscription Renewal' : 'New Subscription';
+
+  // إدراج بند واحد يمثل الباقة
+  await conn.query(
+    `INSERT INTO order_items (
+       order_id, product_id, laundry_service_id,
+       product_name_ar, product_name_en,
+       service_name_ar, service_name_en,
+       quantity, unit_price, line_total,
+       subscription_period_id
+     ) VALUES (?, NULL, NULL, ?, ?, ?, ?, 1, ?, ?, ?)`,
+    [
+      orderId,
+      packageNameAr, packageNameEn || packageNameAr,
+      svcAr, svcEn,
+      totalAmount, totalAmount,
+      periodId
+    ]
+  );
+
+  // ZATCA QR
+  try {
+    const [[zs]] = await conn.query(
+      `SELECT company_name, vat_number FROM zatca_settings WHERE id = 1`
+    );
+    const sellerName = zs && zs.company_name ? String(zs.company_name).trim() : '';
+    const vatNum = zs && zs.vat_number ? String(zs.vat_number).trim() : '';
+    if (sellerName && vatNum) {
+      const t = new Date();
+      const iso = isNaN(t.getTime()) ? '' : t.toISOString();
+      const totalStr = (Number(totalAmount) || 0).toFixed(2);
+      const vatStr = (Number(vatAmt) || 0).toFixed(2);
+      const tlvB64 = buildZatcaTlvBase64({
+        sellerName, vatNumber: vatNum, timestamp: iso,
+        totalAmount: totalStr, vatAmount: vatStr
+      });
+      await conn.query(
+        `UPDATE orders SET zatca_qr = ?, zatca_submitted = NOW() WHERE id = ?`,
+        [tlvB64, orderId]
+      );
+    }
+  } catch (e) {
+    console.error('subscription order zatca qr error:', e);
+  }
+
+  return orderId;
 }
 
 async function createSubscription(data) {
@@ -2333,8 +2522,24 @@ async function createSubscription(data) {
       [periodId, credit, credit, 'اشتراك جديد', createdBy || null]
     );
 
+    // ── إنشاء فاتورة بيع للاشتراك ──
+    const subOrderId = await _createSubscriptionOrder(conn, {
+      customerId: cid,
+      packageId: pid,
+      packageNameAr: pkg.name_ar || '',
+      packageNameEn: pkg.name_en || '',
+      periodId,
+      orderType: 'subscription_new',
+      paymentMethod: data.paymentMethod || 'cash',
+      paidCash: data.paidCash || 0,
+      paidCard: data.paidCard || 0,
+      vatRate: Number(data.vatRate) || 0,
+    });
+    // ربط الفترة بالفاتورة
+    await conn.query('UPDATE subscription_periods SET order_id = ? WHERE id = ?', [subOrderId, periodId]);
+
     await conn.commit();
-    return { subscriptionId: subId, subscriptionRef: ref, periodId };
+    return { subscriptionId: subId, subscriptionRef: ref, periodId, orderId: subOrderId };
   } catch (e) {
     await conn.rollback();
     throw e;
@@ -2435,8 +2640,32 @@ async function renewSubscription(data) {
       [pid, sid]
     );
 
+    // ── إنشاء فاتورة بيع للتجديد ──
+    const renewOrderId = await _createSubscriptionOrder(conn, {
+      customerId: sub.customer_id,
+      packageId: pid,
+      packageNameAr: pkg.name_ar || '',
+      packageNameEn: pkg.name_en || '',
+      periodId,
+      orderType: 'subscription_renewal',
+      paymentMethod: data.paymentMethod || 'cash',
+      paidCash: data.paidCash || 0,
+      paidCard: data.paidCard || 0,
+      vatRate: Number(data.vatRate) || 0,
+    });
+    // ربط الفترة بالفاتورة
+    await conn.query('UPDATE subscription_periods SET order_id = ? WHERE id = ?', [renewOrderId, periodId]);
+
     await conn.commit();
-    return { subscriptionId: sid, periodId, subscriptionRef: sub.subscription_ref };
+    return {
+      success:        true,
+      periodId:       periodId,
+      customerId:     sub.customer_id,
+      packageId:      pid,
+      subscriptionId: sid,
+      subscriptionRef: sub.subscription_ref,
+      orderId:        renewOrderId,
+    };
   } catch (e) {
     await conn.rollback();
     throw e;
@@ -3231,6 +3460,149 @@ function buildZatcaTlvBase64({ sellerName, vatNumber, timestamp, totalAmount, va
   return Buffer.concat(parts).toString('base64');
 }
 
+async function insertConsumptionReceipt(conn, {
+  orderId = null,
+  customerId,
+  subscriptionId,
+  periodId,
+  packageName = null,
+  amountConsumed,
+  balanceBefore,
+  balanceAfter,
+  itemsJson = null,
+  notes = null,
+  createdBy = null
+}) {
+  const [[maxRow]] = await conn.query(
+    'SELECT COALESCE(MAX(receipt_seq), 0) AS mx FROM consumption_receipts FOR UPDATE'
+  );
+  const receiptSeq = Number(maxRow.mx) + 1;
+  const [result] = await conn.query(`
+    INSERT INTO consumption_receipts
+      (receipt_seq, order_id, customer_id, subscription_id, period_id,
+       package_name, amount_consumed, balance_before, balance_after,
+       items_json, notes, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    receiptSeq, orderId, customerId, subscriptionId, periodId,
+    packageName, amountConsumed, balanceBefore, balanceAfter,
+    itemsJson ? JSON.stringify(itemsJson) : null, notes, createdBy
+  ]);
+  return { receiptId: result.insertId, receiptSeq };
+}
+
+async function createConsumptionReceipt(params) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await insertConsumptionReceipt(conn, params);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getConsumptionReceipts({
+  page = 1,
+  pageSize = 50,
+  search = '',
+  customerId = null,
+  subscriptionId = null,
+  dateFrom = null,
+  dateTo = null
+} = {}) {
+  let where = '1=1';
+  const params = [];
+
+  if (customerId) {
+    where += ' AND cr.customer_id = ?';
+    params.push(customerId);
+  }
+  if (subscriptionId) {
+    where += ' AND cr.subscription_id = ?';
+    params.push(subscriptionId);
+  }
+  if (search) {
+    where += ` AND (
+      c.customer_name LIKE ? OR c.phone LIKE ?
+      OR CAST(cr.receipt_seq AS CHAR) LIKE ?
+    )`;
+    const s = `%${search}%`;
+    params.push(s, s, s);
+  }
+  if (dateFrom) {
+    where += ' AND cr.created_at >= ?';
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    where += ' AND cr.created_at <= ?';
+    params.push(dateTo + ' 23:59:59');
+  }
+
+  const [[countRow]] = await pool.query(`
+    SELECT COUNT(*) AS total
+    FROM consumption_receipts cr
+    JOIN customers c ON c.id = cr.customer_id
+    WHERE ${where}
+  `, params);
+  const total = Number(countRow.total);
+
+  const offset = (page - 1) * pageSize;
+  const [rows] = await pool.query(`
+    SELECT
+      cr.id, cr.receipt_seq, cr.order_id, cr.customer_id,
+      cr.subscription_id, cr.period_id, cr.package_name,
+      cr.amount_consumed, cr.balance_before, cr.balance_after,
+      cr.items_json, cr.notes, cr.created_by, cr.created_at,
+      c.customer_name, c.phone,
+      cs.subscription_ref
+    FROM consumption_receipts cr
+    JOIN customers c ON c.id = cr.customer_id
+    LEFT JOIN customer_subscriptions cs ON cs.id = cr.subscription_id
+    WHERE ${where}
+    ORDER BY cr.created_at DESC
+    LIMIT ? OFFSET ?
+  `, [...params, pageSize, offset]);
+
+  return {
+    receipts: rows.map(r => ({
+      ...r,
+      items: r.items_json ? (typeof r.items_json === 'string' ? JSON.parse(r.items_json) : r.items_json) : []
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize) || 1
+  };
+}
+
+async function getConsumptionReceiptById(receiptId) {
+  const [[row]] = await pool.query(`
+    SELECT
+      cr.*,
+      c.customer_name, c.phone, c.address, c.city,
+      c.subscription_number, c.customer_type,
+      c.national_id, c.tax_number,
+      cs.subscription_ref,
+      sp.period_from, sp.period_to,
+      sp.credit_value_granted
+    FROM consumption_receipts cr
+    JOIN customers c ON c.id = cr.customer_id
+    LEFT JOIN customer_subscriptions cs ON cs.id = cr.subscription_id
+    LEFT JOIN subscription_periods sp ON sp.id = cr.period_id
+    WHERE cr.id = ?
+  `, [receiptId]);
+  if (!row) return null;
+  return {
+    ...row,
+    items: row.items_json ? (typeof row.items_json === 'string' ? JSON.parse(row.items_json) : row.items_json) : []
+  };
+}
+
 async function createOrder({ orderNumber, customerId, items, subtotal, discountAmount, discountLabel, extraAmount = 0,
   vatRate, vatAmount, totalAmount, paymentMethod, paidCash = 0, paidCard = 0,
   starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt }) {
@@ -3239,117 +3611,141 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
     await conn.beginTransaction();
     let pm = paymentMethod || 'cash';
     const pdm = priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive';
+    const orderType = arguments[0].orderType || 'pos';
+    const subscriptionPeriodId = arguments[0].subscriptionPeriodId || null;
 
-    // ── تحقق مسبق من الاشتراك لتحديد طريقة الدفع ──
-    let subscriptionDeduction = null;
-    if (customerId) {
-      try {
-        const [[activePeriod]] = await conn.query(
-          `SELECT sp.id, sp.credit_remaining
-           FROM subscription_periods sp
-           INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
-           WHERE cs.customer_id = ? AND sp.status = 'active'
-           ORDER BY sp.id DESC
-           LIMIT 1`,
-          [Number(customerId)]
-        );
-        if (activePeriod) {
-          const creditRemaining = Number(activePeriod.credit_remaining);
-          if (creditRemaining > 0 && creditRemaining >= Number(totalAmount)) {
-            // الاشتراك يغطي الفاتورة بالكامل
-            const deductAmount = Number(totalAmount);
-            const newBalance = creditRemaining - deductAmount;
-            pm = 'subscription';
-            subscriptionDeduction = { periodId: activePeriod.id, deductAmount, newBalance };
-            console.log(`[createOrder] Subscription fully covers invoice: total=${totalAmount}, credit=${creditRemaining}, setting payment_method=subscription`);
-          } else if (allowSubscriptionDebt && Number(totalAmount) > 0) {
-            // السماح بالمديونية: خصم المبلغ بالكامل والباقي بالسالب
-            const deductAmount = Number(totalAmount);
-            const newBalance = creditRemaining - deductAmount;
-            pm = 'subscription';
-            subscriptionDeduction = { periodId: activePeriod.id, deductAmount, newBalance };
-            console.log(`[createOrder] Subscription debt allowed: total=${totalAmount}, credit=${creditRemaining}, newBalance=${newBalance}`);
-          } else if (creditRemaining > 0 && Number(totalAmount) > creditRemaining) {
-            // عدم السماح بالمديونية ومبلغ الفاتورة أكبر من رصيد الاشتراك → منع البيع
-            throw new Error(`مبلغ الفاتورة (${Number(totalAmount).toFixed(2)} ر.س) أكبر من رصيد الاشتراك المتاح (${creditRemaining.toFixed(2)} ر.س) — يرجى تفعيل السماح بالمديونية أو تجديد الاشتراك`);
-          } else if (creditRemaining <= 0) {
-            // عدم السماح بالمديونية ورصيد الاشتراك 0 أو سالب → منع البيع
-            throw new Error('رصيد الاشتراك نفد — يرجى تجديد الاشتراك أولاً قبل إتمام العملية');
-          }
-        } else {
-          console.log(`[createOrder] No active subscription for customer=${customerId}`);
+    const numTotal = Number(totalAmount) || 0;
+    let consumptionAmount = 0;
+    let invoiceAmount = numTotal;
+    let isConsumptionOnly = false;
+    let pendingConsumption = null;
+    const isSubscriptionInvoice = orderType === 'subscription_new' || orderType === 'subscription_renewal';
+
+    if (customerId && !isSubscriptionInvoice && numTotal > 0) {
+      const [[activeSub]] = await conn.query(`
+        SELECT cs.id AS sub_id, sp.id AS period_id, sp.credit_remaining,
+               pp.name_ar AS package_name, cs.subscription_ref
+        FROM customer_subscriptions cs
+        JOIN subscription_periods sp ON sp.customer_subscription_id = cs.id AND sp.status = 'active'
+        LEFT JOIN prepaid_packages pp ON pp.id = sp.package_id
+        WHERE cs.customer_id = ?
+        ORDER BY sp.id DESC LIMIT 1
+      `, [Number(customerId)]);
+
+      if (activeSub) {
+        const creditRemaining = Number(activeSub.credit_remaining);
+        const allowDebt = allowSubscriptionDebt === true;
+
+        if (allowDebt) {
+          consumptionAmount = numTotal;
+        } else if (creditRemaining > 0) {
+          consumptionAmount = Math.min(numTotal, creditRemaining);
         }
-      } catch (subErr) {
-        if (subErr.message && (subErr.message.includes('رصيد الاشتراك نفد') || subErr.message.includes('أكبر من رصيد الاشتراك المتاح'))) throw subErr;
-        console.error('subscription pre-check error:', subErr);
+
+        consumptionAmount = Math.round(consumptionAmount * 100) / 100;
+        invoiceAmount = Math.round((numTotal - consumptionAmount) * 100) / 100;
+        if (invoiceAmount < 0) invoiceAmount = 0;
+        isConsumptionOnly = invoiceAmount === 0 && consumptionAmount > 0;
+
+        if (consumptionAmount > 0) {
+          const balanceBefore = creditRemaining;
+          const newBalance = Math.round((creditRemaining - consumptionAmount) * 100) / 100;
+          if (isConsumptionOnly) {
+            pm = 'subscription';
+          }
+          pendingConsumption = {
+            subscriptionId: activeSub.sub_id,
+            periodId: activeSub.period_id,
+            packageName: activeSub.package_name,
+            amountConsumed: consumptionAmount,
+            balanceBefore,
+            balanceAfter: newBalance,
+            newBalance
+          };
+        }
       }
     }
 
     const payStatus = pm === 'credit' ? 'pending' : 'paid';
-    const paidAt    = pm === 'credit' ? null : new Date();
+    const paidAt = pm === 'credit' ? null : new Date();
+    const paidAmount = pm === 'credit' ? 0 : numTotal;
+    const remainingAmount = pm === 'credit' ? numTotal : 0;
 
-    // Calculate paid_amount and remaining_amount based on payment method
-    const paidAmount = pm === 'credit' ? 0 : totalAmount;
-    const remainingAmount = pm === 'credit' ? totalAmount : 0;
-
-    // Mixed payment breakdown (cash + card) stored only when payment_method == 'mixed'
     let dbPaidCash = 0;
     let dbPaidCard = 0;
     if (pm === 'mixed') {
-      const total = Number(totalAmount) || 0;
-      dbPaidCash = Math.max(0, Math.min(Number(paidCash || 0), total));
-      dbPaidCard = Math.max(0, total - dbPaidCash);
+      dbPaidCash = Math.max(0, Math.min(Number(paidCash || 0), numTotal));
+      dbPaidCard = Math.max(0, numTotal - dbPaidCash);
       dbPaidCash = Math.round(dbPaidCash * 100) / 100;
       dbPaidCard = Math.round(dbPaidCard * 100) / 100;
     }
 
-    // Get next invoice_seq
-    const [[seqRow]] = await conn.query('SELECT COALESCE(MAX(invoice_seq), 0) + 1 AS next_seq FROM orders');
-    const invoiceSeq = seqRow.next_seq;
+    let dbSubtotal = Number(subtotal) || 0;
+    let dbVatRate = Number(vatRate) || 0;
+    let dbVatAmount = Number(vatAmount) || 0;
+    if (isConsumptionOnly) {
+      dbVatRate = 0;
+      dbVatAmount = 0;
+    } else if (consumptionAmount > 0 && invoiceAmount > 0 && numTotal > 0) {
+      const ratio = invoiceAmount / numTotal;
+      dbVatAmount = Math.round(dbVatAmount * ratio * 100) / 100;
+      dbSubtotal = Math.round(dbSubtotal * ratio * 100) / 100;
+    }
+
+    let invoiceSeq = null;
+    if (!isConsumptionOnly) {
+      const [[seqRow]] = await conn.query(
+        'SELECT COALESCE(MAX(invoice_seq), 0) AS mx FROM orders FOR UPDATE'
+      );
+      invoiceSeq = Number(seqRow.mx) + 1;
+    }
+
     const [result] = await conn.query(
       `INSERT INTO orders
-         (order_number, invoice_seq, customer_id, subtotal, discount_amount, discount_label, extra_amount, vat_rate, vat_amount,
+         (order_number, invoice_seq, order_type, subscription_period_id, customer_id, subtotal, discount_amount, discount_label, extra_amount, vat_rate, vat_amount,
          total_amount, paid_amount, remaining_amount, paid_cash, paid_card,
-         payment_method, payment_status, paid_at, notes, created_by, price_display_mode, starch, bluing, hanger_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderNumber, invoiceSeq, customerId || null, subtotal, discountAmount || 0, discountLabel || null, extraAmount || 0, vatRate || 0,
-        vatAmount || 0, totalAmount, paidAmount, remainingAmount, dbPaidCash, dbPaidCard,
+         payment_method, payment_status, paid_at, notes, created_by, price_display_mode, starch, bluing, hanger_id,
+         is_consumption_only, consumption_amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orderNumber, invoiceSeq, orderType, subscriptionPeriodId, customerId || null, dbSubtotal, discountAmount || 0, discountLabel || null, extraAmount || 0, dbVatRate,
+        dbVatAmount, numTotal, paidAmount, remainingAmount, dbPaidCash, dbPaidCard,
         pm, payStatus, paidAt, notes || null, createdBy || null, pdm,
-        starch || null, bluing || null, hangerId || null]
+        starch || null, bluing || null, hangerId || null,
+        isConsumptionOnly ? 1 : 0, consumptionAmount]
     );
     const orderId = result.insertId;
 
-    // ── ZATCA QR (TLV) using DB settings ──
     let zatcaQr = null;
-    try {
-      const [[zs]] = await conn.query(
-        `SELECT company_name, vat_number FROM zatca_settings WHERE id = 1`
-      );
-      const sellerName = zs && zs.company_name ? String(zs.company_name).trim() : '';
-      const vatNum = zs && zs.vat_number ? String(zs.vat_number).trim() : '';
-      if (sellerName && vatNum) {
-        const t = new Date();
-        const iso = isNaN(t.getTime()) ? '' : t.toISOString();
-        const totalStr = (Number(totalAmount) || 0).toFixed(2);
-        const vatStr = (Number(vatAmount) || 0).toFixed(2);
-        const tlvB64 = buildZatcaTlvBase64({
-          sellerName,
-          vatNumber: vatNum,
-          timestamp: iso,
-          totalAmount: totalStr,
-          vatAmount: vatStr
-        });
-        await conn.query(
-          `UPDATE orders SET zatca_qr = ?, zatca_submitted = NOW() WHERE id = ?`,
-          [tlvB64, orderId]
+    if (!isConsumptionOnly && invoiceSeq) {
+      try {
+        const [[zs]] = await conn.query(
+          `SELECT company_name, vat_number FROM zatca_settings WHERE id = 1`
         );
-        zatcaQr = tlvB64;
+        const sellerName = zs && zs.company_name ? String(zs.company_name).trim() : '';
+        const vatNum = zs && zs.vat_number ? String(zs.vat_number).trim() : '';
+        if (sellerName && vatNum) {
+          const t = new Date();
+          const iso = isNaN(t.getTime()) ? '' : t.toISOString();
+          const qrTotal = invoiceAmount > 0 && consumptionAmount > 0 ? invoiceAmount : numTotal;
+          const qrVat = dbVatAmount;
+          const tlvB64 = buildZatcaTlvBase64({
+            sellerName,
+            vatNumber: vatNum,
+            timestamp: iso,
+            totalAmount: qrTotal.toFixed(2),
+            vatAmount: qrVat.toFixed(2)
+          });
+          await conn.query(
+            `UPDATE orders SET zatca_qr = ?, zatca_submitted = NOW() WHERE id = ?`,
+            [tlvB64, orderId]
+          );
+          zatcaQr = tlvB64;
+        }
+      } catch (e) {
+        console.error('zatca qr update error:', e);
       }
-    } catch (e) {
-      console.error('zatca qr update error:', e);
     }
 
-    // ── ربط الشماعة بالفاتورة ──
     if (hangerId) {
       try {
         await conn.query(`UPDATE hangers SET status = 'occupied' WHERE id = ?`, [Number(hangerId)]);
@@ -3357,36 +3753,84 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
         console.error('hanger update error:', hangerErr);
       }
     }
+
+    const itemsJsonSnapshot = (items || []).map(it => ({
+      productId: it.productId || null,
+      serviceId: it.serviceId || null,
+      qty: it.quantity,
+      unitPrice: it.unitPrice,
+      lineTotal: it.lineTotal,
+      productNameAr: it.productNameAr || null,
+      productNameEn: it.productNameEn || null,
+      serviceNameAr: it.serviceNameAr || null,
+      serviceNameEn: it.serviceNameEn || null
+    }));
+
     for (const item of (items || [])) {
       await conn.query(
         `INSERT INTO order_items
            (order_id, product_id, laundry_service_id, quantity, unit_price, line_total)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.productId, item.serviceId, item.quantity, item.unitPrice, item.lineTotal]
+        [orderId, item.productId || null, item.serviceId || null, item.quantity, item.unitPrice, item.lineTotal]
       );
     }
 
-    // ── خصم من رصيد الاشتراك إن وُجد ──
-    if (subscriptionDeduction) {
-      try {
-        await conn.query(
-          `UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?`,
-          [subscriptionDeduction.newBalance, subscriptionDeduction.periodId]
-        );
-        await conn.query(
-          `INSERT INTO subscription_ledger
-             (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
-           VALUES (?, 'consumption', ?, ?, 'order', ?, ?, ?)`,
-          [subscriptionDeduction.periodId, subscriptionDeduction.deductAmount, subscriptionDeduction.newBalance, orderId,
-            `فاتورة رقم ${invoiceSeq}`, createdBy || null]
-        );
-      } catch (subErr) {
-        console.error('subscription deduction error:', subErr);
-      }
+    let consumptionReceiptId = null;
+    let consumptionReceiptSeq = null;
+
+    if (pendingConsumption) {
+      await conn.query(
+        'UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?',
+        [pendingConsumption.newBalance, pendingConsumption.periodId]
+      );
+
+      const receipt = await insertConsumptionReceipt(conn, {
+        orderId,
+        customerId: Number(customerId),
+        subscriptionId: pendingConsumption.subscriptionId,
+        periodId: pendingConsumption.periodId,
+        packageName: pendingConsumption.packageName,
+        amountConsumed: pendingConsumption.amountConsumed,
+        balanceBefore: pendingConsumption.balanceBefore,
+        balanceAfter: pendingConsumption.balanceAfter,
+        itemsJson: itemsJsonSnapshot,
+        notes: null,
+        createdBy: createdBy || null
+      });
+      consumptionReceiptId = receipt.receiptId;
+      consumptionReceiptSeq = receipt.receiptSeq;
+
+      await conn.query(
+        'UPDATE orders SET consumption_receipt_id = ? WHERE id = ?',
+        [consumptionReceiptId, orderId]
+      );
+
+      const ledgerNote = isConsumptionOnly
+        ? `إيصال استهلاك C-${receipt.receiptSeq}`
+        : `استهلاك جزئي C-${receipt.receiptSeq} — فاتورة ${invoiceSeq || ''}`;
+
+      await conn.query(
+        `INSERT INTO subscription_ledger
+           (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
+         VALUES (?, 'consumption', ?, ?, 'order', ?, ?, ?)`,
+        [pendingConsumption.periodId, pendingConsumption.amountConsumed, pendingConsumption.balanceAfter,
+          orderId, ledgerNote, createdBy || null]
+      );
     }
 
     await conn.commit();
-    return { id: orderId, orderNumber, invoiceSeq, paymentMethod: pm, zatcaQr };
+    return {
+      id: orderId,
+      orderNumber,
+      invoiceSeq,
+      paymentMethod: pm,
+      zatcaQr,
+      isConsumptionOnly,
+      consumptionReceiptId,
+      consumptionReceiptSeq,
+      consumptionAmount,
+      invoiceAmount
+    };
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -3401,11 +3845,14 @@ async function getOrdersBySubscription(subscriptionId) {
   const [rows] = await pool.query(
     `SELECT o.id, o.order_number, o.invoice_seq, o.total_amount,
             o.payment_method, o.payment_status, o.created_at,
-            sl.amount AS deducted_amount
+            o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
+            sl.amount AS deducted_amount,
+            cr.receipt_seq AS consumption_receipt_seq
      FROM subscription_ledger sl
      INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
      INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
      INNER JOIN orders o ON o.id = sl.ref_id
+     LEFT JOIN consumption_receipts cr ON cr.id = o.consumption_receipt_id
      WHERE cs.id = ? AND sl.ref_type = 'order' AND sl.entry_type = 'consumption'
      ORDER BY o.id DESC`,
     [sid]
@@ -3462,7 +3909,8 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
   const offset = (page - 1) * pageSize;
   const like = `%${search}%`;
 
-  let whereClauses = 'WHERE (o.order_number LIKE ? OR COALESCE(c.customer_name,\'\') LIKE ? OR COALESCE(c.phone,\'\') LIKE ?)';
+  let whereClauses = `WHERE (o.order_number LIKE ? OR COALESCE(c.customer_name,'') LIKE ? OR COALESCE(c.phone,'') LIKE ?)
+    AND COALESCE(o.is_consumption_only, 0) = 0`;
   const params = [like, like, like];
 
   if (dateFrom) {
@@ -3475,9 +3923,10 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
   }
 
   const [rows] = await pool.query(`
-    SELECT o.id, o.order_number, o.invoice_seq, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount, o.vat_rate, o.vat_amount,
-           o.total_amount, o.payment_method, o.payment_status, o.paid_amount, o.remaining_amount, 
-           o.created_at, o.created_by, o.price_display_mode,
+    SELECT o.id, o.order_number, o.invoice_seq, o.order_type, o.subscription_period_id, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount, o.vat_rate, o.vat_amount,
+           o.total_amount, o.payment_method, o.payment_status, o.paid_amount, o.remaining_amount,
+           o.notes, o.created_at, o.created_by, o.price_display_mode,
+           o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
            c.customer_name, c.phone
     FROM orders o
@@ -3498,11 +3947,12 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
 
 async function getOrderById(id) {
   const [[order]] = await pool.query(`
-    SELECT o.id, o.order_number, o.invoice_seq, o.customer_id, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount, o.vat_rate, o.vat_amount,
+    SELECT o.id, o.order_number, o.invoice_seq, o.order_type, o.customer_id, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount, o.vat_rate, o.vat_amount,
            o.total_amount, o.paid_amount, o.remaining_amount, o.paid_cash, o.paid_card,
            o.payment_method, o.payment_status, o.notes, o.created_at, o.created_by,
            o.paid_at, o.cleaning_date, o.delivery_date, o.price_display_mode, o.starch, o.bluing,
            o.hanger_id, h.hanger_number,
+           o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
            c.customer_name, c.phone, c.tax_number AS customer_vat, c.address AS customer_address, c.city AS customer_city
     FROM orders o
@@ -3513,12 +3963,14 @@ async function getOrderById(id) {
   if (!order) return null;
 
   const [items] = await pool.query(`
-    SELECT oi.id, oi.product_id, oi.quantity, oi.unit_price, oi.line_total,
-           p.name_ar AS product_name_ar, p.name_en AS product_name_en,
-           ls.name_ar AS service_name_ar, ls.name_en AS service_name_en
+    SELECT oi.id, oi.product_id, oi.laundry_service_id, oi.quantity, oi.unit_price, oi.line_total,
+           COALESCE(oi.product_name_ar, p.name_ar) AS product_name_ar,
+           COALESCE(oi.product_name_en, p.name_en) AS product_name_en,
+           COALESCE(oi.service_name_ar, ls.name_ar) AS service_name_ar,
+           COALESCE(oi.service_name_en, ls.name_en) AS service_name_en
     FROM order_items oi
-    JOIN products p ON p.id = oi.product_id
-    JOIN laundry_services ls ON ls.id = oi.laundry_service_id
+    LEFT JOIN products p ON p.id = oi.product_id
+    LEFT JOIN laundry_services ls ON ls.id = oi.laundry_service_id
     WHERE oi.order_id = ?
     ORDER BY oi.id ASC
   `, [id]);
@@ -4291,7 +4743,7 @@ async function getInvoiceBySeq(invoiceSeq) {
     throw e;
   }
   const [[order]] = await pool.query(`
-    SELECT o.id, o.order_number, o.invoice_seq, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount,
+    SELECT o.id, o.order_number, o.invoice_seq, o.order_type, o.subscription_period_id, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount,
            o.vat_rate, o.vat_amount, o.total_amount, o.payment_method, o.payment_status,
            o.paid_amount, o.remaining_amount, o.price_display_mode,
            o.created_at, o.created_by, o.starch, o.bluing,
@@ -4594,6 +5046,176 @@ async function getHangerById(id) {
   return row || null;
 }
 
+async function migrateSubscriptionInvoicesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS subscription_invoices (
+      id                INT AUTO_INCREMENT PRIMARY KEY,
+      invoice_seq       INT NOT NULL,
+      subscription_id   INT NOT NULL,
+      period_id         INT DEFAULT NULL,
+      customer_id       INT NOT NULL,
+      package_id        INT NOT NULL,
+      package_name_ar   VARCHAR(255) NOT NULL,
+      invoice_type      ENUM('new','renewal') NOT NULL DEFAULT 'new',
+      payment_method    VARCHAR(50) NOT NULL DEFAULT 'cash',
+      paid_cash         DECIMAL(10,2) NOT NULL DEFAULT 0,
+      paid_card         DECIMAL(10,2) NOT NULL DEFAULT 0,
+      prepaid_price     DECIMAL(10,2) NOT NULL DEFAULT 0,
+      vat_rate          DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+      net_amount        DECIMAL(10,2) NOT NULL DEFAULT 0,
+      vat_amount        DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total_amount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+      price_display_mode VARCHAR(20) NOT NULL DEFAULT 'inclusive',
+      zatca_uuid        VARCHAR(100) DEFAULT NULL,
+      zatca_hash        VARCHAR(255) DEFAULT NULL,
+      zatca_qr          TEXT DEFAULT NULL,
+      created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE CASCADE,
+      FOREIGN KEY (customer_id)     REFERENCES customers(id)              ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
+async function migrateOrderTypeColumn() {
+  // إضافة عمود order_type للتمييز بين فاتورة بيع عادية واشتراك
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders' AND column_name = 'order_type'`
+    );
+    if (cols.length === 0) {
+      await pool.query(
+        `ALTER TABLE orders ADD COLUMN order_type ENUM('sale','subscription_new','subscription_renewal') NOT NULL DEFAULT 'sale'`
+      );
+    }
+  } catch (e) {
+    console.error('migrateOrderTypeColumn:', e);
+  }
+  // إضافة عمود subscription_period_id لربط الفاتورة بالفترة
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders' AND column_name = 'subscription_period_id'`
+    );
+    if (cols.length === 0) {
+      await pool.query(
+        `ALTER TABLE orders ADD COLUMN subscription_period_id INT DEFAULT NULL`
+      );
+    }
+  } catch (e) {
+    console.error('migrate subscription_period_id:', e);
+  }
+}
+
+async function migrateOrderItemsNullable() {
+  // السماح بـ NULL في product_id و laundry_service_id لفاتورة الاشتراك
+  try {
+    await pool.query(`ALTER TABLE order_items MODIFY COLUMN product_id INT NULL`);
+  } catch (e) {
+    console.error('migrate order_items product_id nullable:', e);
+  }
+  try {
+    await pool.query(`ALTER TABLE order_items MODIFY COLUMN laundry_service_id INT NULL`);
+  } catch (e) {
+    console.error('migrate order_items laundry_service_id nullable:', e);
+  }
+  // إضافة أعمدة اسم المنتج والخدمة مباشرة في order_items للاشتراكات
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'order_items' AND column_name = 'product_name_ar'`
+    );
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE order_items
+        ADD COLUMN product_name_ar VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN product_name_en VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN service_name_ar VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN service_name_en VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN subscription_period_id INT DEFAULT NULL
+      `);
+    }
+  } catch (e) {
+    console.error('migrate order_items subscription columns:', e);
+  }
+}
+
+async function migrateSubscriptionPeriodsOrderId() {
+  // إضافة عمود order_id لربط الفترة بفاتورتها
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'subscription_periods' AND column_name = 'order_id'`
+    );
+    if (cols.length === 0) {
+      await pool.query(
+        `ALTER TABLE subscription_periods ADD COLUMN order_id INT DEFAULT NULL`
+      );
+    }
+  } catch (e) {
+    console.error('migrate subscription_periods order_id:', e);
+  }
+}
+
+async function createSubscriptionInvoice({
+  subscriptionId, periodId, customerId, packageId,
+  packageNameAr, invoiceType,
+  paymentMethod, paidCash, paidCard,
+  prepaidPrice, vatRate,
+  netAmount, vatAmount, totalAmount
+}) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[seqRow]] = await conn.query(
+      `SELECT COALESCE(
+         GREATEST(
+           (SELECT COALESCE(MAX(invoice_seq),0) FROM orders),
+           (SELECT COALESCE(MAX(invoice_seq),0) FROM subscription_invoices)
+         ), 0
+       ) + 1 AS next_seq`
+    );
+    const invoiceSeq = seqRow.next_seq;
+
+    const [ins] = await conn.query(
+      `INSERT INTO subscription_invoices
+         (invoice_seq, subscription_id, period_id, customer_id, package_id,
+          package_name_ar, invoice_type, payment_method,
+          paid_cash, paid_card,
+          prepaid_price, vat_rate, net_amount, vat_amount, total_amount,
+          price_display_mode)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'inclusive')`,
+      [
+        invoiceSeq, subscriptionId, periodId || null, customerId, packageId,
+        packageNameAr, invoiceType, paymentMethod,
+        paidCash || 0, paidCard || 0,
+        prepaidPrice, vatRate, netAmount, vatAmount, totalAmount
+      ]
+    );
+
+    await conn.commit();
+    return { id: ins.insertId, invoiceSeq };
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getSubscriptionInvoice(id) {
+  const [[row]] = await pool.query(
+    `SELECT si.*,
+            c.customer_name, c.phone AS customer_phone,
+            c.address AS customer_address, c.city AS customer_city
+     FROM subscription_invoices si
+     JOIN customers c ON c.id = si.customer_id
+     WHERE si.id = ?`,
+    [id]
+  );
+  return row || null;
+}
+
 // ═══════════════════════════════════════════════════
 // ═══ OFFERS / PROMOTIONS ═══
 // ═══════════════════════════════════════════════════
@@ -4687,6 +5309,60 @@ async function deleteOffer(id) {
 
 /* ========== ZATCA Order Status Functions ========== */
 
+async function getSubscriptionOrderByPeriod(periodId) {
+  const [rows] = await pool.query(
+    `SELECT o.*, c.customer_name, c.phone
+     FROM orders o
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.subscription_period_id = ?
+     LIMIT 1`,
+    [periodId]
+  );
+  return rows[0] || null;
+}
+
+async function createSubscriptionOrder({
+  customerId, subscriptionPeriodId, packageNameAr, packageNameEn, prepaidPricePaid, paymentMethod = 'cash', createdBy
+}) {
+  const settings = await getAppSettings();
+  const vatRate = parseFloat(settings.vatRate || 15);
+  const total = parseFloat(prepaidPricePaid) || 0;
+  const subtotal = parseFloat((total / (1 + vatRate / 100)).toFixed(2));
+  const vatAmount = parseFloat((total - subtotal).toFixed(2));
+  const orderNumber = await generateOrderNumber();
+
+  const [result] = await pool.query(
+    `INSERT INTO orders
+       (order_number, customer_id, subtotal, discount_amount, vat_rate,
+        vat_amount, total_amount, payment_method, notes,
+        subscription_period_id, created_by)
+     VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      orderNumber,
+      customerId || null,
+      subtotal,
+      vatRate,
+      vatAmount,
+      total,
+      paymentMethod,
+      'اشتراك: ' + (packageNameAr || ''),
+      subscriptionPeriodId || null,
+      createdBy || null
+    ]
+  );
+
+  return {
+    orderId: result.insertId,
+    orderNumber,
+    subtotal,
+    vatRate,
+    vatAmount,
+    total,
+    packageNameAr: packageNameAr || '',
+    packageNameEn: packageNameEn || ''
+  };
+}
+
 async function updateOrderZatcaStatus(orderId, data = {}) {
   await pool.query(
     `UPDATE orders SET
@@ -4739,6 +5415,8 @@ async function getUnsentZatcaOrders(limit = 500) {
      WHERE (zatca_status IS NULL OR zatca_status NOT IN ('submitted', 'accepted'))
        AND zatca_submitted IS NULL
        AND (zatca_response IS NULL OR zatca_response NOT LIKE '%NOT_REPORTED%')
+       AND COALESCE(is_consumption_only, 0) = 0
+       AND invoice_seq IS NOT NULL
      ORDER BY id ASC
      LIMIT ?`,
     [limit]
@@ -4762,10 +5440,15 @@ module.exports = {
   getSubscriptionLedgerBySubscription, createSubscription, renewSubscription, stopSubscription,
   resumeSubscription, updateActiveSubscriptionPeriod, deleteSubscription,
   getSubscriptionReceiptData, getSubscriptionsExportRows, getSubscriptionCustomerReportRows,
+  get pool() { return pool; },
+  createSubscriptionInvoice, getSubscriptionInvoice,
+  // New subscription order helpers
+  createSubscriptionOrder, getSubscriptionOrderByPeriod,
   getAppSettings, saveAppSettings, updateReportEmailLastResult,
   getZatcaSettings, saveZatcaSettings,
   updateOrderZatcaStatus, updateCreditNoteZatcaStatus, getUnsentZatcaOrders,
   getPosProducts, getPosServices, generateOrderNumber, createOrder, getOrders, getOrderById,
+  createConsumptionReceipt, getConsumptionReceipts, getConsumptionReceiptById,
   getOrdersBySubscription, getSubscriptionInvoices,
   getDeferredOrders, payDeferredOrder, markOrderCleaned, markOrderDelivered,
   // Partial invoice payment functions

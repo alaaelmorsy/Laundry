@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="consumption-receipts-title">إيصالات الاستهلاك - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="consumption-receipts.css" />
+  <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+</head>
+<body>
+
+  <div class="page-wrapper">
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M7 8h10M7 12h6M7 16h4"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="consumption-receipts-title">إيصالات الاستهلاك</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <a href="../invoices/invoices.html" class="link-tax-invoices" data-i18n="consumption-link-invoices">الفواتير الضريبية</a>
+        <button class="back-btn" id="btnBack" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="invoices-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input id="searchInput" type="text" class="search-input"
+            data-i18n-placeholder="consumption-search-placeholder"
+            placeholder="بحث باسم العميل أو الجوال أو رقم الإيصال..." autocomplete="off" />
+        </div>
+        <div class="toolbar-filters">
+          <input type="date" id="dateFrom" class="filter-date" />
+          <input type="date" id="dateTo" class="filter-date" />
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="invoices-table">
+          <thead>
+            <tr>
+              <th data-i18n="consumption-receipt-number">رقم الإيصال</th>
+              <th data-i18n="invoices-col-customer">العميل</th>
+              <th data-i18n="consumption-col-phone">الجوال</th>
+              <th data-i18n="consumption-col-sub">الاشتراك</th>
+              <th data-i18n="consumption-col-package">الباقة</th>
+              <th data-i18n="consumption-amount">المبلغ المستهلك</th>
+              <th data-i18n="balance-before">الرصيد قبل</th>
+              <th data-i18n="balance-after">الرصيد بعد</th>
+              <th data-i18n="invoices-col-date">التاريخ</th>
+              <th data-i18n="invoices-col-actions">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="receiptsTableBody">
+            <tr id="loadingRow">
+              <td colspan="10" class="loading-cell">
+                <div class="spinner"></div>
+                <span data-i18n="invoices-loading">جارٍ التحميل...</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="empty-state" style="display:none">
+        <p data-i18n="consumption-empty">لا توجد إيصالات استهلاك</p>
+      </div>
+
+      <div class="pagination-bar" id="paginationBar" style="display:none">
+        <div class="pagination-info"><span id="paginationInfo"></span></div>
+        <div class="pagination-controls">
+          <button id="btnFirstPage" class="page-btn" type="button">«</button>
+          <button id="btnPrevPage" class="page-btn" type="button">‹</button>
+          <div id="pageNumbers" class="page-numbers"></div>
+          <button id="btnNextPage" class="page-btn" type="button">›</button>
+          <button id="btnLastPage" class="page-btn" type="button">»</button>
+        </div>
+        <div class="page-size-selector">
+          <span data-i18n="invoices-pagination-show">عرض</span>
+          <select id="pageSizeSelect">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="receiptViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="btnCrClose" class="btn-inv-action btn-inv-close" type="button" data-i18n="invoices-modal-close">إغلاق</button>
+        <button id="btnCrExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="18"/>
+            <line x1="15" y1="15" x2="12" y2="18"/>
+          </svg>
+          <span>تصدير PDF</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="crPaper">
+          <div class="inv-logo-wrap" id="crLogoWrap" style="display:none">
+            <img id="crLogo" class="inv-logo" alt="" />
+          </div>
+          <div class="inv-shop-name" id="crShopName"></div>
+          <div class="inv-shop-sub" id="crShopAddress"></div>
+          <div class="inv-shop-sub" id="crShopPhone"></div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" style="justify-content:center">
+            <span class="inv-meta-label cr-receipt-title" data-i18n="consumption-receipt">إيصال استهلاك</span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
+            <span class="inv-meta-val" id="crReceiptNum" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row">
+            <span class="inv-meta-label" data-i18n="invoices-col-date">التاريخ</span>
+            <span class="inv-meta-val" id="crDate" dir="ltr"></span>
+          </div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="invoices-col-customer">العميل</span><span class="inv-meta-val" id="crCustomer"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-phone">الجوال</span><span class="inv-meta-val" id="crPhone" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-sub">رقم الاشتراك</span><span class="inv-meta-val" id="crSubRef" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-package">الباقة</span><span class="inv-meta-val" id="crPackage"></span></div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="inv-th-name">النوع</th>
+                <th class="inv-th-num">عدد</th>
+                <th class="inv-th-num">الإجمالي</th>
+                <th class="inv-th-name">العملية</th>
+              </tr>
+            </thead>
+            <tbody id="crItemsBody"></tbody>
+          </table>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crConsumed" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crBalBefore" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crBalAfter" dir="ltr"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/i18n.js"></script>
+  <script src="consumption-receipts.js"></script>
+</body>
+</html>

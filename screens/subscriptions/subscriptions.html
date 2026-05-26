@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title data-i18n="page-title-subscriptions">الاشتراكات المسبقة</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="../pos/pos.css" />
   <style id="subs-inline-css">
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
@@ -477,6 +478,21 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
 .sub-actions-more{justify-self:end}
 .detail-actions-grid{grid-template-columns:1fr}
 }
+/* ── أزرار طريقة الدفع ── */
+.pay-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+}
+.pay-btn-active {
+  background: #1a73e8;
+  color: #fff;
+  border-color: #1a73e8;
+}
   </style>
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
 </head>
@@ -724,6 +740,19 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
           <input type="date" id="newSubEnd" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
           <span style="font-size:11px;color:#94a3b8" data-i18n="subscriptions-label-end-hint">اتركه فارغاً للباقة المفتوحة</span>
         </div>
+        <!-- طريقة الدفع -->
+        <div class="form-group">
+          <label>طريقة الدفع</label>
+          <div class="payment-method-btns" id="newSubPaymentBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+            <button type="button" class="btn btn-sm pay-btn pay-btn-active" data-method="cash">نقداً</button>
+            <button type="button" class="btn btn-sm pay-btn" data-method="card">شبكة</button>
+            <button type="button" class="btn btn-sm pay-btn" data-method="mixed">نقد + شبكة</button>
+          </div>
+          <div id="newSubMixedRow" style="display:none;margin-top:8px;">
+            <label>المبلغ نقداً (ر.س)</label>
+            <input type="number" id="newSubMixedCash" class="form-control" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-primary" id="btnSaveNewSub" data-i18n="products-btn-save">حفظ</button>
@@ -777,6 +806,19 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
             <input type="checkbox" id="renewCarry" checked />
             <span data-i18n="subscriptions-renew-carry">ترحيل الرصيد</span>
           </label>
+        </div>
+        <!-- طريقة الدفع -->
+        <div class="form-group">
+          <label>طريقة الدفع</label>
+          <div class="payment-method-btns" id="renewPaymentBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+            <button type="button" class="btn btn-sm pay-btn pay-btn-active" data-method="cash">نقداً</button>
+            <button type="button" class="btn btn-sm pay-btn" data-method="card">شبكة</button>
+            <button type="button" class="btn btn-sm pay-btn" data-method="mixed">نقد + شبكة</button>
+          </div>
+          <div id="renewMixedRow" style="display:none;margin-top:8px;">
+            <label>المبلغ نقداً (ر.س)</label>
+            <input type="number" id="renewMixedCash" class="form-control" min="0" step="0.01" placeholder="0.00">
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -850,13 +892,14 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
                 <tr>
                   <th data-i18n="subscriptions-invoice-col-num">رقم الفاتورة</th>
                   <th data-i18n="subscriptions-invoice-col-date">التاريخ</th>
+                  <th data-i18n="document-type">نوع المستند</th>
                   <th data-i18n="subscriptions-invoice-col-total">المبلغ الإجمالي</th>
                   <th data-i18n="subscriptions-invoice-col-deducted">المخصوم من الاشتراك</th>
                   <th data-i18n="subscriptions-invoice-col-payment">طريقة الدفع</th>
                 </tr>
               </thead>
               <tbody id="detailInvoicesTbody">
-                <tr><td colspan="5" class="loading-cell"><span class="spinner"></span></td></tr>
+                <tr><td colspan="6" class="loading-cell"><span class="spinner"></span></td></tr>
               </tbody>
             </table>
           </div>
@@ -903,11 +946,61 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
     </div>
   </div>
 
+  <!-- مودال معاينة الفاتورة — نفس تصميم POS -->
+  <div id="subInvoiceModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="btnSubInvClose" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
+        <button id="btnSubInvPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>
+          <span>تصدير PDF</span>
+        </button>
+        <button id="btnSubInvPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="subInvPaper">
+          <div class="inv-logo-wrap" id="subInvLogoWrap" style="display:none"><img id="subInvLogo" class="inv-logo" alt="شعار المغسلة" /></div>
+          <div class="inv-shop-name" id="subInvShopName"></div>
+          <div class="inv-shop-sub" id="subInvShopAddress"></div>
+          <div class="inv-shop-sub" id="subInvShopPhone"></div>
+          <div class="inv-shop-sub" id="subInvVatNumber" dir="ltr"></div>
+          <div class="inv-shop-sub" id="subInvShopEmail"></div>
+          <div id="subInvCustomFields" style="display:none"></div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" id="subInvTypeLabel" style="color:#000;font-weight:800">فاتورة ضريبية مبسطة</span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label">رقم الفاتورة</span><span class="inv-meta-val" id="subInvOrderNum" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label">التاريخ</span><span class="inv-meta-val" id="subInvDate" dir="ltr"></span></div>
+          <div class="inv-meta-row"><span class="inv-meta-label">طريقة الدفع</span><span class="inv-meta-val" id="subInvPayment"></span></div>
+          <div id="subInvCustomerSection" style="display:none">
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row" id="subInvCustNameRow" style="display:none"><span class="inv-meta-label">الاسم</span><span class="inv-meta-val" id="subInvCustName"></span></div>
+            <div class="inv-meta-row" id="subInvCustPhoneRow" style="display:none"><span class="inv-meta-label">الجوال</span><span class="inv-meta-val" id="subInvCustPhone" dir="ltr"></span></div>
+            <div class="inv-meta-row" id="subInvSubRefRow" style="display:none"><span class="inv-meta-label">رقم الاشتراك</span><span class="inv-meta-val" id="subInvSubRef" dir="ltr"></span></div>
+            <div class="inv-meta-row" id="subInvSubBalRow" style="display:none"><span class="inv-meta-label">الرصيد المتبقي</span><span class="inv-meta-val" id="subInvSubBalance" dir="ltr"></span></div>
+          </div>
+          <table class="inv-table"><thead><tr><th class="inv-th-name">النوع</th><th class="inv-th-num">عدد</th><th class="inv-th-num">الإجمالي</th><th class="inv-th-name">العملية</th></tr></thead><tbody id="subInvItemsTbody"></tbody></table>
+          <div class="inv-totals-box">
+            <div class="inv-total-row"><span class="inv-total-label" id="subInvSubtotalLabel">المجموع قبل الضريبة</span><span class="inv-total-val" id="subInvSubtotal" dir="ltr"></span></div>
+            <div class="inv-total-row" id="subInvDiscRow" style="display:none"><span class="inv-total-label">الخصم</span><span class="inv-total-val inv-disc-val" id="subInvDiscount" dir="ltr"></span></div>
+            <div class="inv-total-row" id="subInvVatRow"><span class="inv-total-label" id="subInvVatLabel">ضريبة القيمة المضافة</span><span class="inv-total-val" id="subInvVat" dir="ltr"></span></div>
+            <div class="inv-total-row inv-grand-row"><span class="inv-grand-label" id="subInvTotalLabel">الإجمالي شامل الضريبة</span><span class="inv-grand-val" id="subInvTotal" dir="ltr"></span></div>
+          </div>
+          <div class="inv-qr-wrap"><div id="subInvQR" class="inv-qr"></div></div>
+          <div id="subInvFooterNotes" class="inv-notes-box" style="display:none"><span class="inv-notes-title">الشروط والأحكام (Terms):</span><span class="inv-notes-content" id="subInvNotesContent"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="../../assets/web-api.js"></script>
   <script src="../../assets/auth-guard.js"></script>
   <script src="../../assets/i18n.js"></script>
-  <script src="subscriptions.js"></script>
+  <script src="../invoiceRenderer.js"></script>
+    <script src="subscriptions.js"></script>
 </body>
 </html>

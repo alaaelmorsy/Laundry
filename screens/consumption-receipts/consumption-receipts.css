@@ -1,0 +1,71 @@
+@import url('../invoices/invoices.css');
+
+.back-btn{background:linear-gradient(90deg,#14b8a6,#0d9488)!important;box-shadow:0 2px 8px rgba(20,184,166,.25)!important}
+.logo-icon{background:linear-gradient(135deg,#14b8a6,#0d9488)!important}
+.search-wrap:focus-within{border-color:#14b8a6!important;box-shadow:0 0 0 3px rgba(20,184,166,.1)!important}
+.invoices-table thead tr{background:linear-gradient(90deg,rgba(20,184,166,.06),rgba(13,148,136,.06))!important}
+.invoices-table thead th{color:#0d9488!important}
+.spinner{border-top-color:#14b8a6!important}
+.cr-num-cell{font-weight:700;color:#0d9488;font-size:13px}
+
+#receiptViewModal .inv-shop-name,
+#receiptViewModal .inv-shop-sub,
+#receiptViewModal .inv-meta-label,
+#receiptViewModal .inv-meta-val,
+#receiptViewModal .inv-table th,
+#receiptViewModal .inv-table td,
+#receiptViewModal .cr-receipt-title,
+#receiptViewModal .cr-vat-note,
+#receiptViewModal .cr-warning-banner {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+
+@media print {
+  html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
+  body > *:not(#receiptViewModal) { display: none !important; }
+  #receiptViewModal {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+  #receiptViewModal .inv-dialog {
+    max-height: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  #receiptViewModal .inv-dialog-body {
+    overflow: visible !important;
+    padding: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    flex: none !important;
+  }
+  #receiptViewModal .inv-dialog-footer { display: none !important; }
+  #receiptViewModal .inv-paper {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  #receiptViewModal .no-print { display: none !important; }
+}
+.cr-warning-banner{background:#fef9c3;border:1px solid #fde047;color:#854d0e;padding:10px 12px;border-radius:8px;font-size:12px;text-align:center;margin-bottom:10px;line-height:1.5}
+.cr-vat-note{font-size:11px;color:#64748b;text-align:center;margin-top:8px}
+.toolbar-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filter-date{padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px}
+.link-tax-invoices{color:#8b5cf6;font-size:13px;text-decoration:none;font-weight:700}
+.link-tax-invoices:hover{text-decoration:underline}

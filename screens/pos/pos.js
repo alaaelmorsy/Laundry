@@ -139,6 +139,10 @@
     successTotal: document.getElementById('successTotal'),
     btnNewSale: document.getElementById('btnNewSale'),
     btnCloseSuccess: document.getElementById('btnCloseSuccess'),
+    consumptionReceiptModal: document.getElementById('consumptionReceiptModal'),
+    btnCrModalClose: document.getElementById('btnCrModalClose'),
+    btnCrModalExportPdf: document.getElementById('btnCrModalExportPdf'),
+    btnCrModalPrint: document.getElementById('btnCrModalPrint'),
     invoiceModal: document.getElementById('invoiceModal'),
     invoicePaper: document.getElementById('invoicePaper'),
     invLogoWrap: document.getElementById('invLogoWrap'),
@@ -1598,11 +1602,13 @@
         });
       }
 
-      if (r && r.success) {
+      const subOk = r && r.success !== false && (r.orderId || r.subscriptionId);
+      if (subOk) {
         closeAddSubscriptionModal();
         showToast(isRenew ? 'تم تجديد الاشتراك بنجاح' : 'تم إضافة الاشتراك بنجاح', 'success');
-        if (r.periodId) {
-          window.api.printSubscriptionReceipt({ periodId: r.periodId }).catch(() => {});
+        const invoiceOrderId = r.orderId || r.invoiceId;
+        if (invoiceOrderId) {
+          await showSubscriptionInvoiceModal(invoiceOrderId);
         }
       } else {
         els.addSubError.textContent = (r && r.message) || 'حدث خطأ أثناء الحفظ';
@@ -1683,9 +1689,80 @@
   }
 
   /* ========== A4 INVOICE WINDOW (fallback standalone) ========== */
+  function paymentLabel(method) {
+    const map = { cash: 'نقدي', card: 'شبكة', credit: 'آجل', mixed: 'نقدي + شبكة' };
+    return map[method] || method || 'نقدي';
+  }
   function openA4Invoice(data) {
     localStorage.setItem('a4InvoiceData', JSON.stringify(data));
     window.open('/screens/invoice-a4/invoice-a4.html', '_blank', 'width=960,height=1120,scrollbars=yes');
+  }
+
+  /** اطبع فاتورة الاشتراك بنفس تصميم شاشة الاشتراكات عبر A4 */
+  async function printSubscriptionA4(orderId) {
+    try {
+      const res = await window.api.getOrderById({ id: orderId });
+      if (!res || !res.success || !res.order) return;
+      const order = res.order;
+      const items = res.items || [];
+      const subscription = res.subscription || null;
+      const settingsRes = await window.api.getAppSettings().catch(() => null);
+      const s = (settingsRes && settingsRes.settings) || settingsRes || {};
+
+      const vatRate = parseFloat(order.vat_rate || s.vatRate || 0);
+      const subtotal = parseFloat(order.subtotal || 0);
+      const vatAmount = parseFloat(order.vat_amount || 0);
+      const total = parseFloat(order.total_amount || 0);
+
+      const data = {
+        shopNameAr: s.laundryNameAr,
+        shopNameEn: s.laundryNameEn,
+        shopAddressAr: s.locationAr,
+        shopAddressEn: s.locationEn,
+        shopPhone: s.phone,
+        shopEmail: s.email,
+        vatNumber: s.vatNumber,
+        commercialRegister: s.commercialRegister,
+        logoDataUrl: s.logoDataUrl,
+        titleAr: 'فاتورة ضريبية مبسطة',
+        titleEn: 'Simplified Tax Invoice',
+        orderNum: order.invoice_seq || order.order_number || '',
+        date: formatInvoiceDate(order.created_at),
+        payment: paymentLabel(order.payment_method),
+        custName: order.customer_name,
+        custPhone: order.phone,
+        subRef: subscription ? subscription.subscription_number : null,
+        subPackageName: subscription ? subscription.package_name : null,
+        subBalance: subscription ? subscription.credit_remaining : null,
+        items: items.map(it => ({
+          productAr: it.product_name_ar || it.product_name || '',
+          productEn: it.product_name_en || '',
+          serviceAr: it.service_name_ar || '',
+          serviceEn: it.service_name_en || '',
+          qty: it.quantity || 1,
+          unitPrice: it.unit_price || it.unitPrice || 0,
+          lineTotal: it.line_total || it.lineTotal || 0
+        })),
+        subtotal: subtotal,
+        discount: order.discount_amount || 0,
+        extra: order.extra_amount || 0,
+        vatRate: vatRate,
+        vatAmount: vatAmount,
+        total: total,
+        priceDisplayMode: order.price_display_mode || 'inclusive',
+        paidCash: order.paid_cash || order.paidCash || 0,
+        paidCard: order.paid_card || order.paidCard || 0,
+        paid: order.paid || 0,
+        remaining: order.remaining || 0,
+        invoiceNotes: order.notes || '',
+        settingsNotes: s.invoiceNotes,
+        qrPayload: order.zatca_qr ? { tlvBase64: order.zatca_qr } : (vatRate > 0 && s.vatNumber ? { sellerName: s.laundryNameAr || '', vatNumber: s.vatNumber, timestamp: (order.created_at ? new Date(order.created_at).toISOString() : new Date().toISOString()), totalAmount: (total || 0).toFixed(2), vatAmount: (vatAmount || 0).toFixed(2) } : null)
+      };
+
+      openA4Invoice(data);
+    } catch (e) {
+      console.error('printSubscriptionA4 error:', e);
+    }
   }
 
   /* ========== A4 MODAL HELPERS ========== */
@@ -1944,6 +2021,129 @@
     var d = dateStr ? new Date(dateStr) : new Date();
     if (isNaN(d.getTime())) d = new Date();
     return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+
+  function formatConsumptionReceiptNum(seq) {
+    return 'C-' + (Number(seq) || 1);
+  }
+
+  function formatSubscriptionDisplayNum(val) {
+    if (val == null || String(val).trim() === '') return '—';
+    var s = String(val).trim();
+    var m = s.match(/(\d+)\s*$/);
+    if (m) return String(Number(m[1]));
+    var n = Number(s.replace(/\D/g, ''));
+    return isNaN(n) ? s : String(n);
+  }
+
+  function buildConsumptionItemsHtml(items) {
+    var list = items || [];
+    return list.map(function (item) {
+      var nameAr = escHtml(item.productNameAr || item.name || '');
+      var nameEn = escHtml(item.productNameEn || '');
+      var svcAr = escHtml(item.serviceNameAr || item.serviceName || '');
+      var svcEn = escHtml(item.serviceNameEn || '');
+      var productCell = nameAr
+        + (nameEn && nameEn !== nameAr ? '<br><span class="inv-td-en">' + nameEn + '</span>' : '');
+      var serviceCell = svcAr
+        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '');
+      var qty = item.qty != null ? item.qty : (item.quantity != null ? item.quantity : 1);
+      var line = item.lineTotal != null ? item.lineTotal : 0;
+      return '<tr>'
+        + '<td class="inv-td-name">' + (productCell || '—') + '</td>'
+        + '<td class="inv-td-num">' + qty + '</td>'
+        + '<td class="inv-td-amt">' + fmtLtr(line) + '</td>'
+        + '<td class="inv-td-name">' + (svcAr ? serviceCell : '—') + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function printConsumptionReceipt() {
+    document.body.classList.add('print-consumption-receipt');
+    var copies = getPrintCopies();
+    if (copies === 0) {
+      document.body.classList.remove('print-consumption-receipt');
+      return;
+    }
+    var currentCopy = 0;
+    function printNext() {
+      if (currentCopy >= copies) {
+        document.body.classList.remove('print-consumption-receipt');
+        return;
+      }
+      currentCopy += 1;
+      var handled = false;
+      function afterPrint() {
+        if (handled) return;
+        handled = true;
+        window.removeEventListener('afterprint', afterPrint);
+        if (currentCopy < copies) {
+          setTimeout(printNext, 120);
+        } else {
+          document.body.classList.remove('print-consumption-receipt');
+        }
+      }
+      window.addEventListener('afterprint', afterPrint);
+      window.print();
+      setTimeout(afterPrint, 2500);
+    }
+    printNext();
+  }
+
+  function showConsumptionReceiptModal(result, subscription, autoOpenPrint) {
+    var s = state.appSettings || {};
+    var lang = getLang();
+    var shopName = (lang === 'ar' ? s.laundryNameAr : s.laundryNameEn) || s.laundryNameAr || '';
+    var crShop = document.getElementById('crModalShopName');
+    var crAddr = document.getElementById('crModalShopAddress');
+    var crPhone = document.getElementById('crModalShopPhone');
+    if (crShop) crShop.textContent = shopName;
+    if (crAddr) crAddr.textContent = s.locationAr || s.locationEn || '';
+    if (crPhone) crPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
+    var crLogoWrap = document.getElementById('crModalLogoWrap');
+    var crLogo = document.getElementById('crModalLogo');
+    if (s.logoDataUrl && crLogo) {
+      crLogo.src = s.logoDataUrl;
+      if (crLogoWrap) crLogoWrap.style.display = '';
+    } else if (crLogoWrap) crLogoWrap.style.display = 'none';
+
+    var consumed = Number(result.consumptionAmount || 0);
+    var balAfter = subscription && subscription.credit_remaining != null
+      ? Number(subscription.credit_remaining)
+      : null;
+    var balBefore = balAfter != null ? balAfter + consumed : null;
+
+    state.viewingConsumptionReceiptNum = formatConsumptionReceiptNum(result.consumptionReceiptSeq);
+
+    document.getElementById('crModalReceiptNum').textContent = state.viewingConsumptionReceiptNum;
+    document.getElementById('crModalDate').textContent = formatInvoiceDate(new Date());
+    var cust = state.selectedCustomer;
+    document.getElementById('crModalCustomer').textContent = (cust && cust.name) || '—';
+    document.getElementById('crModalPhone').textContent = (cust && cust.phone) || '—';
+    var subNum = (subscription && subscription.subscription_number)
+      || (cust && cust.subscription_number) || '';
+    var subRefEl = document.getElementById('crModalSubRef');
+    if (subRefEl) subRefEl.textContent = formatSubscriptionDisplayNum(subNum);
+    document.getElementById('crModalPackage').textContent =
+      (subscription && subscription.package_name) || '—';
+    var sarHtml = '<span class="sar">&#xE900;</span> ';
+    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(consumed);
+    document.getElementById('crModalBalBefore').innerHTML =
+      balBefore != null ? sarHtml + fmtLtr(balBefore) : '—';
+    document.getElementById('crModalBalAfter').innerHTML =
+      balAfter != null ? sarHtml + fmtLtr(balAfter) : '—';
+
+    var tbody = document.getElementById('crModalItemsBody');
+    if (tbody) {
+      tbody.innerHTML = buildConsumptionItemsHtml(state.cart);
+    }
+
+    if (els.consumptionReceiptModal) {
+      els.consumptionReceiptModal.style.display = 'flex';
+      if (autoOpenPrint) {
+        setTimeout(printConsumptionReceipt, 500);
+      }
+    }
   }
 
   function showInvoiceModal(orderNumber, orderDate, totals, subscription, invoiceSeq, deferredDates, autoOpenPrint, orderId, invoiceNotes) {
@@ -2394,6 +2594,94 @@
     }
   }
 
+  /**
+   * عرض وطباعة فاتورة الاشتراك بنفس مودال فاتورة البيع (حراري / A4 حسب الإعدادات)
+   * @param {number} orderId - معرف الفاتورة في جدول orders
+   */
+  async function showSubscriptionInvoiceModal(orderId) {
+    try {
+      const res = await window.api.getOrderById({ id: Number(orderId) });
+      if (!res || !res.success || !res.order) {
+        showTopToast('تعذّر تحميل بيانات الفاتورة', 'error');
+        return;
+      }
+      const { order, items } = res;
+
+      state.cart = (items || []).map(function(item) {
+        return {
+          productNameAr: item.product_name_ar || '',
+          productNameEn: item.product_name_en || '',
+          serviceNameAr: item.service_name_ar || '',
+          serviceNameEn: item.service_name_en || '',
+          serviceName:   item.service_name_ar || '',
+          qty:           item.quantity,
+          unitPrice:     parseFloat(item.unit_price || 0),
+          lineTotal:     parseFloat(item.line_total || 0),
+        };
+      });
+      state.selectedCustomer = order.customer_name
+        ? { name: order.customer_name, phone: order.phone || '' }
+        : state.selectedCustomer;
+      state.paymentMethod    = order.payment_method || 'cash';
+      state.vatRate          = Number(order.vat_rate != null ? order.vat_rate : (state.vatRate || 15));
+      state.priceDisplayMode = order.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
+      state.lastZatcaQr      = order.zatca_qr || null;
+      state.viewingOrderId   = order.id;
+
+      const subscription = res.subscription || null;
+
+      let totalCash = parseFloat(order.paid_cash || 0);
+      let totalCard = parseFloat(order.paid_card || 0);
+      try {
+        const paymentsRes = await window.api.getInvoiceWithPayments({ orderId: Number(orderId) });
+        if (paymentsRes && paymentsRes.success && Array.isArray(paymentsRes.payments) && paymentsRes.payments.length) {
+          totalCash = 0;
+          totalCard = 0;
+          paymentsRes.payments.forEach(function(p) {
+            const method = p.payment_method;
+            if (method === 'cash') {
+              totalCash += Number(p.payment_amount || 0);
+            } else if (method === 'card') {
+              totalCard += Number(p.payment_amount || 0);
+            } else if (method === 'mixed') {
+              totalCash += Number(p.cash_amount || 0);
+              totalCard += Number(p.card_amount || 0);
+            }
+          });
+        }
+      } catch (_) {}
+
+      if (totalCash > 0 && totalCard > 0) {
+        state.paymentMethod = 'mixed';
+      }
+
+      showInvoiceModal(
+        order.order_number,
+        order.created_at,
+        {
+          subtotal:  Number(order.subtotal || 0),
+          discount:  Number(order.discount_amount || 0),
+          extra:     Number(order.extra_amount || 0),
+          vatAmount: Number(order.vat_amount || 0),
+          total:     Number(order.total_amount || 0),
+          paid:      Number(order.paid_amount || 0),
+          remaining: Number(order.remaining_amount || 0),
+          paidCash:  totalCash,
+          paidCard:  totalCard,
+        },
+        subscription,
+        order.invoice_seq,
+        null,
+        true,
+        order.id,
+        order.notes || ''
+      );
+    } catch (e) {
+      console.error('showSubscriptionInvoiceModal error:', e);
+      showTopToast('خطأ في عرض الفاتورة', 'error');
+    }
+  }
+
   function closeInvoiceModal() {
     els.invoiceModal.style.display = 'none';
     document.body.classList.remove('invtype-a4');
@@ -2474,7 +2762,11 @@
         serviceId: item.serviceId,
         quantity: item.qty,
         unitPrice: item.unitPrice,
-        lineTotal: item.lineTotal
+        lineTotal: item.lineTotal,
+        productNameAr: item.productNameAr || null,
+        productNameEn: item.productNameEn || null,
+        serviceNameAr: item.serviceNameAr || null,
+        serviceNameEn: item.serviceNameEn || null
       }));
 
       const res = await window.api.createOrder({
@@ -2511,12 +2803,45 @@
           }
         } catch (_) {}
       }
+      if (!subscription && state.selectedCustomer && state.selectedCustomer.id) {
+        try {
+          var subRes = await window.api.getCustomerActiveSubscription({ customerId: state.selectedCustomer.id });
+          if (subRes && subRes.success && subRes.subscription) {
+            subscription = subRes.subscription;
+          }
+        } catch (_) {}
+      }
 
       state.paymentMethod = res.paymentMethod || state.paymentMethod;
       state.lastZatcaQr = res.zatcaQr || null;
-      showInvoiceModal(res.orderNumber, res.createdAt || null,
-        { subtotal, discount, extra, vatAmount, total, paidCash: state.paymentMethod === 'mixed' ? state.mixedCash : 0, paidCard: state.paymentMethod === 'mixed' ? state.mixedCard : 0 },
-        subscription, res.invoiceSeq, null, true, res.id, state.invoiceNotes);
+
+      var consumed = Number(res.consumptionAmount || 0);
+      var invoicePart = Number(res.invoiceAmount != null ? res.invoiceAmount : total);
+      var ratio = total > 0 && consumed > 0 && invoicePart > 0 ? invoicePart / total : 1;
+
+      if (consumed > 0) {
+        showConsumptionReceiptModal(res, subscription, true);
+      }
+
+      if (!res.isConsumptionOnly) {
+        var invTotals = consumed > 0 && invoicePart > 0 ? {
+          subtotal: parseFloat((subtotal * ratio).toFixed(2)),
+          discount: parseFloat((discount * ratio).toFixed(2)),
+          extra: parseFloat((extra * ratio).toFixed(2)),
+          vatAmount: parseFloat((vatAmount * ratio).toFixed(2)),
+          total: invoicePart,
+          paidCash: state.paymentMethod === 'mixed' ? parseFloat((state.mixedCash * ratio).toFixed(2)) : 0,
+          paidCard: state.paymentMethod === 'mixed' ? parseFloat((state.mixedCard * ratio).toFixed(2)) : 0
+        } : {
+          subtotal, discount, extra, vatAmount, total,
+          paidCash: state.paymentMethod === 'mixed' ? state.mixedCash : 0,
+          paidCard: state.paymentMethod === 'mixed' ? state.mixedCard : 0
+        };
+        setTimeout(function () {
+          showInvoiceModal(res.orderNumber, res.createdAt || null,
+            invTotals, subscription, res.invoiceSeq, null, consumed <= 0, res.id, state.invoiceNotes);
+        }, consumed > 0 ? 800 : 0);
+      }
 
     } catch (err) {
       showToast(t('pos-err-save'), 'error');
@@ -3325,6 +3650,44 @@
     });
 
     els.btnInvClose.addEventListener('click', closeInvoiceModal);
+    if (els.btnCrModalClose) {
+      els.btnCrModalClose.addEventListener('click', function () {
+        if (els.consumptionReceiptModal) els.consumptionReceiptModal.style.display = 'none';
+      });
+    }
+    if (els.btnCrModalPrint) {
+      els.btnCrModalPrint.addEventListener('click', printConsumptionReceipt);
+    }
+    if (els.btnCrModalExportPdf) {
+      els.btnCrModalExportPdf.addEventListener('click', async function () {
+        var paperEl = document.getElementById('crModalPaper');
+        if (!paperEl) {
+          showToast('لم يتم العثور على محتوى الإيصال', 'error');
+          return;
+        }
+        try {
+          els.btnCrModalExportPdf.disabled = true;
+          els.btnCrModalExportPdf.innerHTML = '<span>جارٍ التصدير...</span>';
+          var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+          var orderNum = state.viewingConsumptionReceiptNum || 'consumption';
+          var result = await window.api.exportInvoicePdfFromHtml({
+            html: paperEl.outerHTML,
+            paperType: paperType,
+            orderNum: orderNum
+          });
+          if (result.success) {
+            showToast('تم تنزيل ملف PDF بنجاح', 'success');
+          } else {
+            showToast(result.message || 'فشل تصدير PDF', 'error');
+          }
+        } catch (err) {
+          showToast('حدث خطأ أثناء التصدير', 'error');
+        } finally {
+          els.btnCrModalExportPdf.disabled = false;
+          els.btnCrModalExportPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg><span>تصدير PDF</span>';
+        }
+      });
+    }
 
     els.invoiceModal.addEventListener('click', (e) => {
       if (e.target === els.invoiceModal) closeInvoiceModal();

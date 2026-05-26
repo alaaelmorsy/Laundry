@@ -361,6 +361,24 @@
       state.appSettings = settingsRes.settings;
     }
 
+    // ── فتح فاتورة تلقائياً إذا جاء من شاشة الاشتراكات ──
+    const pendingViewId = localStorage.getItem('subscriptionViewOrderId');
+    const isInIframe = window.self !== window.top;
+
+    if (pendingViewId) {
+      localStorage.removeItem('subscriptionViewOrderId');
+      const orderId = Number(pendingViewId);
+      if (orderId) {
+        // في وضع iframe: نحتاج تحميل الإعدادات فقط ثم فتح الفاتورة
+        if (isInIframe) {
+          await loadOrders();
+          openInvoice(orderId);
+          return; // لا نكمل تحميل باقي الواجهة
+        }
+        openInvoice(orderId);
+      }
+    }
+
     await loadOrders();
   }
 
@@ -480,12 +498,28 @@
       const z = getZatcaBadgeInfo(order);
       const hasResp = Boolean(order.zatca_response) || Boolean(order.zatca_rejection_reason);
       const canSubmit = state.appSettings && state.appSettings.zatcaEnabled
-        && !['submitted', 'accepted'].includes(String(order.zatca_status || '').toLowerCase());
+        && !['submitted', 'accepted'].includes(String(order.zatca_status || '').toLowerCase())
+        && Number(order.is_consumption_only) !== 1;
+
+      const isSub = order.order_type && order.order_type !== 'sale';
+      const typeLabel = isSub
+        ? (order.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد')
+        : 'فاتورة بيع';
+      const typeBadge = isSub
+        ? `<span class="payment-badge" style="background:#dbeafe;color:#1e40af">${escHtml(typeLabel)}</span>${order.notes ? `<br><span style="font-size:11px;color:#64748b">${escHtml(order.notes)}</span>` : ''}`
+        : `<span class="payment-badge" style="background:#f1f5f9;color:#475569">${escHtml(typeLabel)}</span>`;
+
+      let docType = I18N.t('doc-type-tax-invoice');
+      if (Number(order.consumption_amount) > 0 && order.consumption_receipt_id && order.invoice_seq) {
+        docType = I18N.t('doc-type-mixed');
+      }
+      const docTypeBadge = `<span class="payment-badge" style="background:#ccfbf1;color:#0f766e">${escHtml(docType)}</span>`;
 
       tr.innerHTML = `
         <td class="inv-num-cell">${seqNum}</td>
         <td style="direction:ltr;text-align:right">${escHtml(formatDate(order.created_at))}</td>
         <td>${order.customer_name ? escHtml(order.customer_name) + (order.phone ? `<br><span style="font-size:12px;color:#94a3b8">${escHtml(order.phone)}</span>` : '') : '<span style="color:#94a3b8">—</span>'}</td>
+        <td>${docTypeBadge}<br>${typeBadge}</td>
         <td><span class="payment-badge ${paymentClass(order.payment_method)}">${escHtml(paymentLabel(order.payment_method))}</span></td>
         <td class="total-cell">${fmtLtr(total)} <span class="sar">&#xE900;</span></td>
         <td>
@@ -1171,5 +1205,32 @@
 
   /* ========== START ========== */
   window.addEventListener('DOMContentLoaded', init);
+
+  // ── معالجة وضع iframe: إخفاء عناصر الواجهة والاستجابة لـ postMessage ──
+  window.addEventListener('DOMContentLoaded', () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      // إخفاء header و toolbar و table — إبقاء المودال فقط
+      const hideSelectors = ['.header-bar', '.toolbar', '.table-container', '.table-scroll-hint'];
+      hideSelectors.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) el.style.display = 'none';
+      });
+      // إخفاء زر العودة في المودال
+      const btnInvClose = document.getElementById('btnInvClose');
+      if (btnInvClose) btnInvClose.style.display = 'none';
+    }
+
+    // الاستجابة لأوامر من المودال الأب (طباعة / تصدير PDF)
+    window.addEventListener('message', (e) => {
+      if (!e.data || !e.data.action) return;
+      if (e.data.action === 'printInvoice') {
+        printInvoiceByCopies();
+      } else if (e.data.action === 'exportPdf') {
+        const btn = document.getElementById('btnInvExportPdf');
+        if (btn) btn.click();
+      }
+    });
+  });
 
 })();

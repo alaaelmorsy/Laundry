@@ -59,12 +59,26 @@ class LocalZatcaBridge {
     const order = orderData.order;
     const items = orderData.items || [];
 
+    if (!order.invoice_seq) {
+      throw new Error('لا يمكن إرسال طلب بدون invoice_seq (إيصال استهلاك)');
+    }
+    if (Number(order.is_consumption_only) === 1) {
+      throw new Error('إيصال استهلاك — لا يُرسل لزاتكا');
+    }
+
+    const consumptionAmt = Number(order.consumption_amount || 0);
+    const orderTotal = Number(order.total_amount || 0);
+    const taxTotalBase = consumptionAmt > 0
+      ? Math.max(0, orderTotal - consumptionAmt)
+      : orderTotal;
+    const scaleRatio = consumptionAmt > 0 && orderTotal > 0 ? taxTotalBase / orderTotal : 1;
+
     // بيانات الشركة من zatca_settings
     const company = zs || {};
     const addr = company.address && typeof company.address === 'object' ? company.address : {};
 
     // حساب المجاميع
-    const discount = Math.abs(Number(order.discount_amount || 0));
+    const discount = Math.abs(Number(order.discount_amount || 0)) * scaleRatio;
     const taxRate = Number(order.vat_rate || 15);
 
     // UUID — استخدام المخزن أو إنشاء جديد
@@ -83,11 +97,11 @@ class LocalZatcaBridge {
       : new Date().toISOString().replace('T', ' ').slice(0, 19);
 
     // بنود الفاتورة — تنسيق مطابق لعينة ZATCA
-    const sumPreVat = items.reduce((s, it) => s + (Number(it.unit_price || 0) * Number(it.quantity || 1)), 0);
+    const sumPreVat = items.reduce((s, it) => s + (Number(it.unit_price || 0) * Number(it.quantity || 1) * scaleRatio), 0);
     const products = items.map(it => {
       const price = Number(it.unit_price || 0);
       const count = Number(it.quantity || 1);
-      const sellingPrice = price * count;
+      const sellingPrice = price * count * scaleRatio;
       const share = sumPreVat > 0 ? sellingPrice / sumPreVat : 0;
       const disVal = discount * share;
       const totalSellingAfterDis = sellingPrice - disVal;
@@ -351,6 +365,12 @@ class LocalZatcaBridge {
     const appSettings = await db.getAppSettings();
     if (!appSettings || !appSettings.zatcaEnabled) {
       throw new Error('الربط الإلكتروني غير مفعل من الإعدادات');
+    }
+
+    const orderData = await db.getOrderById(orderId);
+    if (!orderData || !orderData.order) throw new Error('الفاتورة غير موجودة');
+    if (Number(orderData.order.is_consumption_only) === 1) {
+      return { skipped: true, reason: 'consumption_only' };
     }
 
     // بناء الجسم

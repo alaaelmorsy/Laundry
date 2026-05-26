@@ -27,6 +27,7 @@
         </div>
       </div>
       <div class="header-left">
+        <a href="../consumption-receipts/consumption-receipts.html" class="back-btn" style="text-decoration:none;background:linear-gradient(90deg,#14b8a6,#0d9488);margin-left:8px" data-i18n="consumption-receipts-title">إيصالات الاستهلاك</a>
         <button class="back-btn" id="btnBack">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="15 18 9 12 15 6"/>
@@ -62,6 +63,7 @@
               <th data-i18n="invoices-col-invoice-num">رقم الفاتورة</th>
               <th data-i18n="invoices-col-date">التاريخ</th>
               <th data-i18n="invoices-col-customer">العميل</th>
+              <th data-i18n="document-type">نوع المستند</th>
               <th data-i18n="invoices-col-payment">طريقة الدفع</th>
               <th data-i18n="invoices-col-total">الإجمالي</th>
               <th>ZATCA</th>
@@ -70,7 +72,7 @@
           </thead>
           <tbody id="invoicesTableBody">
             <tr id="loadingRow">
-              <td colspan="7" class="loading-cell">
+              <td colspan="9" class="loading-cell">
                 <div class="spinner"></div>
                 <span data-i18n="invoices-loading">جارٍ التحميل...</span>
               </td>

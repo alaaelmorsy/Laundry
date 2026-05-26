@@ -53,6 +53,13 @@ window.addEventListener('DOMContentLoaded', () => {
   let subsTotal = 0;
   let subsTotalPages = 1;
 
+  // متغيرات طريقة الدفع — اشتراك جديد
+  let currentPaymentMethod = 'cash';
+  let mixedCashAmount = 0;
+  // متغيرات طريقة الدفع — تجديد
+  let currentRenewPaymentMethod = 'cash';
+  let renewMixedCash = 0;
+
   const pendingFilter = sessionStorage.getItem('subscriptionsFilterCustomerId');
   if (pendingFilter) {
     filterCustomerId = Number(pendingFilter) || null;
@@ -134,7 +141,199 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
+  function fmtLtr(n) {
+    return Number(n || 0).toFixed(2);
+  }
+
+  /**
+   * تعرض فاتورة الاشتراك في مودال بنفس تصميم POS
+   * @param {number} orderId - id من جدول orders
+   */
+  async function openSubscriptionInvoice(orderId) {
+    try {
+      const res = await window.api.getOrderById({ id: orderId });
+      if (!res || !res.success || !res.order) {
+        showToast('تعذّر تحميل بيانات الفاتورة', 'error');
+        return;
+      }
+      const order = res.order;
+      const items = res.items || [];
+      const subscription = res.subscription || null;
+
+      // جلب الإعدادات
+      const settingsRes = await window.api.getAppSettings({});
+      const s = settingsRes.settings || settingsRes || {};
+
+      const vatRate = parseFloat(order.vat_rate || 0);
+      const total = parseFloat(order.total_amount || 0);
+      const subtotal = parseFloat(order.subtotal || 0);
+      const discount = parseFloat(order.discount_amount || 0);
+      const vatAmount = parseFloat(order.vat_amount || 0);
+      const isInclusive = order.price_display_mode === 'inclusive';
+
+      // ── ملء بيانات المتجر ──
+      const $ = (id) => document.getElementById(id);
+      const shopName = s.laundryNameAr || s.laundryNameEn || '';
+      $('subInvShopName').textContent = shopName;
+      const addrParts = [];
+      if (s.buildingNumber) addrParts.push(s.buildingNumber);
+      if (s.streetNameAr) addrParts.push(s.streetNameAr);
+      if (s.districtAr) addrParts.push(s.districtAr);
+      if (s.cityAr) addrParts.push(s.cityAr);
+      if (s.postalCode) addrParts.push(s.postalCode);
+      $('subInvShopAddress').textContent = addrParts.length ? addrParts.join('، ') : (s.locationAr || '');
+      $('subInvShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
+      $('subInvVatNumber').textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
+      $('subInvShopEmail').textContent = s.email || '';
+
+      if (s.logoDataUrl) {
+        $('subInvLogo').src = s.logoDataUrl;
+        $('subInvLogoWrap').style.display = '';
+      } else {
+        $('subInvLogoWrap').style.display = 'none';
+      }
+
+      // Custom fields
+      const cfEl = $('subInvCustomFields');
+      if (cfEl) {
+        const cfs = Array.isArray(s.customFields) ? s.customFields : [];
+        if (cfs.length > 0) {
+          let cfHtml = '';
+          cfs.forEach(cf => { if (cf.labelAr) cfHtml += '<div class="inv-shop-sub">' + escHtml(cf.labelAr) + '</div>'; });
+          cfEl.innerHTML = cfHtml;
+          cfEl.style.display = cfHtml ? '' : 'none';
+        } else { cfEl.style.display = 'none'; }
+      }
+
+      // ── بيانات الفاتورة ──
+      $('subInvOrderNum').textContent = order.invoice_seq ? String(order.invoice_seq) : (order.order_number || '—');
+      $('subInvDate').textContent = formatInvDate(order.created_at);
+      $('subInvPayment').textContent = paymentLabel(order.payment_method);
+
+      // ── بيانات العميل ──
+      if (order.customer_name || order.phone) {
+        $('subInvCustomerSection').style.display = '';
+        if (order.customer_name) { $('subInvCustName').textContent = order.customer_name; $('subInvCustNameRow').style.display = ''; }
+        else { $('subInvCustNameRow').style.display = 'none'; }
+        if (order.phone) { $('subInvCustPhone').textContent = order.phone; $('subInvCustPhoneRow').style.display = ''; }
+        else { $('subInvCustPhoneRow').style.display = 'none'; }
+      } else {
+        $('subInvCustomerSection').style.display = 'none';
+      }
+
+      // بيانات الاشتراك
+      if (subscription && subscription.subscription_number) {
+        $('subInvSubRef').textContent = subscription.subscription_number;
+        $('subInvSubRefRow').style.display = '';
+        $('subInvCustomerSection').style.display = '';
+      } else { $('subInvSubRefRow').style.display = 'none'; }
+      if (subscription && subscription.credit_remaining != null) {
+        const bal = parseFloat(subscription.credit_remaining);
+        if (!isNaN(bal)) {
+          $('subInvSubBalance').innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(bal);
+          $('subInvSubBalRow').style.display = '';
+          $('subInvCustomerSection').style.display = '';
+        } else { $('subInvSubBalRow').style.display = 'none'; }
+      } else { $('subInvSubBalRow').style.display = 'none'; }
+
+      // ── البنود ──
+      $('subInvItemsTbody').innerHTML = items.map(it => {
+        const nameAr = escHtml(it.product_name_ar || '');
+        const nameEn = escHtml(it.product_name_en || '');
+        const svcAr = escHtml(it.service_name_ar || '');
+        const svcEn = escHtml(it.service_name_en || '');
+        const productCell = nameAr + (nameEn && nameEn !== nameAr ? '<span class="inv-td-en">' + nameEn + '</span>' : '');
+        const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? '<span class="inv-td-en">' + svcEn + '</span>' : '');
+        return '<tr><td class="inv-td-name">' + productCell + '</td><td class="inv-td-num">' + (it.quantity || 1) + '</td><td class="inv-td-amt">' + fmtLtr(it.line_total) + '</td><td class="inv-td-name">' + (serviceCell || '—') + '</td></tr>';
+      }).join('');
+
+      // ── الإجماليات ──
+      if (isInclusive && vatRate > 0) {
+        const netBeforeTax = subtotal * 100 / (100 + vatRate);
+        $('subInvSubtotal').innerHTML = sarFmt(netBeforeTax);
+        $('subInvVatLabel').textContent = 'ضريبة القيمة المضافة (' + vatRate + '%)';
+        $('subInvVat').innerHTML = sarFmt(vatAmount);
+        $('subInvVatRow').style.display = '';
+        $('subInvSubtotalLabel').textContent = 'المجموع قبل الضريبة';
+        $('subInvTotalLabel').textContent = 'الإجمالي شامل الضريبة';
+      } else {
+        $('subInvSubtotal').innerHTML = sarFmt(subtotal);
+        if (vatRate > 0 && vatAmount > 0) {
+          $('subInvVatLabel').textContent = 'ضريبة القيمة المضافة (' + vatRate + '%)';
+          $('subInvVat').innerHTML = sarFmt(vatAmount);
+          $('subInvVatRow').style.display = '';
+        } else { $('subInvVatRow').style.display = 'none'; }
+      }
+      if (discount > 0) {
+        $('subInvDiscount').innerHTML = sarFmt(discount);
+        $('subInvDiscRow').style.display = '';
+      } else { $('subInvDiscRow').style.display = 'none'; }
+      $('subInvTotal').innerHTML = sarFmt(total);
+
+      // ملاحظات
+      if (s.invoiceNotes) {
+        $('subInvNotesContent').textContent = s.invoiceNotes;
+        $('subInvFooterNotes').style.display = '';
+      } else { $('subInvFooterNotes').style.display = 'none'; }
+
+      // QR Code
+      if (vatRate > 0 && s.vatNumber) {
+        const shopN = s.laundryNameAr || '';
+        const iso = order.created_at ? new Date(order.created_at).toISOString() : new Date().toISOString();
+        const totalStr = total.toFixed(2);
+        const vatStr = vatAmount.toFixed(2);
+        renderSubQR(shopN, s.vatNumber, iso, totalStr, vatStr, order.zatca_qr || null);
+      } else { $('subInvQR').innerHTML = ''; }
+
+      // حفظ orderId للاستخدام في PDF
+      _subViewingOrderId = orderId;
+
+      // عرض المودال
+      $('subInvoiceModal').style.display = 'flex';
+    } catch (e) {
+      showToast('خطأ في عرض الفاتورة', 'error');
+      console.error(e);
+    }
+  }
+
+  function formatInvDate(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const p = (x) => String(x).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function paymentLabel(method) {
+    const map = { cash: 'نقدي', card: 'شبكة', credit: 'آجل', mixed: 'نقدي + شبكة' };
+    return map[method] || method || 'نقدي';
+  }
+
+  function sarFmt(amount) {
+    return '<span class="sar">&#xE900;</span> ' + fmtLtr(amount);
+  }
+
+  function renderSubQR(sellerName, vatNumber, timestamp, totalAmount, vatAmount, storedQr) {
+    const el = document.getElementById('subInvQR');
+    if (!el) return;
+    el.innerHTML = '';
+    const payload = storedQr
+      ? { tlvBase64: storedQr }
+      : { sellerName, vatNumber, timestamp, totalAmount, vatAmount };
+    window.api.generateZatcaQR(payload)
+      .then(function(res) {
+        if (res && res.success && res.svg) {
+          el.innerHTML = res.svg;
+        } else {
+          el.innerHTML = '<div style="font-size:9px;color:#999;padding:8px">QR غير متاح</div>';
+        }
+      })
+      .catch(function() {
+        el.innerHTML = '<div style="font-size:9px;color:#999;padding:8px">QR غير متاح</div>';
+      });
+  }
+
   let confirmResolver = null;
+  let _subViewingOrderId = null;
 
   function finishConfirm(value) {
     if (modalConfirm._onKey) {
@@ -866,20 +1065,22 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     subscriptionsTableBody.querySelectorAll('[data-sub-print]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const pid = btn.dataset.subPrint;
-        if (!pid) return;
-        const r = await window.api.printSubscriptionReceipt({ periodId: Number(pid) });
-        if (r.success) showToast(I18N.t('subscriptions-print-success'), 'success');
-        else showToast(r.message || I18N.t('subscriptions-err-generic'), 'error');
+        const orderId = btn.dataset.subPrint;
+        if (!orderId || orderId === '0' || orderId === 'null') {
+          showToast('لا توجد فاتورة لهذا الاشتراك', 'error');
+          return;
+        }
+        await openSubscriptionInvoice(Number(orderId));
       });
     });
     subscriptionsTableBody.querySelectorAll('[data-sub-pdf]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const pid = btn.dataset.subPdf;
-        if (!pid) return;
-        const r = await window.api.exportSubscriptionReceiptPdf({ periodId: Number(pid) });
-        if (r.success) showToast(I18N.t('subscriptions-pdf-receipt-success'), 'success');
-        else showToast(r.message || I18N.t('subscriptions-export-error'), 'error');
+        const orderId = btn.dataset.subPdf;
+        if (!orderId || orderId === '0' || orderId === 'null') {
+          showToast('لا توجد فاتورة لهذا الاشتراك', 'error');
+          return;
+        }
+        await openSubscriptionInvoice(Number(orderId));
       });
     });
     subscriptionsTableBody.querySelectorAll('[data-sub-delete]').forEach((btn) => {
@@ -1058,11 +1259,11 @@ window.addEventListener('DOMContentLoaded', () => {
               <span>${I18N.t('subscriptions-btn-edit-sub')}</span>
             </button>
             ${hasPeriod ? `
-            <button type="button" class="sub-actions-menu-item" data-sub-print="${s.current_period_id}">
+            <button type="button" class="sub-actions-menu-item" data-sub-print="${s.current_order_id || ''}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
               <span>${I18N.t('subscriptions-btn-print')}</span>
             </button>
-            <button type="button" class="sub-actions-menu-item" data-sub-pdf="${s.current_period_id}">
+            <button type="button" class="sub-actions-menu-item" data-sub-pdf="${s.current_order_id || ''}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
               <span>${I18N.t('subscriptions-btn-pdf-receipt')}</span>
             </button>
@@ -1192,19 +1393,25 @@ window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('errNewSub').style.display = 'block';
       return;
     }
+    const settingsRes = await window.api.getAppSettings().catch(() => null);
+    const vatRate = settingsRes && settingsRes.settings ? Number(settingsRes.settings.vatRate) || 0 : 0;
     const r = await window.api.createSubscription({
       customerId: Number(customerId),
       packageId: Number(packageId),
       periodFrom,
-      endDate
+      endDate,
+      paymentMethod: currentPaymentMethod || 'cash',
+      paidCash:      mixedCashAmount || 0,
+      paidCard:      null,
+      vatRate
     });
     if (r.success) {
       showToast(I18N.t('subscriptions-success-create'), 'success');
       modalNewSub.style.display = 'none';
       await loadSubscriptions();
-      if (r.periodId) {
-        const pr = await window.api.printSubscriptionReceipt({ periodId: r.periodId });
-        if (pr.success) showToast(I18N.t('subscriptions-print-success'), 'success');
+      // ── فتح فاتورة الاشتراك تلقائياً ──
+      if (r.invoiceId) {
+        await openSubscriptionInvoice(r.invoiceId);
       }
     } else {
       document.getElementById('errNewSub').textContent = r.message || I18N.t('subscriptions-err-generic');
@@ -1297,19 +1504,25 @@ window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('errRenew').style.display = 'block';
       return;
     }
+    const settingsRes = await window.api.getAppSettings().catch(() => null);
+    const vatRate = settingsRes && settingsRes.settings ? Number(settingsRes.settings.vatRate) || 0 : 0;
     const r = await window.api.renewSubscription({
       subscriptionId,
       packageId: Number(packageId),
       periodFrom,
-      carryOverRemaining
+      carryOverRemaining,
+      paymentMethod: currentRenewPaymentMethod || 'cash',
+      paidCash:      renewMixedCash || 0,
+      paidCard:      null,
+      vatRate
     });
     if (r.success) {
       showToast(I18N.t('subscriptions-success-renew'), 'success');
       modalRenew.style.display = 'none';
       await loadSubscriptions();
-      if (r.periodId) {
-        const pr = await window.api.printSubscriptionReceipt({ periodId: r.periodId });
-        if (pr.success) showToast(I18N.t('subscriptions-print-success'), 'success');
+      // ── فتح فاتورة التجديد تلقائياً ──
+      if (r.invoiceId) {
+        await openSubscriptionInvoice(r.invoiceId);
       }
     } else {
       document.getElementById('errRenew').textContent = r.message || I18N.t('subscriptions-err-generic');
@@ -1788,11 +2001,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const start = (detailInvPage - 1) * detailInvPageSize;
     const pageList = filteredList.slice(start, start + detailInvPageSize);
 
+    function docTypeLabel(inv) {
+      if (Number(inv.is_consumption_only) === 1) return I18N.t('doc-type-consumption');
+      if (inv.consumption_receipt_id && inv.invoice_seq) return I18N.t('doc-type-mixed');
+      return I18N.t('doc-type-tax-invoice');
+    }
+
     // جدول الديسكتوب
     detailInvTbody.innerHTML = pageList.map(inv => `
       <tr>
-        <td>${escHtml(String(inv.invoice_seq || inv.order_number || '—'))}</td>
+        <td>${escHtml(inv.consumption_receipt_seq ? 'C-' + inv.consumption_receipt_seq : String(inv.invoice_seq || inv.order_number || '—'))}</td>
         <td>${escHtml(formatDateTimeNumeric(inv.created_at))}</td>
+        <td>${escHtml(docTypeLabel(inv))}</td>
         <td>${riyalHtml(Number(inv.total_amount).toFixed(2))}</td>
         <td>${riyalHtml(Number(inv.deducted_amount).toFixed(2))}</td>
         <td>${escHtml(pmLabel(inv.payment_method))}</td>
@@ -1858,7 +2078,7 @@ window.addEventListener('DOMContentLoaded', () => {
   async function loadDetailInvoices() {
     detailInvLoaded = true;
     detailInvPage = 1;
-    detailInvTbody.innerHTML = `<tr><td colspan="5" class="loading-cell"><span class="spinner"></span></td></tr>`;
+      detailInvTbody.innerHTML = `<tr><td colspan="6" class="loading-cell"><span class="spinner"></span></td></tr>`;
     if (detailInvCards) detailInvCards.innerHTML = '';
     if (detailInvPagBar) detailInvPagBar.style.display = 'none';
     detailInvEmpty.style.display = 'none';
@@ -1867,7 +2087,7 @@ window.addEventListener('DOMContentLoaded', () => {
       detailInvAllList = res && res.success ? (res.orders || []) : [];
       renderDetailInvoices(detailInvAllList);
     } catch (e) {
-      detailInvTbody.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:#b91c1c">${I18N.t('subscriptions-err-load-invoices')}</td></tr>`;
+      detailInvTbody.innerHTML = `<tr><td colspan="6" class="loading-cell" style="color:#b91c1c">${I18N.t('subscriptions-err-load-invoices')}</td></tr>`;
     }
   }
 
@@ -1936,6 +2156,34 @@ window.addEventListener('DOMContentLoaded', () => {
   initNewSubCustomerCombobox();
   initPackageDropdown('newSub');
   initPackageDropdown('renew');
+
+  // ── منطق أزرار الدفع — اشتراك جديد ──
+  document.getElementById('newSubPaymentBtns').addEventListener('click', (e) => {
+    const btn = e.target.closest('.pay-btn');
+    if (!btn) return;
+    document.querySelectorAll('#newSubPaymentBtns .pay-btn').forEach(b => b.classList.remove('pay-btn-active'));
+    btn.classList.add('pay-btn-active');
+    currentPaymentMethod = btn.dataset.method;
+    document.getElementById('newSubMixedRow').style.display = currentPaymentMethod === 'mixed' ? '' : 'none';
+  });
+
+  // ── منطق أزرار الدفع — تجديد ──
+  document.getElementById('renewPaymentBtns').addEventListener('click', (e) => {
+    const btn = e.target.closest('.pay-btn');
+    if (!btn) return;
+    document.querySelectorAll('#renewPaymentBtns .pay-btn').forEach(b => b.classList.remove('pay-btn-active'));
+    btn.classList.add('pay-btn-active');
+    currentRenewPaymentMethod = btn.dataset.method;
+    document.getElementById('renewMixedRow').style.display = currentRenewPaymentMethod === 'mixed' ? '' : 'none';
+  });
+
+  // ── قراءة قيمة المبلغ النقدي عند تغييره ──
+  document.getElementById('newSubMixedCash').addEventListener('input', (e) => {
+    mixedCashAmount = Number(e.target.value) || 0;
+  });
+  document.getElementById('renewMixedCash').addEventListener('input', (e) => {
+    renewMixedCash = Number(e.target.value) || 0;
+  });
   const pkgPh = I18N.t('subscriptions-select-package');
   const nLab = document.getElementById('newSubPackageLabel');
   const rLab = document.getElementById('renewPackageLabel');
@@ -1947,4 +2195,52 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     loadSubscriptions();
   }
+
+  // ── معالجات مودال معاينة الفاتورة ──
+  const subInvModal = document.getElementById('subInvoiceModal');
+  const btnSubInvClose = document.getElementById('btnSubInvClose');
+  const btnSubInvPrint = document.getElementById('btnSubInvPrint');
+  const btnSubInvPdf = document.getElementById('btnSubInvPdf');
+
+  function closeSubInvModal() {
+    if (subInvModal) subInvModal.style.display = 'none';
+  }
+
+  if (btnSubInvClose) btnSubInvClose.addEventListener('click', closeSubInvModal);
+  if (subInvModal) subInvModal.addEventListener('click', (e) => {
+    if (e.target === subInvModal) closeSubInvModal();
+  });
+
+  if (btnSubInvPrint) btnSubInvPrint.addEventListener('click', () => {
+    try {
+      // طباعة بنفس طريقة POS
+      var paperType = 'thermal';  // الاشتراكات دائماً حراري
+      var styleEl = null;
+      if (paperType === 'a4') {
+        styleEl = document.createElement('style');
+        styleEl.id = 'a4PageStyle';
+        styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
+        document.head.appendChild(styleEl);
+      }
+      window.print();
+      if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+    } catch (e) { console.error('print error:', e); }
+  });
+
+  if (btnSubInvPdf) btnSubInvPdf.addEventListener('click', async () => {
+    try {
+      const orderId = _subViewingOrderId;
+      if (!orderId) { showToast('معرف الفاتورة غير موجود', 'error'); return; }
+      // استخدام نفس API لتصدير PDF
+      const res = await window.api.exportInvoicePdf({ id: orderId });
+      if (res && res.success) {
+        showToast('تم تصدير PDF بنجاح', 'success');
+      } else {
+        showToast(res && res.message ? res.message : 'فشل تصدير PDF', 'error');
+      }
+    } catch (e) {
+      console.error('pdf error:', e);
+      showToast('حدث خطأ أثناء التصدير', 'error');
+    }
+  });
 });
