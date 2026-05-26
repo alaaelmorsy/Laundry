@@ -903,6 +903,7 @@
     state.extra = 0;
     els.discountInput.value = '';
     if (els.extraInput) els.extraInput.value = '';
+    clearCustomer();
     renderCart();
     updateMobileCartBadge();
   }

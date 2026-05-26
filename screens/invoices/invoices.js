@@ -93,7 +93,18 @@
     invQR: document.getElementById('invQR'),
     invBarcode: document.getElementById('invBarcode'),
     invFooterEmail: document.getElementById('invFooterEmail'),
+    // Refund modal
+    btnInvRefund: document.getElementById('btnInvRefund'),
+    refundModal: document.getElementById('refundModal'),
+    refundOriginalNo: document.getElementById('refundOriginalNo'),
+    refundCustomer: document.getElementById('refundCustomer'),
+    refundAmount: document.getElementById('refundAmount'),
+    refundReason: document.getElementById('refundReason'),
+    btnRefundConfirm: document.getElementById('btnRefundConfirm'),
+    btnRefundCancel: document.getElementById('btnRefundCancel'),
+    btnRefundClose: document.getElementById('btnRefundClose'),
   };
+  let refundTargetOrderId = null;
 
   /* ========== UTILS ========== */
   function fmtLtr(n) {
@@ -487,7 +498,7 @@
     const fragment = document.createDocumentFragment();
 
     state.orders.forEach((order, idx) => {
-      const seqNum = order.invoice_seq || (offset + idx + 1); // رقم تسلسلي يبدأ من 1
+      const seqNum = order.is_refund ? order.order_number : (order.invoice_seq || (offset + idx + 1));
       const tr = document.createElement('tr');
 
       const subtotal = parseFloat(order.subtotal || 0);
@@ -502,15 +513,25 @@
         && Number(order.is_consumption_only) !== 1;
 
       const isSub = order.order_type && order.order_type !== 'sale';
-      const typeLabel = isSub
-        ? (order.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد')
-        : 'فاتورة بيع';
+      const typeLabel = order.is_refund
+        ? 'مرتجع'
+        : isSub
+          ? (order.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد')
+          : 'فاتورة بيع';
+      const refundBadge = order.is_refund
+        ? `<span class="refund-badge" data-i18n="refund-badge">مرتجع</span>`
+        : '';
+      const refundedBadge = order.refunded_at && !order.is_refund
+        ? `<span class="refund-badge" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">تم إرجاعه</span>`
+        : '';
       const typeBadge = isSub
         ? `<span class="payment-badge" style="background:#dbeafe;color:#1e40af">${escHtml(typeLabel)}</span>${order.notes ? `<br><span style="font-size:11px;color:#64748b">${escHtml(order.notes)}</span>` : ''}`
         : `<span class="payment-badge" style="background:#f1f5f9;color:#475569">${escHtml(typeLabel)}</span>`;
 
       let docType = I18N.t('doc-type-tax-invoice');
-      if (Number(order.consumption_amount) > 0 && order.consumption_receipt_id && order.invoice_seq) {
+      if (order.is_refund) {
+        docType = I18N.t('refund-badge') || 'مرتجع';
+      } else if (Number(order.consumption_amount) > 0 && order.consumption_receipt_id && order.invoice_seq) {
         docType = I18N.t('doc-type-mixed');
       }
       const docTypeBadge = `<span class="payment-badge" style="background:#ccfbf1;color:#0f766e">${escHtml(docType)}</span>`;
@@ -519,7 +540,7 @@
         <td class="inv-num-cell">${seqNum}</td>
         <td style="direction:ltr;text-align:right">${escHtml(formatDate(order.created_at))}</td>
         <td>${order.customer_name ? escHtml(order.customer_name) + (order.phone ? `<br><span style="font-size:12px;color:#94a3b8">${escHtml(order.phone)}</span>` : '') : '<span style="color:#94a3b8">—</span>'}</td>
-        <td>${docTypeBadge}<br>${typeBadge}</td>
+        <td>${docTypeBadge}<br>${typeBadge}${refundBadge ? '<br>' + refundBadge : ''}${refundedBadge ? '<br>' + refundedBadge : ''}</td>
         <td><span class="payment-badge ${paymentClass(order.payment_method)}">${escHtml(paymentLabel(order.payment_method))}</span></td>
         <td class="total-cell">${fmtLtr(total)} <span class="sar">&#xE900;</span></td>
         <td>
@@ -643,14 +664,96 @@
         return;
       }
       renderInvoiceModal(res.order, res.items, seqNum, res.subscription || null);
+      const order = res.order;
+      if (order.is_refund || order.refunded_at) {
+        els.btnInvRefund.style.display = 'none';
+      } else {
+        els.btnInvRefund.style.display = '';
+        els.btnInvRefund.dataset.orderId = orderId;
+      }
     } catch (err) {
       showToast(I18N.t('invoices-err-generic'), 'error');
     }
   }
 
+  async function openRefundModal(orderId) {
+    refundTargetOrderId = orderId;
+    const res = await window.api.getOrderForRefund(orderId);
+    if (!res.success) {
+      showToast(res.error || I18N.t('refund-err-not-found'), 'error');
+      return;
+    }
+    const order = res.order;
+    els.refundOriginalNo.textContent = order.order_number || '—';
+    els.refundCustomer.textContent = order.customer_name || '—';
+    els.refundAmount.textContent = sarFmt(order.total_amount);
+    els.refundReason.value = '';
+    els.refundModal.style.display = '';
+  }
+
+  async function confirmRefund() {
+    if (!refundTargetOrderId) return;
+    const btn = els.btnRefundConfirm;
+    btn.disabled = true;
+    try {
+      const reason = els.refundReason.value.trim();
+      const res = await window.api.createRefund({ originalOrderId: refundTargetOrderId, reason });
+      if (!res.success) throw new Error(res.error);
+      showToast(I18N.t('refund-success'), 'success');
+      els.refundModal.style.display = 'none';
+
+      if (res.orderNumber) {
+        var refundData = {
+          orderNum: res.orderNumber,
+          isRefund: true,
+          originalOrderNumber: res.originalOrderNumber,
+          amount: res.amount,
+          autoPrint: true
+        };
+        // Try to populate with full invoice data from the original invoice modal
+        var s = state.appSettings || {};
+        refundData.shopNameAr = s.laundryNameAr || '';
+        refundData.shopNameEn = s.laundryNameEn || '';
+        refundData.shopAddressAr = s.locationAr || '';
+        refundData.shopAddressEn = s.locationEn || '';
+        refundData.shopPhone = s.phone || '';
+        refundData.shopEmail = s.email || '';
+        refundData.vatNumber = s.vatNumber || '';
+        refundData.commercialRegister = s.commercialRegister || '';
+        refundData.logoDataUrl = s.logoDataUrl || '';
+        refundData.customFields = s.customFields || [];
+        refundData.date = formatInvoiceDate(new Date().toISOString());
+        refundData.payment = 'مرتجع';
+        refundData.custName = els.invCustName.textContent || '—';
+        refundData.custPhone = els.invCustPhone.textContent || '—';
+        refundData.total = Number(res.amount || 0);
+        // Copy items from last A4 data if available
+        if (state.lastA4Data && state.lastA4Data.items) {
+          refundData.items = state.lastA4Data.items.map(function (item) {
+            return { ...item };
+          });
+          refundData.subtotal = state.lastA4Data.subtotal || 0;
+          refundData.discount = state.lastA4Data.discount || 0;
+          refundData.discountLabel = state.lastA4Data.discountLabel || '';
+          refundData.extra = state.lastA4Data.extra || 0;
+          refundData.vatRate = state.lastA4Data.vatRate || 0;
+          refundData.priceDisplayMode = state.lastA4Data.priceDisplayMode || 'exclusive';
+        }
+        refundData.vatAmount = -(state.lastA4Data && state.lastA4Data.vatAmount ? Math.abs(state.lastA4Data.vatAmount) : 0);
+        localStorage.setItem('a4InvoiceData', JSON.stringify(refundData));
+        window.open('/screens/invoice-a4/invoice-a4.html', '_blank', 'width=960,height=1120,scrollbars=yes');
+      }
+      await loadOrders();
+    } catch (err) {
+      showToast(err.message || 'فشل', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function renderInvoiceModal(order, items, seqNum, subscription) {
     const s = state.appSettings || {};
-    const displaySeq = order.invoice_seq || seqNum;
+    const displaySeq = order.is_refund ? order.order_number : (order.invoice_seq || seqNum);
 
     /* Shop info */
     const shopName = s.laundryNameAr || s.laundryNameEn || '';
@@ -1002,7 +1105,8 @@
         vatAmount:   fmtLtr(vatAmount),
         tlvBase64:   order.zatca_qr || null
       } : null,
-      autoPrint: false
+      autoPrint: false,
+      isRefund: !!order.is_refund,
     };
 
     /* ── Show modal (thermal or A4) ── */
@@ -1189,6 +1293,22 @@
         els.btnInvExportPdf.disabled = false;
         els.btnInvExportPdf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg><span>تصدير PDF</span>';
       }
+    });
+
+    /* Refund button */
+    els.btnInvRefund.addEventListener('click', () => {
+      const orderId = els.btnInvRefund.dataset.orderId;
+      if (orderId) openRefundModal(Number(orderId));
+    });
+    els.btnRefundConfirm.addEventListener('click', confirmRefund);
+    function closeRefundModal() {
+      els.refundModal.style.display = 'none';
+      refundTargetOrderId = null;
+    }
+    els.btnRefundCancel.addEventListener('click', closeRefundModal);
+    els.btnRefundClose.addEventListener('click', closeRefundModal);
+    els.refundModal.addEventListener('click', (e) => {
+      if (e.target === els.refundModal) closeRefundModal();
     });
 
     document.addEventListener('keydown', (e) => {

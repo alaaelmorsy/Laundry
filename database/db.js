@@ -105,6 +105,7 @@ async function initialize() {
   await migrateOrderTypeColumn();
   await migrateOrderItemsNullable();
   await migrateSubscriptionPeriodsOrderId();
+  await migrateOrdersRefundColumns();
 }
 
 async function migrateOrdersZatcaColumns() {
@@ -675,6 +676,35 @@ async function migrateSubscriptionPeriodsCreatedAt() {
     }
   } catch (e) {
     console.error('migrateSubscriptionPeriodsCreatedAt:', e);
+  }
+}
+
+async function migrateOrdersRefundColumns() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders'`
+    );
+    const set = new Set(cols.map(r => r.COLUMN_NAME));
+    if (!set.has('is_refund')) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN is_refund TINYINT(1) NOT NULL DEFAULT 0`);
+    }
+    if (!set.has('refund_of_order_id')) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN refund_of_order_id INT DEFAULT NULL`);
+    }
+    if (!set.has('refund_reason')) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN refund_reason TEXT DEFAULT NULL`);
+    }
+    if (!set.has('refunded_at')) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN refunded_at DATETIME DEFAULT NULL`);
+    }
+    if (!set.has('refunded_by')) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN refunded_by VARCHAR(100) DEFAULT NULL`);
+    }
+    await pool.query(`CREATE INDEX idx_orders_is_refund ON orders(is_refund)`).catch(() => {});
+    await pool.query(`CREATE INDEX idx_orders_refund_of ON orders(refund_of_order_id)`).catch(() => {});
+  } catch (e) {
+    console.error('migrateOrdersRefundColumns:', e);
   }
 }
 
@@ -3918,6 +3948,173 @@ async function refundConsumptionReceipt({ receiptSeq, reason, refundedBy } = {})
   };
 }
 
+async function generateRefundNumber() {
+  const [rows] = await pool.query(
+    `SELECT order_number FROM orders
+     WHERE order_number REGEXP '^R[0-9]+$'
+     ORDER BY CAST(SUBSTRING(order_number, 2) AS UNSIGNED) DESC LIMIT 1`
+  );
+  let next = 1;
+  if (rows.length) {
+    const num = parseInt(rows[0].order_number.slice(1), 10);
+    if (!isNaN(num)) next = num + 1;
+  }
+  return `R${next}`;
+}
+
+async function getOrderForRefund(orderId) {
+  const [rows] = await pool.query(
+    `SELECT o.*,
+            c.customer_name, c.phone
+     FROM orders o
+     LEFT JOIN customers c ON c.id = o.customer_id
+     WHERE o.id = ?`,
+    [orderId]
+  );
+  if (!rows.length) return null;
+  const order = rows[0];
+  const [items] = await pool.query(
+    `SELECT oi.*, p.name_ar AS product_name, ls.name_ar AS service_name
+     FROM order_items oi
+     LEFT JOIN products p ON p.id = oi.product_id
+     LEFT JOIN laundry_services ls ON ls.id = oi.laundry_service_id
+     WHERE oi.order_id = ?`,
+    [orderId]
+  );
+  return { ...order, items };
+}
+
+async function createRefund({ originalOrderId, reason, createdBy }) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orders] = await conn.query(
+      `SELECT * FROM orders WHERE id = ? FOR UPDATE`,
+      [originalOrderId]
+    );
+    if (!orders.length) throw new Error('الإيصال غير موجود');
+    const original = orders[0];
+    if (original.is_refund) throw new Error('لا يمكن إرجاع سجل مرتجع');
+    if (original.refunded_at) throw new Error('هذا الإيصال تم إرجاعه مسبقًا');
+
+    const refundNumber = await generateRefundNumber();
+    const totalAmount = Number(original.total_amount) || 0;
+
+    const [insertRes] = await conn.query(
+      `INSERT INTO orders (
+        order_number, customer_id, subscription_period_id,
+        subtotal, discount_amount, extra_amount, vat_rate, vat_amount, total_amount,
+        paid_amount, remaining_amount,
+        payment_method, payment_status, notes, created_by, created_at,
+        is_refund, refund_of_order_id, refund_reason, refunded_at, refunded_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, ?, ?, NOW(), ?)`,
+      [
+        refundNumber,
+        original.customer_id,
+        original.subscription_period_id,
+        -(Number(original.subtotal) || 0),
+        -(Number(original.discount_amount) || 0),
+        -(Number(original.extra_amount) || 0),
+        original.vat_rate,
+        -(Number(original.vat_amount) || 0),
+        -totalAmount,
+        -totalAmount, 0,
+        original.payment_method, 'paid',
+        `مرتجع إيصال رقم ${original.order_number}`,
+        createdBy || null,
+        original.id,
+        reason || null,
+        createdBy || null
+      ]
+    );
+    const refundId = insertRes.insertId;
+
+    await conn.query(
+      `UPDATE orders SET refunded_at = NOW(), refunded_by = ? WHERE id = ?`,
+      [createdBy || null, originalOrderId]
+    );
+
+    const [origItems] = await conn.query(
+      `SELECT * FROM order_items WHERE order_id = ?`,
+      [originalOrderId]
+    );
+    for (const item of origItems) {
+      await conn.query(
+        `INSERT INTO order_items (order_id, product_id, laundry_service_id, quantity, unit_price, line_total)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [refundId, item.product_id, item.laundry_service_id, item.quantity, item.unit_price, -(Number(item.line_total) || 0)]
+      );
+    }
+
+    let subscriptionInfo = null;
+    if (original.subscription_period_id) {
+      const [periods] = await conn.query(
+        `SELECT sp.*, cs.id AS cs_id
+         FROM subscription_periods sp
+         JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
+         WHERE sp.id = ? FOR UPDATE`,
+        [original.subscription_period_id]
+      ).catch(() => []);
+      const period = periods && periods.length ? periods[0] : null;
+      if (period) {
+        const newBalance = Number(period.credit_remaining || 0) + totalAmount;
+        await conn.query(
+          `UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?`,
+          [newBalance, original.subscription_period_id]
+        );
+        try {
+          await conn.query(
+            `INSERT INTO subscription_ledger
+              (subscription_id, period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
+             VALUES (?, ?, 'refund', ?, ?, 'order', ?, ?, ?)`,
+            [
+              period.cs_id,
+              original.subscription_period_id,
+              totalAmount,
+              newBalance,
+              refundId,
+              `مرتجع إيصال رقم ${original.order_number}`,
+              createdBy || null
+            ]
+          );
+        } catch (_) {}
+        subscriptionInfo = {
+          subscriptionId: period.cs_id,
+          periodId: original.subscription_period_id,
+          newBalance
+        };
+      }
+    }
+
+    await conn.commit();
+    return {
+      id: refundId,
+      orderNumber: refundNumber,
+      originalOrderNumber: original.order_number,
+      amount: totalAmount,
+      subscription: subscriptionInfo
+    };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getSubscriptionTransactions(subscriptionId) {
+  const [rows] = await pool.query(
+    `SELECT sl.id, sl.entry_type AS type, sl.amount, sl.balance_after,
+            sl.ref_id AS reference_order_id,
+            sl.notes AS description, sl.created_by AS performed_by, sl.created_at
+     FROM subscription_ledger sl
+     WHERE sl.subscription_id = ?
+     ORDER BY sl.created_at DESC, sl.id DESC`,
+    [subscriptionId]
+  );
+  return rows;
+}
+
 async function createOrder({ orderNumber, customerId, items, subtotal, discountAmount, discountLabel, extraAmount = 0,
   vatRate, vatAmount, totalAmount, paymentMethod, paidCash = 0, paidCard = 0,
   starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt }) {
@@ -4243,6 +4440,7 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
            o.notes, o.created_at, o.created_by, o.price_display_mode,
            o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
+           o.is_refund, o.refunded_at,
            c.customer_name, c.phone
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
@@ -4269,6 +4467,7 @@ async function getOrderById(id) {
            o.hanger_id, h.hanger_number,
            o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
+           o.is_refund, o.refunded_at, o.refund_reason, o.refunded_by,
            c.customer_name, c.phone, c.tax_number AS customer_vat, c.address AS customer_address, c.city AS customer_city
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
@@ -5824,6 +6023,8 @@ module.exports = {
   // Credit Note functions
   createCreditNotesTable, getInvoiceBySeq, createCreditNote,
   getCreditNotes, getCreditNoteById,
+  // Refund functions
+  generateRefundNumber, createRefund, getOrderForRefund, getSubscriptionTransactions,
   // Offer functions
   createOffersTable, getAllOffers, getActiveOffers, createOffer, updateOffer, toggleOfferStatus, deleteOffer,
   // Report functions

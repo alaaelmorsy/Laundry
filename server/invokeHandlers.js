@@ -905,6 +905,43 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'getOrderForRefund': {
+      try {
+        const { orderId } = payload || {};
+        if (!orderId) return { success: false, error: 'orderId مطلوب' };
+        const order = await db.getOrderForRefund(orderId);
+        if (!order) return { success: false, error: 'الإيصال غير موجود' };
+        if (order.is_refund) return { success: false, error: 'هذا السجل هو مرتجع' };
+        if (order.refunded_at) return { success: false, error: 'هذا الإيصال تم إرجاعه مسبقًا', refundedAt: order.refunded_at, refundedBy: order.refunded_by };
+        return { success: true, order };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+
+    case 'createRefund': {
+      try {
+        const { originalOrderId, reason } = payload || {};
+        if (!originalOrderId) return { success: false, error: 'originalOrderId مطلوب' };
+        const createdBy = (_user && (_user.username || _user.full_name || _user.name)) || null;
+        const result = await db.createRefund({ originalOrderId, reason: reason || null, createdBy });
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+
+    case 'getSubscriptionTransactions': {
+      try {
+        const { subscriptionId } = payload || {};
+        if (!subscriptionId) return { success: false, error: 'subscriptionId مطلوب' };
+        const transactions = await db.getSubscriptionTransactions(subscriptionId);
+        return { success: true, transactions };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+
     case 'getOrderById': {
       try {
         const data = await db.getOrderById(payload.id);

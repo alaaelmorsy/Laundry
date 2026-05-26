@@ -52,6 +52,16 @@
     setText('a4VatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
     setText('a4CrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
 
+    /* ── Title band ── */
+    var titleBand = document.querySelector('.a4-title-band');
+    if (titleBand) {
+      if (data.isRefund) {
+        titleBand.innerHTML = '<span style="color:#dc2626">مرتجع / REFUND</span>';
+      } else {
+        titleBand.innerHTML = '<span>فاتورة ضريبية مبسطة</span><span class="a4-title-sep">•</span><span>Simplified Tax Invoice</span>';
+      }
+    }
+
     /* Custom fields */
     var a4CFElAr = document.getElementById('a4CustomFieldsAr');
     var a4CFElEn = document.getElementById('a4CustomFieldsEn');
@@ -249,6 +259,15 @@
     try { data = JSON.parse(raw); } catch (e) { return; }
 
     fillInvoice(data);
+
+    if (data.isRefund) {
+      document.body.classList.add('is-refund');
+      var refundBadge = document.getElementById('a4RefundBadge');
+      if (refundBadge) refundBadge.style.display = '';
+      if (data.originalOrderNumber) {
+        setText('a4RefundOriginal', 'مرجع الإيصال الأصلي: ' + data.originalOrderNumber);
+      }
+    }
 
     if (data.autoPrint) {
       setTimeout(function () { window.print(); }, 800);

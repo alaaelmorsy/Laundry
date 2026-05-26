@@ -575,3 +575,22 @@ html, body {
   .a4-title-band { background: #fff !important; }
   .a4-footer { background: #fff !important; }
 }
+
+.a4-refund-badge {
+  text-align: center;
+  background: #dc2626;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  padding: 6px 0;
+  margin: 0 -2px;
+  letter-spacing: 2px;
+}
+.a4-refund-original {
+  text-align: center;
+  font-size: 13px;
+  color: #dc2626;
+  padding: 4px 0;
+  margin: 0 -2px;
+  border-bottom: 2px solid #dc2626;
+}
