@@ -103,6 +103,15 @@
               </svg>
               <span data-i18n="pos-btn-process-invoice">معالجة الفاتورة</span>
             </button>
+
+            <button id="btnRefundConsumptionReceipt" class="btn-process-invoice" type="button"
+              title="مرتجع إيصال اشتراك">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-3-6.7" />
+                <polyline stroke-linecap="round" stroke-linejoin="round" points="21 3 21 12 12 12" />
+              </svg>
+              <span>مرتجع إيصال اشتراك</span>
+            </button>
           </div>
 
           <!-- Active: compact inline banner (shown when invoice loaded) -->
@@ -984,6 +993,14 @@
           <span class="inv-meta-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
           <span class="inv-meta-val" id="crModalReceiptNum" dir="ltr"></span>
         </div>
+        <div class="inv-meta-row" id="crModalRefundNumRow" style="display:none">
+          <span class="inv-meta-label">رقم المرتجع</span>
+          <span class="inv-meta-val" id="crModalRefundNum" dir="ltr"></span>
+        </div>
+        <div class="inv-meta-row" id="crModalRefundReasonRow" style="display:none">
+          <span class="inv-meta-label">سبب الإرجاع</span>
+          <span class="inv-meta-val" id="crModalRefundReason"></span>
+        </div>
         <div class="inv-meta-row">
           <span class="inv-meta-label">التاريخ</span>
           <span class="inv-meta-val" id="crModalDate" dir="ltr"></span>
@@ -1005,10 +1022,50 @@
           </thead>
           <tbody id="crModalItemsBody"></tbody>
         </table>
+        <div class="inv-totals-box">
+          <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalAmountLabel" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crModalConsumed" dir="ltr"></span></div>
+          <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalBalBeforeLabel" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crModalBalBefore" dir="ltr"></span></div>
+          <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalBalAfterLabel" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crModalBalAfter" dir="ltr"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== REFUND RECEIPT SEARCH MODAL ===== -->
+<div id="refundReceiptSearchModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+  <div class="inv-dialog" style="max-width: 720px;">
+    <div class="inv-dialog-footer no-print">
+      <button id="btnRefundSearchClose" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
+      <button id="btnRefundSearch" class="btn-inv-action btn-inv-print" type="button">بحث</button>
+    </div>
+    <div class="inv-dialog-body">
+      <div class="inv-paper">
+        <div class="inv-meta-row" style="justify-content:center">
+          <span class="inv-meta-label" style="font-weight:900">مرتجع إيصال اشتراك</span>
+        </div>
         <div class="inv-divider-thick inv-sep"></div>
-        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crModalConsumed" dir="ltr"></span></div>
-        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crModalBalBefore" dir="ltr"></span></div>
-        <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crModalBalAfter" dir="ltr"></span></div>
+        <div class="inv-meta-row">
+          <span class="inv-meta-label">ابحث برقم الإيصال أو رقم الاشتراك</span>
+        </div>
+        <div class="inv-meta-row">
+          <input id="refundReceiptSearchInput" type="text" class="form-input" style="width: 100%;" placeholder="C-123 أو 12345" autocomplete="off" />
+        </div>
+        <div id="refundSearchResult" style="margin-top:14px"></div>
+
+        <div id="refundSearchConfirmArea" style="display:none;margin-top:12px">
+          <div class="inv-meta-row">
+            <span class="inv-meta-label">سبب الإرجاع (اختياري)</span>
+          </div>
+          <div class="inv-meta-row">
+            <input id="refundReceiptReasonInput" type="text" class="form-input" style="width: 100%;" autocomplete="off" />
+          </div>
+          <div class="inv-meta-row" style="justify-content:center">
+            <button id="btnRefundConfirmReceipt" class="btn-inv-action btn-inv-print" type="button">
+              <span>تأكيد المرتجع</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

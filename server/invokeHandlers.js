@@ -885,6 +885,26 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'searchConsumptionReceiptForRefund': {
+      try {
+        return await db.searchConsumptionReceiptForRefund(payload || {});
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'refundConsumptionReceipt': {
+      try {
+        const createdBy = (_user && (_user.username || _user.full_name || _user.name)) || 'system';
+        return await db.refundConsumptionReceipt({
+          ...(payload || {}),
+          refundedBy: createdBy
+        });
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'getOrderById': {
       try {
         const data = await db.getOrderById(payload.id);

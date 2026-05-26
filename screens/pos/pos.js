@@ -43,6 +43,8 @@
     _creditNoteModalMode: false,
     activeOffer: null,
     lastZatcaQr: null,
+    refundSearchTarget: null,
+    shouldClearCartAfterConsumptionPrint: true,
   };
 
   /* ========== DOM REFS ========== */
@@ -286,6 +288,25 @@
     invCNRefundRow:        document.getElementById('invCNRefundRow'),
     invCNRefundText:       document.getElementById('invCNRefundText'),
     invOrderNumRow:        document.getElementById('invOrderNumRow'),
+    btnRefundConsumptionReceipt: document.getElementById('btnRefundConsumptionReceipt'),
+
+    refundReceiptSearchModal: document.getElementById('refundReceiptSearchModal'),
+    refundReceiptSearchInput: document.getElementById('refundReceiptSearchInput'),
+    btnRefundSearch:           document.getElementById('btnRefundSearch'),
+    btnRefundSearchClose:     document.getElementById('btnRefundSearchClose'),
+    refundSearchResult:       document.getElementById('refundSearchResult'),
+    refundSearchConfirmArea:  document.getElementById('refundSearchConfirmArea'),
+    refundReceiptReasonInput: document.getElementById('refundReceiptReasonInput'),
+    btnRefundConfirmReceipt:   document.getElementById('btnRefundConfirmReceipt'),
+
+    // Consumption receipt modal - refund mode UI fields
+    crModalAmountLabel:        document.getElementById('crModalAmountLabel'),
+    crModalBalBeforeLabel:     document.getElementById('crModalBalBeforeLabel'),
+    crModalBalAfterLabel:      document.getElementById('crModalBalAfterLabel'),
+    crModalRefundNumRow:      document.getElementById('crModalRefundNumRow'),
+    crModalRefundNum:         document.getElementById('crModalRefundNum'),
+    crModalRefundReasonRow:   document.getElementById('crModalRefundReasonRow'),
+    crModalRefundReason:      document.getElementById('crModalRefundReason'),
   };
 
   /* ========== UTILS ========== */
@@ -2081,6 +2102,12 @@
           setTimeout(printNext, 120);
         } else {
           document.body.classList.remove('print-consumption-receipt');
+          // After a successful save + print request, empty the cart automatically.
+          if (!state._creditNoteModalMode && !state.viewingDeferredInvoice && state.shouldClearCartAfterConsumptionPrint !== false) {
+            clearCart();
+          }
+          // Keep the receipt modal visible after printing so the user can
+          // export PDF or review details. The user closes it manually.
         }
       }
       window.addEventListener('afterprint', afterPrint);
@@ -2106,6 +2133,15 @@
       crLogo.src = s.logoDataUrl;
       if (crLogoWrap) crLogoWrap.style.display = '';
     } else if (crLogoWrap) crLogoWrap.style.display = 'none';
+
+    // Ensure modal is in "consumption" mode (hide refund-only UI).
+    if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
+    if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = 'none';
+    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المستهلك';
+    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل';
+    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد';
+    var titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
+    if (titleEl) titleEl.textContent = 'إيصال استهلاك';
 
     var consumed = Number(result.consumptionAmount || 0);
     var balAfter = subscription && subscription.credit_remaining != null
@@ -2135,7 +2171,8 @@
 
     var tbody = document.getElementById('crModalItemsBody');
     if (tbody) {
-      tbody.innerHTML = buildConsumptionItemsHtml(state.cart);
+      var itemsForHtml = Array.isArray(result && result.items) ? result.items : state.cart;
+      tbody.innerHTML = buildConsumptionItemsHtml(itemsForHtml);
     }
 
     if (els.consumptionReceiptModal) {
@@ -2143,6 +2180,234 @@
       if (autoOpenPrint) {
         setTimeout(printConsumptionReceipt, 500);
       }
+    }
+  }
+
+  /* ========== REFUND (SUBSCRIPTION RECEIPT) FLOW ========== */
+  function openRefundSearchModal() {
+    state.refundSearchTarget = null;
+    if (els.refundReceiptSearchModal) els.refundReceiptSearchModal.style.display = 'flex';
+    if (els.refundSearchResult) els.refundSearchResult.innerHTML = '';
+    if (els.refundSearchConfirmArea) els.refundSearchConfirmArea.style.display = 'none';
+    if (els.refundReceiptReasonInput) els.refundReceiptReasonInput.value = '';
+    if (els.refundReceiptSearchInput) {
+      els.refundReceiptSearchInput.value = '';
+      setTimeout(() => els.refundReceiptSearchInput.focus(), 0);
+    }
+  }
+
+  function hideRefundSearchModal() {
+    if (els.refundReceiptSearchModal) els.refundReceiptSearchModal.style.display = 'none';
+  }
+
+  function buildRefundSearchItemsPreview(items) {
+    // Reuse POS items renderer for a compact preview.
+    if (!Array.isArray(items) || items.length === 0) return '—';
+    return `
+      <table class="inv-table" style="width:100%;margin-top:10px">
+        <thead>
+          <tr>
+            <th class="inv-th-name">النوع</th>
+            <th class="inv-th-num">عدد</th>
+            <th class="inv-th-num">الإجمالي</th>
+            <th class="inv-th-name">العملية</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildConsumptionItemsHtml(items)}
+        </tbody>
+      </table>
+    `;
+  }
+
+  async function handleRefundSearch() {
+    if (!els.refundReceiptSearchInput) return;
+    const q = els.refundReceiptSearchInput.value.trim();
+    if (!q) {
+      showTopToast('أدخل رقم الإيصال أو رقم الاشتراك للبحث', 'error');
+      return;
+    }
+
+    if (els.refundSearchResult) els.refundSearchResult.innerHTML = 'جارٍ البحث...';
+    if (els.refundSearchConfirmArea) els.refundSearchConfirmArea.style.display = 'none';
+    if (els.btnRefundConfirmReceipt) els.btnRefundConfirmReceipt.disabled = false;
+
+    try {
+      const res = await window.api.searchConsumptionReceiptForRefund({ q });
+      if (!res || !res.success || !res.receipt) {
+        const msg = (res && res.message) ? res.message : 'فشل البحث';
+        showTopToast(msg, 'error');
+        if (els.refundSearchResult) els.refundSearchResult.innerHTML = msg;
+        return;
+      }
+
+      const receipt = res.receipt;
+      const already = res.alreadyRefunded;
+      state.refundSearchTarget = { receipt, alreadyRefunded: already };
+
+      const alreadyHtml = already
+        ? `<div style="margin-top:8px;color:#b91c1c;font-weight:800">
+            تم إرجاع هذا الإيصال مسبقًا بتاريخ ${String(already.refundedAt || '').slice(0, 10) || '—'}
+          </div>`
+        : '';
+
+      if (els.refundSearchConfirmArea) {
+        els.refundSearchConfirmArea.style.display = already ? 'none' : '';
+      }
+
+      if (els.refundSearchResult) {
+        els.refundSearchResult.innerHTML = `
+          <div style="font-size:13px; color: #000; font-weight: 700;">
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">الإيصال:</span>
+              <span class="inv-meta-val" dir="ltr">${escHtml(receipt.receiptSeqLabel || ('C-' + receipt.receiptSeq))}</span>
+            </div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">العميل:</span>
+              <span class="inv-meta-val">${escHtml(receipt.customer?.name || '—')}</span>
+            </div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">الباقة:</span>
+              <span class="inv-meta-val">${escHtml(receipt.packageName || '—')}</span>
+            </div>
+            <div class="inv-divider-thick inv-sep"></div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">المبلغ المستهلك:</span>
+              <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.amountConsumed || 0))}</span>
+            </div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">الرصيد قبل:</span>
+              <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.balanceBefore || 0))}</span>
+            </div>
+            <div class="inv-meta-row">
+              <span class="inv-meta-label">الرصيد بعد:</span>
+              <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.balanceAfter || 0))}</span>
+            </div>
+            <div class="inv-divider-thick inv-sep"></div>
+            ${buildRefundSearchItemsPreview(receipt.items)}
+          </div>
+          ${alreadyHtml}
+        `;
+      }
+    } catch (err) {
+      showTopToast(err.message || 'حدث خطأ أثناء البحث', 'error');
+      if (els.refundSearchResult) els.refundSearchResult.innerHTML = err.message || 'حدث خطأ أثناء البحث';
+    }
+  }
+
+  async function handleRefundConfirm() {
+    if (!state.refundSearchTarget || !state.refundSearchTarget.receipt) return;
+    const target = state.refundSearchTarget;
+    if (target.alreadyRefunded) {
+      showTopToast('هذا الإيصال تم إرجاعه مسبقًا', 'error');
+      return;
+    }
+
+    if (els.btnRefundConfirmReceipt) {
+      els.btnRefundConfirmReceipt.disabled = true;
+      els.btnRefundConfirmReceipt.innerHTML = '<span>جارٍ تنفيذ المرتجع...</span>';
+    }
+
+    try {
+      const reason = els.refundReceiptReasonInput ? els.refundReceiptReasonInput.value.trim() : '';
+      const res = await window.api.refundConsumptionReceipt({
+        receiptSeq: target.receipt.receiptSeq,
+        reason
+      });
+      if (!res || !res.success) {
+        throw new Error(res && res.message ? res.message : 'فشل تنفيذ المرتجع');
+      }
+
+      hideRefundSearchModal();
+      // Open and print the refund receipt.
+      showRefundReceiptModal(res, true);
+    } catch (err) {
+      showTopToast(err.message || 'فشل تنفيذ المرتجع', 'error');
+    } finally {
+      if (els.btnRefundConfirmReceipt) {
+        els.btnRefundConfirmReceipt.disabled = false;
+        els.btnRefundConfirmReceipt.innerHTML = '<span>تأكيد المرتجع</span>';
+      }
+    }
+  }
+
+  function showRefundReceiptModal(refundRes, autoOpenPrint) {
+    if (!refundRes || !refundRes.receipt || !refundRes.refund) return;
+    const receipt = refundRes.receipt;
+    const refund = refundRes.refund;
+
+    state.shouldClearCartAfterConsumptionPrint = false;
+
+    // Shop / branding (same layout as consumption receipt)
+    var s = state.appSettings || {};
+    var lang = getLang();
+    var shopName = (lang === 'ar' ? s.laundryNameAr : s.laundryNameEn) || s.laundryNameAr || '';
+    var crShop = document.getElementById('crModalShopName');
+    var crAddr = document.getElementById('crModalShopAddress');
+    var crPhone = document.getElementById('crModalShopPhone');
+    if (crShop) crShop.textContent = shopName;
+    if (crAddr) crAddr.textContent = s.locationAr || s.locationEn || '';
+    if (crPhone) crPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
+
+    var crLogoWrap = document.getElementById('crModalLogoWrap');
+    var crLogo = document.getElementById('crModalLogo');
+    if (s.logoDataUrl && crLogo) {
+      crLogo.src = s.logoDataUrl;
+      if (crLogoWrap) crLogoWrap.style.display = '';
+    } else if (crLogoWrap) {
+      crLogoWrap.style.display = 'none';
+    }
+
+    // Title
+    const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
+    if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
+
+    // Ensure refund-only UI is visible
+    if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = '';
+    if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = refund.reason ? '' : 'none';
+
+    if (els.crModalRefundNum) els.crModalRefundNum.textContent = refund.creditNoteNumber || ('CN-' + (refund.creditNoteSeq || '—'));
+    if (els.crModalRefundReason) els.crModalRefundReason.textContent = refund.reason || '';
+
+    // Receipt numbers (spec: show original receipt + refund number)
+    var receiptNumEl = document.getElementById('crModalReceiptNum');
+    if (receiptNumEl) receiptNumEl.textContent = receipt.receiptSeqLabel || ('C-' + receipt.receiptSeq);
+
+    // Meta
+    if (document.getElementById('crModalDate')) {
+      const createdAt = receipt.createdAt ? new Date(receipt.createdAt) : new Date();
+      document.getElementById('crModalDate').textContent = formatInvoiceDate(createdAt.toISOString());
+    }
+
+    document.getElementById('crModalCustomer').textContent = receipt.customer?.name || '—';
+    document.getElementById('crModalPhone').textContent = receipt.customer?.phone || '—';
+
+    var subNum = receipt.customer?.subscriptionNumber || receipt.subscriptionNumber || '';
+    var subRefEl = document.getElementById('crModalSubRef');
+    if (subRefEl) subRefEl.textContent = formatSubscriptionDisplayNum(subNum);
+
+    document.getElementById('crModalPackage').textContent = receipt.packageName || '—';
+
+    // Amounts & balances
+    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المسترجع';
+    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
+    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+
+    var sarHtml = '<span class="sar">&#xE900;</span> ';
+    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(refund.refundAmount || receipt.amountConsumed || 0);
+    document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(refund.oldBalance || 0);
+    document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(refund.newBalance || 0);
+
+    // Items
+    var tbody = document.getElementById('crModalItemsBody');
+    if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(receipt.items);
+
+    // Used for PDF export file naming.
+    state.viewingConsumptionReceiptNum = refund.creditNoteNumber || refund.creditNoteSeq || 'refund';
+
+    if (els.consumptionReceiptModal) {
+      els.consumptionReceiptModal.style.display = 'flex';
+      if (autoOpenPrint) setTimeout(printConsumptionReceipt, 500);
     }
   }
 
@@ -2820,6 +3085,7 @@
       var ratio = total > 0 && consumed > 0 && invoicePart > 0 ? invoicePart / total : 1;
 
       if (consumed > 0) {
+        state.shouldClearCartAfterConsumptionPrint = !!res.isConsumptionOnly;
         showConsumptionReceiptModal(res, subscription, true);
       }
 
@@ -2955,6 +3221,12 @@
           setTimeout(printNextCopy, 120);
         } else {
           cleanupPrintArtifacts();
+          // After a successful save + print request, empty the cart automatically.
+          if (!state._creditNoteModalMode && !state.viewingDeferredInvoice) {
+            clearCart();
+          }
+          // Keep the invoice modal visible after printing so the user can
+          // export PDF or review details. The user closes it manually.
         }
       }
 
@@ -3547,6 +3819,36 @@
     if (els.btnProcessInvoice) {
       els.btnProcessInvoice.addEventListener('click', handleProcessInvoice);
     }
+
+    if (els.btnRefundConsumptionReceipt) {
+      els.btnRefundConsumptionReceipt.addEventListener('click', () => {
+        openRefundSearchModal();
+      });
+    }
+
+    if (els.refundReceiptSearchModal) {
+      els.refundReceiptSearchModal.addEventListener('click', (e) => {
+        if (e.target === els.refundReceiptSearchModal) hideRefundSearchModal();
+      });
+    }
+
+    if (els.btnRefundSearchClose) {
+      els.btnRefundSearchClose.addEventListener('click', () => hideRefundSearchModal());
+    }
+
+    if (els.btnRefundSearch) {
+      els.btnRefundSearch.addEventListener('click', () => handleRefundSearch());
+    }
+
+    if (els.refundReceiptSearchInput) {
+      els.refundReceiptSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleRefundSearch();
+      });
+    }
+
+    if (els.btnRefundConfirmReceipt) {
+      els.btnRefundConfirmReceipt.addEventListener('click', () => handleRefundConfirm());
+    }
     if (els.invoiceSeqInput) {
       els.invoiceSeqInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleProcessInvoice();
@@ -3656,7 +3958,11 @@
       });
     }
     if (els.btnCrModalPrint) {
-      els.btnCrModalPrint.addEventListener('click', printConsumptionReceipt);
+      els.btnCrModalPrint.addEventListener('click', () => {
+        const isRefund = els.crModalRefundNumRow && els.crModalRefundNumRow.style.display !== 'none';
+        state.shouldClearCartAfterConsumptionPrint = !isRefund;
+        printConsumptionReceipt();
+      });
     }
     if (els.btnCrModalExportPdf) {
       els.btnCrModalExportPdf.addEventListener('click', async function () {

@@ -32,7 +32,8 @@
     pageSizeSelect: document.getElementById('pageSizeSelect'),
     receiptViewModal: document.getElementById('receiptViewModal'),
     btnCrClose: document.getElementById('btnCrClose'),
-    btnCrExportPdf: document.getElementById('btnCrExportPdf')
+    btnCrExportPdf: document.getElementById('btnCrExportPdf'),
+    btnCrPrint: document.getElementById('btnCrPrint')
   };
 
   function fmtLtr(n) { return Number(n || 0).toFixed(2); }
@@ -112,9 +113,13 @@
     }
     els.emptyState.style.display = 'none';
     els.paginationBar.style.display = 'flex';
-    els.tableBody.innerHTML = state.receipts.map((r) => `
+    els.tableBody.innerHTML = state.receipts.map((r) => {
+      const refundBadge = r.refund_id
+        ? ` <span class="badge-refunded" style="background-color: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 6px; display: inline-block; border: 1px solid #fca5a5;">مرتجع</span>`
+        : '';
+      return `
       <tr>
-        <td class="cr-num-cell">${escHtml(formatConsumptionReceiptNum(r.receipt_seq))}</td>
+        <td class="cr-num-cell">${escHtml(formatConsumptionReceiptNum(r.receipt_seq))}${refundBadge}</td>
         <td>${escHtml(r.customer_name || '—')}</td>
         <td dir="ltr">${escHtml(r.phone || '—')}</td>
         <td>${escHtml(formatSubscriptionDisplayNum(r.subscription_number || r.subscription_ref))}</td>
@@ -126,7 +131,8 @@
         <td>
           <button type="button" class="action-btn btn-view" data-id="${r.id}" title="عرض">عرض</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     els.tableBody.querySelectorAll('.btn-view').forEach((btn) => {
       btn.addEventListener('click', () => openReceipt(Number(btn.dataset.id)));
@@ -169,9 +175,50 @@
     document.getElementById('crPhone').textContent = r.phone || '—';
     document.getElementById('crSubRef').textContent = formatSubscriptionDisplayNum(r.subscription_number);
     document.getElementById('crPackage').textContent = r.package_name || '—';
-    document.getElementById('crConsumed').innerHTML = sarFmt(r.amount_consumed);
-    document.getElementById('crBalBefore').innerHTML = sarFmt(r.balance_before);
-    document.getElementById('crBalAfter').innerHTML = sarFmt(r.balance_after);
+
+    // Handle refund mode vs consumption mode display
+    const titleEl = document.querySelector('#receiptViewModal .cr-receipt-title');
+    const refundNumRow = document.getElementById('crRefundNumRow');
+    const refundReasonRow = document.getElementById('crRefundReasonRow');
+    const amountLabel = document.getElementById('crAmountLabel');
+    const balBeforeLabel = document.getElementById('crBalBeforeLabel');
+    const balAfterLabel = document.getElementById('crBalAfterLabel');
+
+    if (r.refund_id) {
+      if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
+      if (refundNumRow) {
+        refundNumRow.style.display = '';
+        document.getElementById('crRefundNum').textContent = r.credit_note_number || ('CN-' + (r.credit_note_seq || '—'));
+      }
+      if (refundReasonRow) {
+        if (r.refund_reason) {
+          refundReasonRow.style.display = '';
+          document.getElementById('crRefundReason').textContent = r.refund_reason;
+        } else {
+          refundReasonRow.style.display = 'none';
+        }
+      }
+      if (amountLabel) amountLabel.textContent = 'المبلغ المسترجع';
+      if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
+      if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+
+      document.getElementById('crConsumed').innerHTML = sarFmt(r.refund_amount || r.amount_consumed);
+      document.getElementById('crBalBefore').innerHTML = sarFmt(r.refund_old_balance != null ? r.refund_old_balance : r.balance_before);
+      document.getElementById('crBalAfter').innerHTML = sarFmt(r.refund_new_balance != null ? r.refund_new_balance : r.balance_after);
+
+      state.viewingReceiptNum = r.credit_note_number || r.credit_note_seq || 'refund';
+    } else {
+      if (titleEl) titleEl.textContent = 'إيصال استهلاك';
+      if (refundNumRow) refundNumRow.style.display = 'none';
+      if (refundReasonRow) refundReasonRow.style.display = 'none';
+      if (amountLabel) amountLabel.textContent = 'المبلغ المستهلك';
+      if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل';
+      if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد';
+
+      document.getElementById('crConsumed').innerHTML = sarFmt(r.amount_consumed);
+      document.getElementById('crBalBefore').innerHTML = sarFmt(r.balance_before);
+      document.getElementById('crBalAfter').innerHTML = sarFmt(r.balance_after);
+    }
 
     let items = r.items;
     if (r.order_id) {
@@ -194,9 +241,42 @@
     els.receiptViewModal.style.display = 'flex';
   }
 
+  function printReceipt() {
+    var copies = 1;
+    if (state.appSettings && state.appSettings.printCopies) {
+      const c = Number(state.appSettings.printCopies);
+      if (Number.isFinite(c) && c > 0) copies = Math.floor(c);
+    }
+    if (copies > 20) copies = 20;
+
+    var currentCopy = 0;
+    function printNext() {
+      if (currentCopy >= copies) return;
+      currentCopy += 1;
+      var handled = false;
+      function afterPrint() {
+        if (handled) return;
+        handled = true;
+        window.removeEventListener('afterprint', afterPrint);
+        if (currentCopy < copies) {
+          setTimeout(printNext, 120);
+        }
+      }
+      window.addEventListener('afterprint', afterPrint);
+      window.print();
+      setTimeout(afterPrint, 2500);
+    }
+    printNext();
+  }
+
   function bindEvents() {
     els.btnBack.addEventListener('click', () => window.api.navigateBack());
     els.btnCrClose.addEventListener('click', () => { els.receiptViewModal.style.display = 'none'; });
+    if (els.btnCrPrint) {
+      els.btnCrPrint.addEventListener('click', () => {
+        printReceipt();
+      });
+    }
     if (els.btnCrExportPdf) {
       els.btnCrExportPdf.addEventListener('click', async () => {
         const paperEl = document.getElementById('crPaper');

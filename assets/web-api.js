@@ -279,6 +279,8 @@
     getOrders: (filters) => invoke('getOrders', filters),
     getConsumptionReceipts: (filters) => invoke('getConsumptionReceipts', filters),
     getConsumptionReceiptById: (data) => invoke('getConsumptionReceiptById', data),
+    searchConsumptionReceiptForRefund: (data) => invoke('searchConsumptionReceiptForRefund', data),
+    refundConsumptionReceipt: (data) => invoke('refundConsumptionReceipt', data),
     getOrdersBySubscription: (data) => invoke('getOrdersBySubscription', data),
     getSubscriptionInvoices: (filters) => invoke('getSubscriptionInvoices', filters),
     getOrderById: (data) => invoke('getOrderById', data),

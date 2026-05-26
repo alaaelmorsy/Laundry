@@ -118,6 +118,14 @@
           </svg>
           <span>تصدير PDF</span>
         </button>
+        <button id="btnCrPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>طباعة</span>
+        </button>
       </div>
       <div class="inv-dialog-body">
         <div class="inv-paper" id="crPaper">
@@ -134,6 +142,14 @@
           <div class="inv-meta-row">
             <span class="inv-meta-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
             <span class="inv-meta-val" id="crReceiptNum" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="crRefundNumRow" style="display:none">
+            <span class="inv-meta-label">رقم المرتجع</span>
+            <span class="inv-meta-val" id="crRefundNum" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="crRefundReasonRow" style="display:none">
+            <span class="inv-meta-label">سبب الإرجاع</span>
+            <span class="inv-meta-val" id="crRefundReason"></span>
           </div>
           <div class="inv-meta-row">
             <span class="inv-meta-label" data-i18n="invoices-col-date">التاريخ</span>
@@ -156,10 +172,11 @@
             </thead>
             <tbody id="crItemsBody"></tbody>
           </table>
-          <div class="inv-divider-thick inv-sep"></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crConsumed" dir="ltr"></span></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crBalBefore" dir="ltr"></span></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crBalAfter" dir="ltr"></span></div>
+          <div class="inv-totals-box">
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crAmountLabel" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crConsumed" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalBeforeLabel" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crBalBefore" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalAfterLabel" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crBalAfter" dir="ltr"></span></div>
+          </div>
         </div>
       </div>
     </div>

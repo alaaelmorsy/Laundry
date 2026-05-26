@@ -97,6 +97,8 @@ async function initialize() {
   await migrateAppSettingsShowBarcodeInInvoice();
   await migrateSubscriptionPeriodsCreatedAt();
   await createCreditNotesTable();
+  await createRefundsTable();
+  await migrateRefundsColumns();
   await createOffersTable();
   await migrateZatcaSettings();
   await migrateSubscriptionInvoicesTable();
@@ -3559,10 +3561,21 @@ async function getConsumptionReceipts({
       cr.amount_consumed, cr.balance_before, cr.balance_after,
       cr.items_json, cr.notes, cr.created_by, cr.created_at,
       c.customer_name, c.phone,
-      cs.subscription_ref
+      cs.subscription_ref,
+      ref.id AS refund_id,
+      ref.refund_amount,
+      ref.refund_reason,
+      ref.refunded_by,
+      ref.refunded_at,
+      ref.old_balance AS refund_old_balance,
+      ref.new_balance AS refund_new_balance,
+      cn.credit_note_number,
+      cn.credit_note_seq
     FROM consumption_receipts cr
     JOIN customers c ON c.id = cr.customer_id
     LEFT JOIN customer_subscriptions cs ON cs.id = cr.subscription_id
+    LEFT JOIN refunds ref ON ref.consumption_receipt_id = cr.id
+    LEFT JOIN credit_notes cn ON cn.id = ref.credit_note_id
     WHERE ${where}
     ORDER BY cr.created_at DESC
     LIMIT ? OFFSET ?
@@ -3589,17 +3602,319 @@ async function getConsumptionReceiptById(receiptId) {
       c.national_id, c.tax_number,
       cs.subscription_ref,
       sp.period_from, sp.period_to,
-      sp.credit_value_granted
+      sp.credit_value_granted,
+      ref.id AS refund_id,
+      ref.refund_amount,
+      ref.refund_reason,
+      ref.refunded_by,
+      ref.refunded_at,
+      ref.old_balance AS refund_old_balance,
+      ref.new_balance AS refund_new_balance,
+      cn.credit_note_number,
+      cn.credit_note_seq
     FROM consumption_receipts cr
     JOIN customers c ON c.id = cr.customer_id
     LEFT JOIN customer_subscriptions cs ON cs.id = cr.subscription_id
     LEFT JOIN subscription_periods sp ON sp.id = cr.period_id
+    LEFT JOIN refunds ref ON ref.consumption_receipt_id = cr.id
+    LEFT JOIN credit_notes cn ON cn.id = ref.credit_note_id
     WHERE cr.id = ?
   `, [receiptId]);
   if (!row) return null;
   return {
     ...row,
     items: row.items_json ? (typeof row.items_json === 'string' ? JSON.parse(row.items_json) : row.items_json) : []
+  };
+}
+
+async function searchConsumptionReceiptForRefund({ q } = {}) {
+  const query = String(q || '').trim();
+  if (!query) throw new Error('قيمة البحث مطلوبة');
+
+  const digitsOnly = query.replace(/\D/g, '');
+  const hasReceiptHint = /C\s*[-]?/i.test(query) || /إيصال/i.test(query);
+
+  // If query looks like "C-123" / contains C- use receipt_seq first.
+  let receiptSeq = null;
+  const mReceipt = query.match(/(?:^|\D)C\s*-\s*(\d+)/i) || query.match(/(?:^|\D)C\s*(\d+)/i);
+  if (mReceipt) receiptSeq = Number(mReceipt[1]);
+  if (receiptSeq == null && hasReceiptHint && digitsOnly) receiptSeq = Number(digitsOnly);
+  if (receiptSeq == null && /^\d+$/.test(query) && digitsOnly) receiptSeq = Number(digitsOnly);
+
+  // Try by receipt_seq (C-#) first when we have a candidate.
+  if (receiptSeq != null && Number.isFinite(receiptSeq) && receiptSeq > 0) {
+    const [[cr]] = await pool.query(`
+      SELECT
+        cr.*,
+        c.customer_name,
+        c.phone,
+        c.subscription_number
+      FROM consumption_receipts cr
+      JOIN customers c ON c.id = cr.customer_id
+      WHERE cr.receipt_seq = ?
+      ORDER BY cr.created_at DESC
+      LIMIT 1
+    `, [receiptSeq]);
+
+    if (cr) {
+      const [[existing]] = await pool.query(`
+        SELECT id, credit_note_seq, credit_note_number, created_at
+        FROM credit_notes
+        WHERE original_order_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `, [cr.order_id]);
+
+      return {
+        success: true,
+        receipt: {
+          receiptId: cr.id,
+          receiptSeq: Number(cr.receipt_seq),
+          receiptSeqLabel: 'C-' + Number(cr.receipt_seq),
+          orderId: cr.order_id,
+          createdAt: cr.created_at,
+          packageName: cr.package_name,
+          customer: {
+            id: cr.customer_id,
+            name: cr.customer_name,
+            phone: cr.phone,
+            subscriptionNumber: cr.subscription_number
+          },
+          amountConsumed: Number(cr.amount_consumed) || 0,
+          balanceBefore: Number(cr.balance_before) || 0,
+          balanceAfter: Number(cr.balance_after) || 0,
+          subscriptionId: cr.subscription_id,
+          periodId: cr.period_id,
+          items: cr.items_json
+            ? (typeof cr.items_json === 'string' ? JSON.parse(cr.items_json) : cr.items_json)
+            : []
+        },
+        alreadyRefunded: existing
+          ? {
+            creditNoteId: existing.id,
+            creditNoteSeq: existing.credit_note_seq,
+            creditNoteNumber: existing.credit_note_number,
+            refundedAt: existing.created_at
+          }
+          : null
+      };
+    }
+  }
+
+  // Fallback: treat query as subscription_number and return latest consumption receipt.
+  const [[cust]] = await pool.query(`
+    SELECT id, subscription_number
+    FROM customers
+    WHERE subscription_number = ? OR subscription_number LIKE ?
+    ORDER BY id DESC
+    LIMIT 1
+  `, [query, `%${query}%`]);
+
+  if (!cust) throw new Error('لم يتم العثور على اشتراك بهذا الرقم');
+
+  const [[cr]] = await pool.query(`
+    SELECT
+      cr.*,
+      c.customer_name,
+      c.phone,
+      c.subscription_number
+    FROM consumption_receipts cr
+    JOIN customer_subscriptions cs ON cs.id = cr.subscription_id
+    JOIN customers c ON c.id = cs.customer_id
+    WHERE c.subscription_number = ?
+    ORDER BY cr.created_at DESC
+    LIMIT 1
+  `, [cust.subscription_number]);
+
+  if (!cr) throw new Error('لا توجد إيصالات استهلاك لهذا الاشتراك');
+
+  const [[existing]] = await pool.query(`
+    SELECT id, credit_note_seq, credit_note_number, created_at
+    FROM credit_notes
+    WHERE original_order_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `, [cr.order_id]);
+
+  return {
+    success: true,
+    receipt: {
+      receiptId: cr.id,
+      receiptSeq: Number(cr.receipt_seq),
+      receiptSeqLabel: 'C-' + Number(cr.receipt_seq),
+      orderId: cr.order_id,
+      createdAt: cr.created_at,
+      packageName: cr.package_name,
+      customer: {
+        id: cr.customer_id,
+        name: cr.customer_name,
+        phone: cr.phone,
+        subscriptionNumber: cr.subscription_number
+      },
+      amountConsumed: Number(cr.amount_consumed) || 0,
+      balanceBefore: Number(cr.balance_before) || 0,
+      balanceAfter: Number(cr.balance_after) || 0,
+      subscriptionId: cr.subscription_id,
+      periodId: cr.period_id,
+      items: cr.items_json
+        ? (typeof cr.items_json === 'string' ? JSON.parse(cr.items_json) : cr.items_json)
+        : []
+    },
+    alreadyRefunded: existing
+      ? {
+        creditNoteId: existing.id,
+        creditNoteSeq: existing.credit_note_seq,
+        creditNoteNumber: existing.credit_note_number,
+        refundedAt: existing.created_at
+      }
+      : null
+  };
+}
+
+async function refundConsumptionReceipt({ receiptSeq, reason, refundedBy } = {}) {
+  const seq = Number(receiptSeq);
+  if (!seq) throw new Error('رقم الإيصال غير صالح');
+
+  const [[cr]] = await pool.query(`
+    SELECT
+      cr.*,
+      c.customer_name,
+      c.phone,
+      c.subscription_number
+    FROM consumption_receipts cr
+    JOIN customers c ON c.id = cr.customer_id
+    WHERE cr.receipt_seq = ?
+    LIMIT 1
+  `, [seq]);
+
+  if (!cr) throw new Error('الإيصال غير موجود');
+  if (!cr.order_id) throw new Error('لا يمكن إرجاع هذا الإيصال — مرجع الطلب غير موجود');
+
+  const [[existing]] = await pool.query(`
+    SELECT id, credit_note_seq, credit_note_number, created_at
+    FROM credit_notes
+    WHERE original_order_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `, [cr.order_id]);
+  if (existing) {
+    const dateStr = existing.created_at ? String(existing.created_at).slice(0, 10) : '—';
+    throw new Error(`هذا الإيصال تم إرجاعه مسبقًا بتاريخ ${dateStr}`);
+  }
+
+  const items = cr.items_json
+    ? (typeof cr.items_json === 'string' ? JSON.parse(cr.items_json) : cr.items_json)
+    : [];
+
+  const cnItems = Array.isArray(items)
+    ? items.map(it => ({
+      product_id: it.productId ?? it.product_id ?? null,
+      laundry_service_id: it.serviceId ?? it.laundry_service_id ?? null,
+      product_name_ar: it.productNameAr ?? it.product_name_ar ?? null,
+      product_name_en: it.productNameEn ?? it.product_name_en ?? null,
+      service_name_ar: it.serviceNameAr ?? it.service_name_ar ?? null,
+      service_name_en: it.serviceNameEn ?? it.service_name_en ?? null,
+      quantity: it.qty ?? it.quantity ?? 1,
+      unit_price: it.unitPrice ?? it.unit_price ?? 0,
+      line_total: it.lineTotal ?? it.line_total ?? 0
+    }))
+    : [];
+
+  const [[orderRow]] = await pool.query(`
+    SELECT id, order_number, subtotal, discount_amount, extra_amount,
+           vat_rate, vat_amount, total_amount,
+           payment_method, payment_status, price_display_mode,
+           customer_id
+    FROM orders
+    WHERE id = ?
+    LIMIT 1
+  `, [cr.order_id]);
+
+  if (!orderRow) throw new Error('مرجع الفاتورة غير موجود');
+  if (orderRow.payment_status !== 'paid') throw new Error('لا يمكن إرجاع فاتورة غير مدفوعة');
+  if (orderRow.payment_method !== 'subscription') {
+    // In this app, refunds to subscription credit are only meaningful for subscription-paid consumption orders.
+    throw new Error('لا يمكن إرجاع هذا الإيصال — غير مدفوع برصيد الاشتراك');
+  }
+
+  const createdByLabel = refundedBy || 'system';
+  const creditNoteRes = await createCreditNote({
+    originalOrderId: orderRow.id,
+    customerId: cr.customer_id,
+    subtotal: Number(orderRow.subtotal || 0),
+    discountAmount: Number(orderRow.discount_amount || 0),
+    extraAmount: Number(orderRow.extra_amount || 0),
+    vatRate: Number(orderRow.vat_rate || 0),
+    vatAmount: Number(orderRow.vat_amount || 0),
+    totalAmount: Number(orderRow.total_amount || 0),
+    items: cnItems,
+    notes: reason || null,
+    createdBy: createdByLabel,
+    priceDisplayMode: orderRow.price_display_mode || 'inclusive'
+  });
+
+  const newBalance = creditNoteRes?.subscriptionRefund?.newBalance ?? null;
+  const refundAmount = creditNoteRes?.subscriptionRefund?.amount ?? null;
+  const oldBalance = (newBalance != null && refundAmount != null)
+    ? (Number(newBalance) - Number(refundAmount))
+    : null;
+
+  // Best-effort insert for auditing (spec yêuce refunds table).
+  try {
+    if (creditNoteRes && creditNoteRes.success && creditNoteRes.subscriptionRefund) {
+      await pool.query(
+        `INSERT INTO refunds
+          (original_order_id, consumption_receipt_id, subscription_id, refund_amount, refund_reason, refunded_by, old_balance, new_balance, credit_note_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          orderRow.id,
+          cr.id,
+          cr.subscription_id,
+          Number(refundAmount) || 0,
+          reason || null,
+          createdByLabel,
+          oldBalance,
+          newBalance,
+          creditNoteRes.creditNoteId
+        ]
+      );
+    }
+  } catch (e) {
+    // Don't fail the financial operation if the audit insert fails.
+    console.warn('[refunds table] insert failed:', e && e.message ? e.message : e);
+  }
+
+  return {
+    success: true,
+    receipt: {
+      receiptId: cr.id,
+      receiptSeq: Number(cr.receipt_seq),
+      receiptSeqLabel: 'C-' + Number(cr.receipt_seq),
+      orderId: cr.order_id,
+      createdAt: cr.created_at,
+      packageName: cr.package_name,
+      customer: {
+        id: cr.customer_id,
+        name: cr.customer_name,
+        phone: cr.phone,
+        subscriptionNumber: cr.subscription_number
+      },
+      amountConsumed: Number(cr.amount_consumed) || 0,
+      balanceBefore: Number(cr.balance_before) || 0,
+      balanceAfter: Number(cr.balance_after) || 0,
+      subscriptionId: cr.subscription_id,
+      periodId: cr.period_id,
+      items
+    },
+    refund: {
+      creditNoteId: creditNoteRes.creditNoteId,
+      creditNoteSeq: creditNoteRes.creditNoteSeq,
+      creditNoteNumber: creditNoteRes.creditNoteNumber,
+      refundAmount,
+      oldBalance,
+      newBalance,
+      reason: reason || null
+    }
   };
 }
 
@@ -4524,6 +4839,53 @@ async function getPaymentHistory(orderId) {
 // Credit Notes (إشعارات الدائن) Functions
 // ============================================================================
 
+async function createRefundsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS refunds (
+      id                     INT AUTO_INCREMENT PRIMARY KEY,
+      original_order_id     INT NOT NULL UNIQUE COMMENT 'الطلب الأصلي الذي تم إرجاعه',
+      consumption_receipt_id INT NOT NULL COMMENT 'إيصال الاستهلاك الأصلي (C-#)',
+      subscription_id       INT NOT NULL COMMENT 'اشتراك العميل المرتبط بالإيصال',
+      refund_amount         DECIMAL(10,2) NOT NULL DEFAULT 0,
+      refund_reason         TEXT DEFAULT NULL,
+      refunded_by           VARCHAR(100) DEFAULT NULL,
+      refunded_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      old_balance           DECIMAL(10,2) DEFAULT NULL,
+      new_balance           DECIMAL(10,2) DEFAULT NULL,
+      credit_note_id        INT DEFAULT NULL,
+      FOREIGN KEY (original_order_id) REFERENCES orders(id) ON DELETE RESTRICT,
+      FOREIGN KEY (consumption_receipt_id) REFERENCES consumption_receipts(id) ON DELETE RESTRICT,
+      FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_refunds_credit_notes FOREIGN KEY (credit_note_id) REFERENCES credit_notes(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_refunds_refunded_at ON refunds(refunded_at DESC)`).catch(() => {});
+}
+
+async function migrateRefundsColumns() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'refunds'`
+    );
+    const set = new Set(cols.map(r => r.COLUMN_NAME));
+    if (!set.has('old_balance')) {
+      await pool.query(`ALTER TABLE refunds ADD COLUMN old_balance DECIMAL(10,2) NULL`);
+    }
+    if (!set.has('new_balance')) {
+      await pool.query(`ALTER TABLE refunds ADD COLUMN new_balance DECIMAL(10,2) NULL`);
+    }
+    if (!set.has('credit_note_id')) {
+      await pool.query(`ALTER TABLE refunds ADD COLUMN credit_note_id INT NULL`);
+      await pool.query(`ALTER TABLE refunds ADD CONSTRAINT fk_refunds_credit_notes FOREIGN KEY (credit_note_id) REFERENCES credit_notes(id) ON DELETE SET NULL`).catch(() => {});
+    }
+  } catch (e) {
+    console.error('migrateRefundsColumns error:', e);
+  }
+}
+
 async function createCreditNotesTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS credit_notes (
@@ -4903,7 +5265,8 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
               `UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?`,
               [newBalance, periodId]
             );
-            const refundNote = `إرجاع المبلغ المرتبط بالفاتورة رقم ${orderRow.invoice_seq} (إشعار دائن ${cnNumber})`;
+            const reasonTxt = notes && String(notes).trim() ? ` — سبب: ${String(notes).trim()}` : '';
+            const refundNote = `إرجاع المبلغ المرتبط بالفاتورة رقم ${orderRow.invoice_seq} (إشعار دائن ${cnNumber})${reasonTxt}`;
             await conn.query(
               `INSERT INTO subscription_ledger
                  (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
@@ -5449,6 +5812,7 @@ module.exports = {
   updateOrderZatcaStatus, updateCreditNoteZatcaStatus, getUnsentZatcaOrders,
   getPosProducts, getPosServices, generateOrderNumber, createOrder, getOrders, getOrderById,
   createConsumptionReceipt, getConsumptionReceipts, getConsumptionReceiptById,
+  searchConsumptionReceiptForRefund, refundConsumptionReceipt,
   getOrdersBySubscription, getSubscriptionInvoices,
   getDeferredOrders, payDeferredOrder, markOrderCleaned, markOrderDelivered,
   // Partial invoice payment functions
