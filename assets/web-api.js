@@ -299,6 +299,8 @@
     exportCreditNotes:      (data) => exportBinary('/api/export/credit-notes', data),
     markOrderCleaned:   (data) => invoke('markOrderCleaned',   data),
     markOrderDelivered: (data) => invoke('markOrderDelivered', data),
+    markReceiptCleaned:   (data) => invoke('markReceiptCleaned',   data),
+    markReceiptDelivered: (data) => invoke('markReceiptDelivered', data),
     generateZatcaQR:    (data) => invoke('generateZatcaQR',    data),
     zatcaSubmitOrder:            (data) => invoke('zatcaSubmitOrder', data),
     zatcaSubmitCreditNote:       (data) => invoke('zatcaSubmitCreditNote', data),

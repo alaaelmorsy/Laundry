@@ -12,7 +12,8 @@
     dateTo: '',
     searchTimer: null,
     appSettings: null,
-    viewingReceiptNum: null
+    viewingReceiptNum: null,
+    viewingOrderId: null
   };
 
   const els = {
@@ -33,11 +34,18 @@
     receiptViewModal: document.getElementById('receiptViewModal'),
     btnCrClose: document.getElementById('btnCrClose'),
     btnCrExportPdf: document.getElementById('btnCrExportPdf'),
-    btnCrPrint: document.getElementById('btnCrPrint')
+    btnCrPrint: document.getElementById('btnCrPrint'),
+    btnCrMarkCleaned: document.getElementById('btnCrMarkCleaned'),
+    btnCrMarkDelivered: document.getElementById('btnCrMarkDelivered'),
+    crCleanedAtRow: document.getElementById('crCleanedAtRow'),
+    crCleanedAt: document.getElementById('crCleanedAt'),
+    crDeliveredAtRow: document.getElementById('crDeliveredAtRow'),
+    crDeliveredAt: document.getElementById('crDeliveredAt')
   };
 
   function fmtLtr(n) { return Number(n || 0).toFixed(2); }
-  function sarFmt(n) { return `<span class="sar">&#xE900;</span> ${fmtLtr(n)}`; }
+  function sarFmt(n) { return `${fmtLtr(n)} <span class="sar">&#xE900;</span>`; }
+  function sarFmtModal(n) { return `<span class="sar">&#xE900;</span> ${fmtLtr(n)}`; }
   function escHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -57,7 +65,10 @@
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     const p = (x) => String(x).padStart(2, '0');
-    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    const h = d.getHours();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(h12)}:${p(d.getMinutes())} ${ampm}`;
   }
 
   function buildItemsHtml(items) {
@@ -188,7 +199,7 @@
       if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
       if (refundNumRow) {
         refundNumRow.style.display = '';
-        document.getElementById('crRefundNum').textContent = r.credit_note_number || ('CN-' + (r.credit_note_seq || '—'));
+        document.getElementById('crRefundNum').textContent = 'C-' + Number(r.receipt_seq);
       }
       if (refundReasonRow) {
         if (r.refund_reason) {
@@ -202,11 +213,11 @@
       if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
       if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد الإرجاع';
 
-      document.getElementById('crConsumed').innerHTML = sarFmt(r.refund_amount || r.amount_consumed);
-      document.getElementById('crBalBefore').innerHTML = sarFmt(r.refund_old_balance != null ? r.refund_old_balance : r.balance_before);
-      document.getElementById('crBalAfter').innerHTML = sarFmt(r.refund_new_balance != null ? r.refund_new_balance : r.balance_after);
+      document.getElementById('crConsumed').innerHTML = sarFmtModal(r.refund_amount || r.amount_consumed);
+      document.getElementById('crBalBefore').innerHTML = sarFmtModal(r.refund_old_balance != null ? r.refund_old_balance : r.balance_before);
+      document.getElementById('crBalAfter').innerHTML = sarFmtModal(r.refund_new_balance != null ? r.refund_new_balance : r.balance_after);
 
-      state.viewingReceiptNum = r.credit_note_number || r.credit_note_seq || 'refund';
+      state.viewingReceiptNum = 'C-' + Number(r.receipt_seq);
     } else {
       if (titleEl) titleEl.textContent = 'إيصال استهلاك';
       if (refundNumRow) refundNumRow.style.display = 'none';
@@ -215,28 +226,82 @@
       if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل';
       if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد';
 
-      document.getElementById('crConsumed').innerHTML = sarFmt(r.amount_consumed);
-      document.getElementById('crBalBefore').innerHTML = sarFmt(r.balance_before);
-      document.getElementById('crBalAfter').innerHTML = sarFmt(r.balance_after);
+      document.getElementById('crConsumed').innerHTML = sarFmtModal(r.amount_consumed);
+      document.getElementById('crBalBefore').innerHTML = sarFmtModal(r.balance_before);
+      document.getElementById('crBalAfter').innerHTML = sarFmtModal(r.balance_after);
     }
 
     let items = r.items;
+    state.viewingOrderId = r.order_id || null;
+    const isRefunded = !!r.refund_id;
+
+    // تاريخ التنظيف/التسليم — أولاً من الإيصال نفسه، ثم من الطلب
+    const cleanDate = r.cleaning_date || null;
+    const deliverDate = r.delivery_date || null;
+
+    const showCleanDate = (date) => {
+      if (els.crCleanedAt) els.crCleanedAt.textContent = formatDateTime(date);
+      if (els.crCleanedAtRow) els.crCleanedAtRow.style.display = '';
+    };
+    const showDeliverDate = (date) => {
+      if (els.crDeliveredAt) els.crDeliveredAt.textContent = formatDateTime(date);
+      if (els.crDeliveredAtRow) els.crDeliveredAtRow.style.display = '';
+    };
+
+    if (cleanDate) {
+      showCleanDate(cleanDate);
+    } else {
+      if (els.crCleanedAtRow) els.crCleanedAtRow.style.display = 'none';
+    }
+    if (deliverDate) {
+      showDeliverDate(deliverDate);
+    } else {
+      if (els.crDeliveredAtRow) els.crDeliveredAtRow.style.display = 'none';
+    }
+
     if (r.order_id) {
       try {
         const orderRes = await window.api.getOrderById({ id: r.order_id });
-        if (orderRes && orderRes.success && orderRes.items && orderRes.items.length) {
-          items = orderRes.items.map((it) => ({
-            productNameAr: it.product_name_ar,
-            productNameEn: it.product_name_en,
-            serviceNameAr: it.service_name_ar,
-            serviceNameEn: it.service_name_en,
-            quantity: it.quantity,
-            lineTotal: it.line_total
-          }));
+        if (orderRes && orderRes.success) {
+          if (orderRes.items && orderRes.items.length) {
+            items = orderRes.items.map((it) => ({
+              productNameAr: it.product_name_ar,
+              productNameEn: it.product_name_en,
+              serviceNameAr: it.service_name_ar,
+              serviceNameEn: it.service_name_en,
+              quantity: it.quantity,
+              lineTotal: it.line_total
+            }));
+          }
+          const ord = orderRes.order || null;
+          // استخدم تاريخ الطلب فقط إذا لم يكن للإيصال تاريخ خاص به
+          if (!cleanDate && ord && ord.cleaning_date) showCleanDate(ord.cleaning_date);
+          if (!deliverDate && ord && ord.delivery_date) showDeliverDate(ord.delivery_date);
         }
       } catch (_) {}
+    } else {
+      if (els.crCleanedAtRow) els.crCleanedAtRow.style.display = 'none';
+      if (els.crDeliveredAtRow) els.crDeliveredAtRow.style.display = 'none';
     }
     document.getElementById('crItemsBody').innerHTML = buildItemsHtml(items);
+
+    // Barcode
+    const crBarcodeWrap = document.getElementById('crBarcodeWrap');
+    const crBarcode = document.getElementById('crBarcode');
+    if (crBarcode && typeof JsBarcode !== 'undefined' && r.receipt_seq && !r.refund_id) {
+      try {
+        JsBarcode(crBarcode, 'C-' + r.receipt_seq, {
+          format: 'CODE128', displayValue: true, fontSize: 11,
+          height: 40, margin: 4, background: 'transparent'
+        });
+        if (crBarcodeWrap) crBarcodeWrap.style.display = '';
+      } catch (_) {
+        if (crBarcodeWrap) crBarcodeWrap.style.display = 'none';
+      }
+    } else {
+      if (crBarcodeWrap) crBarcodeWrap.style.display = 'none';
+      if (crBarcode) crBarcode.innerHTML = '';
+    }
 
     els.receiptViewModal.style.display = 'flex';
   }
@@ -272,6 +337,38 @@
   function bindEvents() {
     els.btnBack.addEventListener('click', () => window.api.navigateBack());
     els.btnCrClose.addEventListener('click', () => { els.receiptViewModal.style.display = 'none'; });
+    if (els.btnCrMarkCleaned) {
+      els.btnCrMarkCleaned.addEventListener('click', async () => {
+        if (!state.viewingOrderId) return;
+        try {
+          els.btnCrMarkCleaned.disabled = true;
+          await window.api.markOrderCleaned({ orderId: state.viewingOrderId });
+          const now = formatDateTime(new Date().toISOString());
+          els.crCleanedAt.textContent = now;
+          els.crCleanedAtRow.style.display = '';
+          els.btnCrMarkCleaned.style.display = 'none';
+        } catch (e) {
+          alert(e.message || 'فشل تحديث حالة التنظيف');
+          els.btnCrMarkCleaned.disabled = false;
+        }
+      });
+    }
+    if (els.btnCrMarkDelivered) {
+      els.btnCrMarkDelivered.addEventListener('click', async () => {
+        if (!state.viewingOrderId) return;
+        try {
+          els.btnCrMarkDelivered.disabled = true;
+          await window.api.markOrderDelivered({ orderId: state.viewingOrderId });
+          const now = formatDateTime(new Date().toISOString());
+          els.crDeliveredAt.textContent = now;
+          els.crDeliveredAtRow.style.display = '';
+          els.btnCrMarkDelivered.style.display = 'none';
+        } catch (e) {
+          alert(e.message || 'فشل تحديث حالة التسليم');
+          els.btnCrMarkDelivered.disabled = false;
+        }
+      });
+    }
     if (els.btnCrPrint) {
       els.btnCrPrint.addEventListener('click', () => {
         printReceipt();

@@ -1689,6 +1689,27 @@
       });
   }
 
+  function renderConsumptionBarcode(receiptSeq) {
+    const wrap = document.getElementById('crModalBarcodeWrap');
+    const svg  = document.getElementById('crModalBarcode');
+    if (!svg) return;
+    if (receiptSeq) {
+      try {
+        JsBarcode(svg, 'C-' + receiptSeq, {
+          format: 'CODE128', displayValue: true, fontSize: 11,
+          height: 40, margin: 4, background: 'transparent'
+        });
+        if (wrap) wrap.style.display = '';
+      } catch (_) {
+        if (wrap) wrap.style.display = 'none';
+        svg.innerHTML = '';
+      }
+    } else {
+      if (wrap) wrap.style.display = 'none';
+      svg.innerHTML = '';
+    }
+  }
+
   function renderInvoiceBarcode(invoiceSeq) {
     if (!els.invBarcode) return;
     if (invoiceSeq) {
@@ -2176,6 +2197,8 @@
       tbody.innerHTML = buildConsumptionItemsHtml(itemsForHtml);
     }
 
+    renderConsumptionBarcode(result.consumptionReceiptSeq || null);
+
     if (els.consumptionReceiptModal) {
       els.consumptionReceiptModal.style.display = 'flex';
       if (autoOpenPrint) {
@@ -2367,7 +2390,7 @@
     if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = '';
     if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = refund.reason ? '' : 'none';
 
-    if (els.crModalRefundNum) els.crModalRefundNum.textContent = refund.creditNoteNumber || ('CN-' + (refund.creditNoteSeq || '—'));
+    if (els.crModalRefundNum) els.crModalRefundNum.textContent = refund.receiptSeqLabel || receipt.receiptSeqLabel || ('C-' + receipt.receiptSeq);
     if (els.crModalRefundReason) els.crModalRefundReason.textContent = refund.reason || '';
 
     // Receipt numbers (spec: show original receipt + refund number)
@@ -2404,7 +2427,7 @@
     if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(receipt.items);
 
     // Used for PDF export file naming.
-    state.viewingConsumptionReceiptNum = refund.creditNoteNumber || refund.creditNoteSeq || 'refund';
+    state.viewingConsumptionReceiptNum = refund.receiptSeqLabel || receipt.receiptSeqLabel || ('C-' + receipt.receiptSeq);
 
     if (els.consumptionReceiptModal) {
       els.consumptionReceiptModal.style.display = 'flex';
@@ -4246,6 +4269,15 @@
 
   function invoiceMatchesDeferredFilter(inv) {
     const filter = state.deferredStatusFilter || 'unpaid';
+    const isReceipt = inv.rowType === 'receipt';
+    // الايصالات دائماً مدفوعة (اشتراك) — تظهر في كل الفلاتر ما عدا 'unpaid'
+    if (isReceipt) {
+      if (filter === 'unpaid') return false;
+      if (filter === 'cleaned') return !!inv.cleaning_date;
+      if (filter === 'delivered') return !!inv.delivery_date;
+      return true;
+    }
+
     const isPaid = inv.payment_status === 'paid';
     const hasSettledDate = !!(inv.paid_at || inv.fully_paid_at);
     const hasCleaned = !!inv.cleaning_date;
@@ -4271,7 +4303,9 @@
   function isDeferredInvoiceNumberSearch(raw) {
     const s = String(raw || '').trim();
     if (!s) return false;
-    // Mirrors backend `getDeferredOrders`: short numeric = invoice_seq, long numeric = phone
+    // receipt number pattern: c1, C-2, c-3 ...
+    if (/^C-?\d+$/i.test(s)) return true;
+    // short numeric = invoice_seq, long numeric = phone
     return /^\d+$/.test(s) && s.length < 7;
   }
 
@@ -4368,14 +4402,12 @@
     };
 
     els.deferredList.innerHTML = pageItems.map((inv) => {
+      const isReceipt    = inv.rowType === 'receipt';
       const hasCleaned   = !!inv.cleaning_date;
       const hasDelivered = !!inv.delivery_date;
-      const hasPaid      = inv.payment_status === 'paid';
-      const isPartial    = inv.payment_status === 'partial';
+      const hasPaid      = !isReceipt && inv.payment_status === 'paid';
+      const isPartial    = !isReceipt && inv.payment_status === 'partial';
       const paidAmt      = Number(inv.paid_amount || 0);
-      const remainingAmt = Number(inv.remaining_amount != null
-        ? inv.remaining_amount
-        : Math.max(0, Number(inv.total_amount || 0) - paidAmt));
 
       const amountCellHtml = isPartial
         ? `${riyalHtml(fmtLtr(inv.total_amount))}
@@ -4385,34 +4417,57 @@
            </div>`
         : riyalHtml(fmtLtr(inv.total_amount));
 
-      return `<tr class="def-table-row${hasPaid ? ' def-row-paid' : ''}${isPartial ? ' def-row-partial' : ''}" data-id="${inv.id}">
-        <td class="def-td-num">${inv.invoice_seq || inv.order_number || inv.id}</td>
+      // رقم المستند: فاتورة = INV-X، ايصال = C-X
+      const docNum = isReceipt
+        ? `C-${inv.receipt_seq}`
+        : `${inv.invoice_seq || inv.order_number || inv.id}`;
+
+      // أزرار الإجراءات
+      const viewBtn = isReceipt
+        ? `<button class="def-tbl-btn def-tbl-view" onclick="window._posDeferredViewReceipt(${inv.id})" type="button" title="عرض الإيصال">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            عرض
+          </button>`
+        : `<button class="def-tbl-btn def-tbl-view" onclick="window._posDeferredView(${inv.id})" type="button" title="${t('pos-deferred-btn-view')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            ${t('pos-deferred-btn-view')}
+          </button>`;
+
+      const payBtn = isReceipt ? '' : `
+          <button class="def-tbl-btn def-tbl-pay ${hasPaid ? 'def-tbl-done' : ''}${isPartial ? ' def-tbl-partial' : ''}"
+            onclick="window._posPayInvoice(${inv.id})" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            ${hasPaid ? (t('pos-deferred-badge-paid') || '✓ مدفوع') : (isPartial ? (t('pos-deferred-btn-pay-rest') || 'إكمال السداد') : t('pos-deferred-btn-pay'))}
+          </button>`;
+
+      const cleanOnclick = isReceipt
+        ? `window._posMarkReceiptCleaned(${inv.id})`
+        : `window._posMarkCleaned(${inv.id})`;
+      const deliverOnclick = isReceipt
+        ? `window._posMarkReceiptDelivered(${inv.id})`
+        : `window._posMarkDelivered(${inv.id})`;
+
+      return `<tr class="def-table-row${hasPaid ? ' def-row-paid' : ''}${isPartial ? ' def-row-partial' : ''}${isReceipt ? ' def-row-receipt' : ''}" data-id="${inv.id}" data-type="${inv.rowType || 'invoice'}">
+        <td class="def-td-num">${docNum}</td>
         <td class="def-td-cust">
           <span class="def-cust-name">${escHtml(inv.customer_name || '—')}</span>
           ${inv.phone ? `<br><span class="def-cust-phone" dir="ltr">${escHtml(inv.phone)}</span>` : ''}
         </td>
         <td class="def-td-date def-td-date-center" dir="ltr">${fmtDate(inv.created_at)}</td>
-        <td class="def-td-date def-td-date-center ${hasPaid ? 'def-val-paid' : ''}" dir="ltr">${fmtDate(inv.paid_at)}</td>
+        <td class="def-td-date def-td-date-center ${hasPaid ? 'def-val-paid' : ''}" dir="ltr">${isReceipt ? '<span style="color:#94a3b8">—</span>' : fmtDate(inv.paid_at)}</td>
         <td class="def-td-date def-td-date-center ${hasCleaned ? 'def-val-done' : ''}" dir="ltr">${fmtDate(inv.cleaning_date)}</td>
         <td class="def-td-date def-td-date-center ${hasDelivered ? 'def-val-done' : ''}" dir="ltr">${fmtDate(inv.delivery_date)}</td>
         <td class="def-td-amount">${amountCellHtml}</td>
         <td class="def-td-actions">
-          <button class="def-tbl-btn def-tbl-view" onclick="window._posDeferredView(${inv.id})" type="button" title="${t('pos-deferred-btn-view')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            ${t('pos-deferred-btn-view')}
-          </button>
-          <button class="def-tbl-btn def-tbl-pay ${hasPaid ? 'def-tbl-done' : ''}${isPartial ? ' def-tbl-partial' : ''}"
-            onclick="window._posPayInvoice(${inv.id})" type="button" title="${hasPaid ? (t('pos-deferred-view-payments') || 'عرض الدفعات') : t('pos-deferred-btn-pay')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-            ${hasPaid ? (t('pos-deferred-badge-paid') || '✓ مدفوع') : (isPartial ? (t('pos-deferred-btn-pay-rest') || 'إكمال السداد') : t('pos-deferred-btn-pay'))}
-          </button>
+          ${viewBtn}
+          ${payBtn}
           <button class="def-tbl-btn def-tbl-clean ${hasCleaned ? 'def-tbl-done' : ''}"
-            onclick="window._posMarkCleaned(${inv.id})" ${hasCleaned ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-clean')}">
+            onclick="${cleanOnclick}" ${hasCleaned ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-clean')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
             ${hasCleaned ? t('pos-deferred-badge-cleaned') : t('pos-deferred-btn-clean')}
           </button>
           <button class="def-tbl-btn def-tbl-deliver ${hasDelivered ? 'def-tbl-done' : ''}"
-            onclick="window._posMarkDelivered(${inv.id})" ${hasDelivered ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-deliver')}">
+            onclick="${deliverOnclick}" ${hasDelivered ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-deliver')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             ${hasDelivered ? t('pos-deferred-badge-delivered') : t('pos-deferred-btn-deliver')}
           </button>
@@ -4758,35 +4813,136 @@
   }
 
   /* ========== MARK CLEANED / DELIVERED ========== */
+  function refreshRowInPlace(id, type, field) {
+    const now = new Date().toISOString();
+    const arr = state.deferredInvoices || [];
+    const item = arr.find(r => r.id === id && (r.rowType || 'invoice') === type);
+    if (item) item[field] = now;
+    const arr2 = state.deferredFilteredInvoices || [];
+    const item2 = arr2.find(r => r.id === id && (r.rowType || 'invoice') === type);
+    if (item2) item2[field] = now;
+    const wrap = els.defTableWrap || document.getElementById('defTableWrap');
+    const scrollTop = wrap ? wrap.scrollTop : (window.scrollY || 0);
+    renderDeferredTable();
+    if (wrap) wrap.scrollTop = scrollTop;
+    else window.scrollTo(0, scrollTop);
+  }
+
   async function deferredMarkCleaned(orderId) {
-    const btn = document.querySelector(`.deferred-invoice-card[data-id="${orderId}"] .def-btn-clean`);
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
-
     const res = await window.api.markOrderCleaned({ orderId: Number(orderId) });
-
     if (!res || !res.success) {
-      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
       return;
     }
     showTopToast(t('pos-deferred-clean-success'), 'success');
-    await searchDeferredInvoices();
+    refreshRowInPlace(Number(orderId), 'invoice', 'cleaning_date');
   }
 
   async function deferredMarkDelivered(orderId) {
-    const btn = document.querySelector(`.deferred-invoice-card[data-id="${orderId}"] .def-btn-deliver`);
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
-
     const res = await window.api.markOrderDelivered({ orderId: Number(orderId) });
-
     if (!res || !res.success) {
-      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
       return;
     }
     showTopToast(t('pos-deferred-deliver-success'), 'success');
-    await searchDeferredInvoices();
+    refreshRowInPlace(Number(orderId), 'invoice', 'delivery_date');
   }
+
+  async function showDeferredReceiptPreview(receiptId) {
+    const res = await window.api.getConsumptionReceiptById({ id: Number(receiptId) });
+    if (!res || !res.success || !res.receipt) {
+      showToast(t('pos-err-load'), 'error');
+      return;
+    }
+    const r = res.receipt;
+    const s = state.appSettings || {};
+    const lang = getLang();
+    const shopName = (lang === 'ar' ? s.laundryNameAr : s.laundryNameEn) || s.laundryNameAr || '';
+
+    if (document.getElementById('crModalShopName')) document.getElementById('crModalShopName').textContent = shopName;
+    if (document.getElementById('crModalShopAddress')) document.getElementById('crModalShopAddress').textContent = s.locationAr || s.locationEn || '';
+    if (document.getElementById('crModalShopPhone')) document.getElementById('crModalShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
+    const crLogoWrap = document.getElementById('crModalLogoWrap');
+    const crLogo = document.getElementById('crModalLogo');
+    if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
+    else if (crLogoWrap) crLogoWrap.style.display = 'none';
+
+    const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
+    if (titleEl) titleEl.textContent = 'إيصال استهلاك';
+    if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
+    if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = 'none';
+    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المستهلك';
+    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل';
+    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد';
+
+    const fmtDt = (d) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      const pad = n => String(n).padStart(2,'0');
+      const h = dt.getHours(), ampm = h >= 12 ? 'PM' : 'AM';
+      return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(h%12||12)}:${pad(dt.getMinutes())} ${ampm}`;
+    };
+
+    state.viewingConsumptionReceiptNum = 'C-' + Number(r.receipt_seq);
+    document.getElementById('crModalReceiptNum').textContent = state.viewingConsumptionReceiptNum;
+    document.getElementById('crModalDate').textContent = fmtDt(r.created_at);
+    document.getElementById('crModalCustomer').textContent = r.customer_name || '—';
+    document.getElementById('crModalPhone').textContent = r.phone || '—';
+    const subRefEl = document.getElementById('crModalSubRef');
+    if (subRefEl) subRefEl.textContent = formatSubscriptionDisplayNum(r.subscription_number || '');
+    document.getElementById('crModalPackage').textContent = r.package_name || '—';
+
+    // تاريخ التنظيف والتسليم
+    const cleanRow = document.getElementById('crModalCleanRow');
+    const deliverRow = document.getElementById('crModalDeliverRow');
+    const cleanDateEl = document.getElementById('crModalCleanDate');
+    const deliverDateEl = document.getElementById('crModalDeliverDate');
+    if (cleanRow && cleanDateEl) {
+      if (r.cleaning_date) { cleanRow.style.display = ''; cleanDateEl.textContent = fmtDt(r.cleaning_date); }
+      else cleanRow.style.display = 'none';
+    }
+    if (deliverRow && deliverDateEl) {
+      if (r.delivery_date) { deliverRow.style.display = ''; deliverDateEl.textContent = fmtDt(r.delivery_date); }
+      else deliverRow.style.display = 'none';
+    }
+
+    const sarHtml = '<span class="sar">&#xE900;</span> ';
+    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
+    document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
+    document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
+
+    const tbody = document.getElementById('crModalItemsBody');
+    if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(r.items || []);
+
+    renderConsumptionBarcode(r.refund_id ? null : r.receipt_seq);
+
+    if (els.consumptionReceiptModal) els.consumptionReceiptModal.style.display = 'flex';
+  }
+
+  window._posDeferredViewReceipt = (id) => showDeferredReceiptPreview(id);
+
+  async function deferredMarkReceiptCleaned(receiptId) {
+    const res = await window.api.markReceiptCleaned({ receiptId: Number(receiptId) });
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
+      return;
+    }
+    showTopToast(t('pos-deferred-clean-success'), 'success');
+    refreshRowInPlace(Number(receiptId), 'receipt', 'cleaning_date');
+  }
+
+  async function deferredMarkReceiptDelivered(receiptId) {
+    const res = await window.api.markReceiptDelivered({ receiptId: Number(receiptId) });
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
+      return;
+    }
+    showTopToast(t('pos-deferred-deliver-success'), 'success');
+    refreshRowInPlace(Number(receiptId), 'receipt', 'delivery_date');
+  }
+
+  window._posMarkReceiptCleaned   = (id) => deferredMarkReceiptCleaned(id);
+  window._posMarkReceiptDelivered = (id) => deferredMarkReceiptDelivered(id);
 
   /* ========== BARCODE SCAN (Deferred) ========== */
   async function barcodeAutoAction(inv, actionStr) {
@@ -4864,6 +5020,12 @@
     const barcodeVal = els.deferredBarcodeInput ? els.deferredBarcodeInput.value.trim() : '';
     if (!barcodeVal) return;
 
+    // Consumption receipt barcode (C-X format)
+    if (/^C-\d+$/i.test(barcodeVal)) {
+      await handleReceiptBarcodeScan(barcodeVal.toUpperCase());
+      return;
+    }
+
     const invoiceSeq = Number(barcodeVal);
     if (isNaN(invoiceSeq) || invoiceSeq <= 0) {
       showTopToast('رقم باركود غير صالح', 'error');
@@ -4888,6 +5050,47 @@
     } else {
       // Default: just open the pay modal
       openPayDeferredModal(inv.id);
+    }
+
+    if (els.deferredBarcodeInput) {
+      els.deferredBarcodeInput.value = '';
+      els.deferredBarcodeInput.focus();
+    }
+  }
+
+  async function handleReceiptBarcodeScan(barcodeVal) {
+    const res = await window.api.getDeferredOrders({ search: barcodeVal });
+    const receipt = res && res.success && res.orders && res.orders.find(r => r.rowType === 'receipt');
+    if (!receipt) {
+      showTopToast('لم يتم العثور على إيصال بهذا الرقم', 'error');
+      if (els.deferredBarcodeInput) els.deferredBarcodeInput.value = '';
+      return;
+    }
+
+    const autoAction = state.appSettings && state.appSettings.barcodeAutoAction;
+    if (autoAction && autoAction !== 'none') {
+      const actions = autoAction.split(',');
+      if (actions.includes('clean') && !receipt.cleaning_date) {
+        const cr = await window.api.markReceiptCleaned({ receiptId: Number(receipt.id) });
+        if (!cr || !cr.success) { showTopToast('فشل تحديث حالة التنظيف', 'error'); return; }
+      }
+      if (actions.includes('deliver') && !receipt.delivery_date) {
+        const dr = await window.api.markReceiptDelivered({ receiptId: Number(receipt.id) });
+        if (!dr || !dr.success) { showTopToast('فشل تحديث حالة التسليم', 'error'); return; }
+      }
+      const labels = [];
+      if (actions.includes('clean')) labels.push('التنظيف');
+      if (actions.includes('deliver')) labels.push('التسليم');
+      showTopToast('تم ' + labels.join(' و ') + ' للإيصال ' + barcodeVal, 'success');
+    }
+
+    // Refresh display
+    const refreshRes = await window.api.getDeferredOrders({ search: barcodeVal });
+    if (refreshRes && refreshRes.success && refreshRes.orders) {
+      state.deferredInvoiceSearchMode = true;
+      state.deferredInvoices = refreshRes.orders;
+      state.deferredPage = 1;
+      renderDeferredInvoices(state.deferredInvoices);
     }
 
     if (els.deferredBarcodeInput) {

@@ -155,6 +155,14 @@
             <span class="inv-meta-label" data-i18n="invoices-col-date">التاريخ</span>
             <span class="inv-meta-val" id="crDate" dir="ltr"></span>
           </div>
+          <div class="inv-meta-row" id="crCleanedAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التنظيف</span>
+            <span class="inv-meta-val" id="crCleanedAt" dir="ltr"></span>
+          </div>
+          <div class="inv-meta-row" id="crDeliveredAtRow" style="display:none">
+            <span class="inv-meta-label">تاريخ التسليم</span>
+            <span class="inv-meta-val" id="crDeliveredAt" dir="ltr"></span>
+          </div>
           <div class="inv-divider-thick inv-sep"></div>
           <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="invoices-col-customer">العميل</span><span class="inv-meta-val" id="crCustomer"></span></div>
           <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-phone">الجوال</span><span class="inv-meta-val" id="crPhone" dir="ltr"></span></div>
@@ -177,6 +185,9 @@
             <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalBeforeLabel" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crBalBefore" dir="ltr"></span></div>
             <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalAfterLabel" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crBalAfter" dir="ltr"></span></div>
           </div>
+          <div class="inv-barcode-wrap" id="crBarcodeWrap" style="display:none;text-align:center;margin-top:8px">
+            <svg id="crBarcode"></svg>
+          </div>
         </div>
       </div>
     </div>
@@ -185,6 +196,7 @@
   <script src="../../assets/web-api.js"></script>
   <script src="../../assets/auth-guard.js"></script>
   <script src="../../assets/i18n.js"></script>
+  <script src="../../assets/JsBarcode.min.js"></script>
   <script src="consumption-receipts.js"></script>
 </body>
 </html>

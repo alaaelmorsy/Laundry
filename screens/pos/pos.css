@@ -4326,6 +4326,8 @@ html, body {
 .def-table-row:hover { background: #f8fafc; }
 .def-table-row.def-row-paid { background: #f0fdf4; }
 .def-table-row.def-row-paid:hover { background: #dcfce7; }
+.def-table-row.def-row-receipt { background: #f0f9ff; }
+.def-table-row.def-row-receipt:hover { background: #e0f2fe; }
 
 .def-table td {
   padding: 9px 12px;
@@ -4348,15 +4350,15 @@ html, body {
   font-weight: 700;
   color: #1e293b;
   display: block;
-  line-height: 1.3;
-  margin-bottom: 2px;
+  line-height: 1;
+  margin-bottom: 0.5px;
 }
 .def-td-cust .def-cust-phone {
   font-size: 11.5px;
   color: #1e293b;
   font-weight: 800;
   display: block;
-  line-height: 1.3;
+  line-height: 1;
 }
 
 .def-td-date {
@@ -5100,6 +5102,31 @@ html, body {
   .pay-after-value {
     font-size: 15px;
   }
+}
+
+/* ─── عرض الجدول المضغوط على الجوال ─── */
+@media (max-width: 767px) {
+  /* السماح بالـ scroll الأفقي لعرض كل الأعمدة */
+  .def-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* تضغيط الخلايا */
+  .def-table td, .def-table th { padding: 6px 7px; white-space: nowrap; }
+  .def-td-num  { font-size: 11px; }
+  .def-td-cust .def-cust-name { font-size: 11px; }
+  .def-td-cust .def-cust-phone { font-size: 10px; }
+  .def-td-date { font-size: 10px; }
+  .def-td-amount { font-size: 11px; }
+
+  /* أزرار الإجراءات — عمودية مضغوطة */
+  .def-td-actions { white-space: normal; display: flex; flex-direction: column; gap: 4px; padding: 5px 6px; }
+  .def-tbl-btn {
+    padding: 4px 7px;
+    font-size: 10px;
+    gap: 3px;
+    width: 100%;
+    justify-content: center;
+  }
+  .def-tbl-btn svg { width: 10px; height: 10px; }
 }
 
 @media (max-width: 479px) {

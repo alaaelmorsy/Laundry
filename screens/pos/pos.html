@@ -376,7 +376,7 @@
         </span>
         <input id="deferredSearch" type="search" class="deferred-search-input"
           data-i18n-placeholder="pos-deferred-search-placeholder"
-          placeholder="ابحث برقم الفاتورة أو رقم الجوال..."
+          placeholder="ابحث برقم الفاتورة أو الإيصال (C-5) أو رقم الجوال..."
           autocomplete="off" />
       </div>
       <div class="deferred-filter-wrap">
@@ -1010,6 +1010,14 @@
         <div class="inv-meta-row"><span class="inv-meta-label">الجوال</span><span class="inv-meta-val" id="crModalPhone" dir="ltr"></span></div>
         <div class="inv-meta-row"><span class="inv-meta-label">رقم الاشتراك</span><span class="inv-meta-val" id="crModalSubRef" dir="ltr"></span></div>
         <div class="inv-meta-row"><span class="inv-meta-label">الباقة</span><span class="inv-meta-val" id="crModalPackage"></span></div>
+        <div class="inv-meta-row" id="crModalCleanRow" style="display:none">
+          <span class="inv-meta-label">تاريخ التنظيف</span>
+          <span class="inv-meta-val" id="crModalCleanDate" dir="ltr"></span>
+        </div>
+        <div class="inv-meta-row" id="crModalDeliverRow" style="display:none">
+          <span class="inv-meta-label">تاريخ التسليم</span>
+          <span class="inv-meta-val" id="crModalDeliverDate" dir="ltr"></span>
+        </div>
         <div class="inv-divider-thick inv-sep"></div>
         <table class="inv-table">
           <thead>
@@ -1026,6 +1034,9 @@
           <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalAmountLabel" data-i18n="consumption-amount">المبلغ المستهلك</span><span class="inv-meta-val" id="crModalConsumed" dir="ltr"></span></div>
           <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalBalBeforeLabel" data-i18n="balance-before">الرصيد قبل</span><span class="inv-meta-val" id="crModalBalBefore" dir="ltr"></span></div>
           <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crModalBalAfterLabel" data-i18n="balance-after">الرصيد بعد</span><span class="inv-meta-val" id="crModalBalAfter" dir="ltr"></span></div>
+        </div>
+        <div class="inv-barcode-wrap" id="crModalBarcodeWrap" style="display:none;text-align:center;margin-top:8px">
+          <svg id="crModalBarcode"></svg>
         </div>
       </div>
     </div>

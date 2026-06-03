@@ -30,7 +30,8 @@ const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'Db2@dm1n2022',
-  port: parseInt(process.env.DB_PORT || '3306', 10)
+  port: parseInt(process.env.DB_PORT || '3306', 10),
+  charset: 'utf8mb4'
 };
 
 const DB_NAME = process.env.DB_NAME || 'laundry_db';
@@ -106,6 +107,7 @@ async function initialize() {
   await migrateOrderItemsNullable();
   await migrateSubscriptionPeriodsOrderId();
   await migrateOrdersRefundColumns();
+  await fixSubscriptionLedgerNotesEncoding();
 }
 
 async function migrateOrdersZatcaColumns() {
@@ -5984,6 +5986,19 @@ async function getUnsentZatcaOrders(limit = 500) {
     [limit]
   );
   return rows.map(r => r.id);
+}
+
+async function fixSubscriptionLedgerNotesEncoding() {
+  try {
+    // Fix notes that were stored with wrong charset (latin1 connection storing UTF-8 bytes)
+    // Detectable by presence of Ø (U+00D8) or Ù (U+00D9) which are the first bytes of Arabic UTF-8 sequences when misread as latin1
+    await pool.query(`
+      UPDATE subscription_ledger
+      SET notes = CONVERT(BINARY CONVERT(notes USING latin1) USING utf8mb4)
+      WHERE notes IS NOT NULL
+        AND (notes LIKE '%Ø%' OR notes LIKE '%Ù%' OR notes LIKE '%â€"%')
+    `);
+  } catch (_) {}
 }
 
 module.exports = {

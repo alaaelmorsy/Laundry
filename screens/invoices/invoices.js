@@ -94,7 +94,6 @@
     invBarcode: document.getElementById('invBarcode'),
     invFooterEmail: document.getElementById('invFooterEmail'),
     // Refund modal
-    btnInvRefund: document.getElementById('btnInvRefund'),
     refundModal: document.getElementById('refundModal'),
     refundOriginalNo: document.getElementById('refundOriginalNo'),
     refundCustomer: document.getElementById('refundCustomer'),
@@ -540,7 +539,6 @@
         <td class="inv-num-cell">${seqNum}</td>
         <td style="direction:ltr;text-align:right">${escHtml(formatDate(order.created_at))}</td>
         <td>${order.customer_name ? escHtml(order.customer_name) + (order.phone ? `<br><span style="font-size:12px;color:#94a3b8">${escHtml(order.phone)}</span>` : '') : '<span style="color:#94a3b8">—</span>'}</td>
-        <td>${docTypeBadge}<br>${typeBadge}${refundBadge ? '<br>' + refundBadge : ''}${refundedBadge ? '<br>' + refundedBadge : ''}</td>
         <td><span class="payment-badge ${paymentClass(order.payment_method)}">${escHtml(paymentLabel(order.payment_method))}</span></td>
         <td class="total-cell">${fmtLtr(total)} <span class="sar">&#xE900;</span></td>
         <td>
@@ -665,12 +663,6 @@
       }
       renderInvoiceModal(res.order, res.items, seqNum, res.subscription || null);
       const order = res.order;
-      if (order.is_refund || order.refunded_at) {
-        els.btnInvRefund.style.display = 'none';
-      } else {
-        els.btnInvRefund.style.display = '';
-        els.btnInvRefund.dataset.orderId = orderId;
-      }
     } catch (err) {
       showToast(I18N.t('invoices-err-generic'), 'error');
     }
@@ -1295,11 +1287,6 @@
       }
     });
 
-    /* Refund button */
-    els.btnInvRefund.addEventListener('click', () => {
-      const orderId = els.btnInvRefund.dataset.orderId;
-      if (orderId) openRefundModal(Number(orderId));
-    });
     els.btnRefundConfirm.addEventListener('click', confirmRefund);
     function closeRefundModal() {
       els.refundModal.style.display = 'none';

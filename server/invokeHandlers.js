@@ -1084,6 +1084,24 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'markReceiptCleaned': {
+      try {
+        await db.markReceiptCleaned({ receiptId: payload && payload.receiptId });
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'markReceiptDelivered': {
+      try {
+        await db.markReceiptDelivered({ receiptId: payload && payload.receiptId });
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'generateZatcaQR': {
       try {
         let { sellerName, vatNumber, timestamp, totalAmount, vatAmount, tlvBase64 } = payload || {};
