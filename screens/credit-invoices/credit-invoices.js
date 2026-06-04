@@ -1076,10 +1076,15 @@
       } else els.cnSubBalRow.style.display = 'none';
     }
 
-    els.cnItemsTbody.innerHTML = (items || []).map(item => {
-      const nameAr = escHtml(item.product_name_ar || '');
+    const isCNSubInvoice = order && (order.order_type === 'subscription_new' || order.order_type === 'subscription_renewal');
+    const cnSubPkgName = isCNSubInvoice ? (order.notes || '') : '';
+    const cnSubSvcLabel = isCNSubInvoice ? (order.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد') : '';
+    const cnDisplayItems = (items && items.length > 0) ? items
+      : (isCNSubInvoice ? [{ product_name_ar: '', service_name_ar: '', quantity: 1, line_total: parseFloat(cn.total_amount || 0) }] : []);
+    els.cnItemsTbody.innerHTML = cnDisplayItems.map(item => {
+      const nameAr = escHtml(item.product_name_ar || cnSubPkgName);
       const nameEn = escHtml(item.product_name_en || '');
-      const svcAr  = escHtml(item.service_name_ar || '');
+      const svcAr  = escHtml(item.service_name_ar || cnSubSvcLabel);
       const svcEn  = escHtml(item.service_name_en || '');
       const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
       const serviceCell = svcAr  + (svcEn && svcEn !== svcAr   ? `<span class="inv-td-en">${svcEn}</span>`  : '');

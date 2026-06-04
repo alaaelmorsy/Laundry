@@ -108,6 +108,7 @@ async function initialize() {
   await migrateSubscriptionPeriodsOrderId();
   await migrateOrdersRefundColumns();
   await fixSubscriptionLedgerNotesEncoding();
+  await migrateWhatsappQuota();
 }
 
 async function migrateOrdersZatcaColumns() {
@@ -569,6 +570,19 @@ async function migrateConsumptionReceipts() {
     await pool.query(`CREATE INDEX idx_cr_customer ON consumption_receipts(customer_id)`).catch(() => {});
     await pool.query(`CREATE INDEX idx_cr_subscription ON consumption_receipts(subscription_id)`).catch(() => {});
     await pool.query(`CREATE INDEX idx_cr_created ON consumption_receipts(created_at)`).catch(() => {});
+
+    // add cleaning/delivery date columns if missing
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'consumption_receipts'`
+    );
+    const colSet = new Set(cols.map(r => r.COLUMN_NAME));
+    if (!colSet.has('cleaning_date')) {
+      await pool.query(`ALTER TABLE consumption_receipts ADD COLUMN cleaning_date DATETIME NULL DEFAULT NULL`);
+    }
+    if (!colSet.has('delivery_date')) {
+      await pool.query(`ALTER TABLE consumption_receipts ADD COLUMN delivery_date DATETIME NULL DEFAULT NULL`);
+    }
   } catch (e) {
     console.error('migrateConsumptionReceipts:', e);
   }
@@ -2411,8 +2425,9 @@ async function _createSubscriptionOrder(conn, {
        vat_rate, vat_amount, total_amount,
        paid_amount, remaining_amount, paid_cash, paid_card,
        payment_method, payment_status, paid_at,
+       cleaning_date, delivery_date,
        notes, created_by, price_display_mode
-     ) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?, ?, 0, ?, ?, ?, 'paid', NOW(), ?, NULL, 'inclusive')`,
+     ) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?, ?, 0, ?, ?, ?, 'paid', NOW(), NOW(), NOW(), ?, NULL, 'inclusive')`,
     [
       orderNumber, invoiceSeq, orderType, periodId, customerId || null,
       totalAmount,  // subtotal (شامل الضريبة)
@@ -3003,7 +3018,7 @@ async function migrateAppSettings() {
       require_customer_phone TINYINT(1) NOT NULL DEFAULT 0,
       allow_subscription_debt TINYINT(1) NOT NULL DEFAULT 0,
       barcode_auto_action VARCHAR(50) DEFAULT NULL,
-      show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 0,
+      show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 1,
       report_email_enabled TINYINT(1) NOT NULL DEFAULT 0,
       report_email_to VARCHAR(150) DEFAULT NULL,
       report_email_from VARCHAR(150) DEFAULT NULL,
@@ -3046,7 +3061,7 @@ async function migrateAppSettings() {
     "ALTER TABLE app_settings ADD COLUMN barcode_auto_action VARCHAR(50) DEFAULT NULL AFTER allow_subscription_debt"
   ).catch(() => {});
   await pool.query(
-    "ALTER TABLE app_settings ADD COLUMN show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 0 AFTER barcode_auto_action"
+    "ALTER TABLE app_settings ADD COLUMN show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 1 AFTER barcode_auto_action"
   ).catch(() => {});
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN report_email_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER show_barcode_in_invoice"
@@ -3074,6 +3089,24 @@ async function migrateAppSettings() {
   ).catch(() => {});
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN zatca_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER report_email_last_sent_at"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_send_on_print TINYINT(1) NOT NULL DEFAULT 0 AFTER zatca_enabled"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_send_on_clean TINYINT(1) NOT NULL DEFAULT 0 AFTER whatsapp_send_on_print"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_send_on_deliver TINYINT(1) NOT NULL DEFAULT 0 AFTER whatsapp_send_on_clean"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_send_on_subscription TINYINT(1) NOT NULL DEFAULT 0 AFTER whatsapp_send_on_deliver"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_send_on_pay TINYINT(1) NOT NULL DEFAULT 0 AFTER whatsapp_send_on_subscription"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN whatsapp_invoice_message TEXT DEFAULT NULL AFTER whatsapp_send_on_pay"
   ).catch(() => {});
   const [[cnt]] = await pool.query('SELECT COUNT(*) AS c FROM app_settings WHERE id = 1');
   if (Number(cnt.c) === 0) {
@@ -3120,6 +3153,8 @@ async function getAppSettings() {
             report_email_enabled, report_email_to, report_email_from, report_email_app_password_enc, report_email_send_time,
             report_email_last_status, report_email_last_error, report_email_last_sent_at,
             zatca_enabled,
+            whatsapp_send_on_print, whatsapp_send_on_clean, whatsapp_send_on_deliver,
+            whatsapp_send_on_subscription, whatsapp_send_on_pay, whatsapp_invoice_message,
             updated_at
      FROM app_settings WHERE id = 1`
   );
@@ -3188,6 +3223,12 @@ async function getAppSettings() {
     reportEmailLastError: row.report_email_last_error || '',
     reportEmailLastSentAt: row.report_email_last_sent_at,
     zatcaEnabled: row.zatca_enabled === 1,
+    whatsappSendOnPrint: row.whatsapp_send_on_print === 1,
+    whatsappSendOnClean: row.whatsapp_send_on_clean === 1,
+    whatsappSendOnDeliver: row.whatsapp_send_on_deliver === 1,
+    whatsappSendOnSubscription: row.whatsapp_send_on_subscription === 1,
+    whatsappSendOnPay: row.whatsapp_send_on_pay === 1,
+    whatsappInvoiceMessage: row.whatsapp_invoice_message || '',
     updatedAt: row.updated_at
   };
 }
@@ -3259,6 +3300,12 @@ async function saveAppSettings(data) {
     ? null
     : String(data.reportEmailAppPasswordEnc).trim().slice(0, 5000);
   const zatcaEnabled = data.zatcaEnabled === true ? 1 : 0;
+  const whatsappSendOnPrint        = data.whatsappSendOnPrint        ? 1 : 0;
+  const whatsappSendOnClean        = data.whatsappSendOnClean        ? 1 : 0;
+  const whatsappSendOnDeliver      = data.whatsappSendOnDeliver      ? 1 : 0;
+  const whatsappSendOnSubscription = data.whatsappSendOnSubscription ? 1 : 0;
+  const whatsappSendOnPay          = data.whatsappSendOnPay          ? 1 : 0;
+  const whatsappInvoiceMessage     = s(data.whatsappInvoiceMessage, 1000) || null;
 
   const conn = await pool.getConnection();
   try {
@@ -3272,7 +3319,9 @@ async function saveAppSettings(data) {
         enabled_payment_methods = CAST(? AS JSON), default_payment_method = ?, require_hanger = ?, require_customer_phone = ?, allow_subscription_debt = ?,
         barcode_auto_action = ?, show_barcode_in_invoice = ?,
         report_email_enabled = ?, report_email_from = ?, report_email_app_password_enc = ?, report_email_send_time = ?,
-        zatca_enabled = ?
+        zatca_enabled = ?,
+        whatsapp_send_on_print = ?, whatsapp_send_on_clean = ?, whatsapp_send_on_deliver = ?,
+        whatsapp_send_on_subscription = ?, whatsapp_send_on_pay = ?, whatsapp_invoice_message = ?
        WHERE id = 1`,
       [
         laundryNameAr || null,
@@ -3308,7 +3357,13 @@ async function saveAppSettings(data) {
         reportEmailFrom || null,
         reportEmailAppPasswordEnc,
         reportEmailSendTime,
-        zatcaEnabled
+        zatcaEnabled,
+        whatsappSendOnPrint,
+        whatsappSendOnClean,
+        whatsappSendOnDeliver,
+        whatsappSendOnSubscription,
+        whatsappSendOnPay,
+        whatsappInvoiceMessage
       ]
     );
 
@@ -4656,11 +4711,27 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
 
   if (trimmed) {
     const isNumeric = /^\d+$/.test(trimmed);
+    const seqMatch = trimmed.match(/^[cC]-?(\d+)$/);
     const params = [];
     let whereClause;
     let includeDeferredOnly = true;
 
-    if (isNumeric) {
+    if (seqMatch) {
+      // c1, c2 ... → بحث في إيصالات الاستهلاك برقم الإيصال
+      const receiptSeq = Number(seqMatch[1]);
+      const [receiptRows] = await pool.query(`
+        SELECT cr.id, cr.receipt_seq, cr.order_id,
+               cr.amount_consumed AS total_amount,
+               cr.created_at, cr.cleaning_date, cr.delivery_date,
+               c.id AS customer_id, c.customer_name, c.phone,
+               'receipt' AS rowType
+        FROM consumption_receipts cr
+        LEFT JOIN customers c ON c.id = cr.customer_id
+        WHERE cr.receipt_seq = ?
+        LIMIT 1
+      `, [receiptSeq]);
+      return receiptRows;
+    } else if (isNumeric) {
       if (trimmed.length >= 7) {
         // رقم طويل → بحث في الجوال فقط (مطابقة تامة أو جزئية من البداية)
         whereClause = `COALESCE(c.phone, '') LIKE ?`;
@@ -4677,11 +4748,23 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
       params.push(`%${trimmed}%`);
     }
 
-    if (['paid', 'settled', 'cleaned', 'delivered'].includes(normalizedStatusFilter)) {
+    const includeReceipts = ['paid', 'settled', 'cleaned', 'delivered', 'unclean', 'undelivered', 'all'].includes(normalizedStatusFilter);
+    if (includeReceipts) {
       includeDeferredOnly = false;
     }
 
-    const statusClause = includeDeferredOnly ? `AND o.payment_status IN ('pending','partial')` : '';
+    let statusClause;
+    if (normalizedStatusFilter === 'unclean') {
+      statusClause = `AND o.payment_status = 'paid' AND o.cleaning_date IS NULL`;
+    } else if (normalizedStatusFilter === 'undelivered') {
+      statusClause = `AND o.payment_status = 'paid' AND o.delivery_date IS NULL`;
+    } else if (normalizedStatusFilter === 'cleaned') {
+      statusClause = `AND o.cleaning_date IS NOT NULL`;
+    } else if (normalizedStatusFilter === 'delivered') {
+      statusClause = `AND o.delivery_date IS NOT NULL`;
+    } else {
+      statusClause = includeDeferredOnly ? `AND o.payment_status IN ('pending','partial')` : '';
+    }
 
     const [rows] = await pool.query(`
       SELECT
@@ -4694,10 +4777,56 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
       FROM orders o
       LEFT JOIN customers c ON c.id = o.customer_id
       WHERE ${whereClause}
+      AND COALESCE(o.is_consumption_only, 0) = 0
       ${statusClause}
       ORDER BY FIELD(o.payment_status, 'partial', 'pending', 'paid'), o.created_at DESC
       LIMIT 2000
     `, params);
+
+    // إضافة إيصالات الاستهلاك عند الفلاتر المناسبة
+    if (includeReceipts) {
+      let receiptWhere;
+      const receiptParams = [];
+      if (isNumeric && trimmed.length >= 7) {
+        receiptWhere = `COALESCE(c.phone, '') LIKE ?`;
+        receiptParams.push(`${trimmed}%`);
+      } else if (!isNumeric) {
+        receiptWhere = `COALESCE(c.customer_name, '') LIKE ?`;
+        receiptParams.push(`%${trimmed}%`);
+      } else {
+        // بحث برقم قصير → لا نبحث في الإيصالات هنا (c1 معالج مسبقاً)
+        return rows;
+      }
+
+      let receiptDateClause = '';
+      if (normalizedStatusFilter === 'unclean') {
+        receiptDateClause = `AND cr.cleaning_date IS NULL`;
+      } else if (normalizedStatusFilter === 'undelivered') {
+        receiptDateClause = `AND cr.delivery_date IS NULL`;
+      } else if (normalizedStatusFilter === 'cleaned') {
+        receiptDateClause = `AND cr.cleaning_date IS NOT NULL`;
+      } else if (normalizedStatusFilter === 'delivered') {
+        receiptDateClause = `AND cr.delivery_date IS NOT NULL`;
+      }
+
+      const [receiptRows] = await pool.query(`
+        SELECT cr.id, NULL AS order_number, cr.receipt_seq AS invoice_seq, cr.amount_consumed AS total_amount,
+               cr.amount_consumed AS paid_amount, 0 AS remaining_amount, cr.created_at AS fully_paid_at,
+               'subscription' AS payment_method, 'paid' AS payment_status,
+               cr.created_at, cr.created_at AS paid_at, cr.cleaning_date, cr.delivery_date,
+               cr.notes,
+               c.id AS customer_id, c.customer_name, c.phone,
+               'receipt' AS rowType, cr.receipt_seq
+        FROM consumption_receipts cr
+        LEFT JOIN customers c ON c.id = cr.customer_id
+        WHERE ${receiptWhere}
+        ${receiptDateClause}
+        ORDER BY cr.created_at DESC
+        LIMIT 2000
+      `, receiptParams);
+      return [...rows, ...receiptRows];
+    }
+
     return rows;
   } else {
     const [rows] = await pool.query(`
@@ -4711,11 +4840,90 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
       FROM orders o
       LEFT JOIN customers c ON c.id = o.customer_id
       WHERE o.payment_status IN ('pending','partial')
+      AND COALESCE(o.is_consumption_only, 0) = 0
       ORDER BY FIELD(o.payment_status, 'partial', 'pending'), o.created_at DESC
       LIMIT 2000
     `);
     return rows;
   }
+}
+
+async function getDeferredBySubscription({ subscriptionSearch, statusFilter = 'unpaid' } = {}) {
+  const trimmed = String(subscriptionSearch || '').trim();
+  if (!trimmed) return [];
+
+  const normalizedStatusFilter = String(statusFilter || 'unpaid').toLowerCase();
+  const includeReceipts = ['paid', 'settled', 'cleaned', 'delivered', 'unclean', 'undelivered', 'all'].includes(normalizedStatusFilter);
+
+  // بناء شرط الحالة للطلبات
+  let orderStatusClause = '';
+  if (normalizedStatusFilter === 'unclean') {
+    orderStatusClause = `AND o.payment_status = 'paid' AND o.cleaning_date IS NULL`;
+  } else if (normalizedStatusFilter === 'undelivered') {
+    orderStatusClause = `AND o.payment_status = 'paid' AND o.delivery_date IS NULL`;
+  } else if (!includeReceipts) {
+    orderStatusClause = `AND o.payment_status IN ('pending','partial')`;
+  } else if (normalizedStatusFilter === 'cleaned') {
+    orderStatusClause = `AND o.cleaning_date IS NOT NULL`;
+  } else if (normalizedStatusFilter === 'delivered') {
+    orderStatusClause = `AND o.delivery_date IS NOT NULL`;
+  }
+
+  // شرط الحالة لإيصالات الاستهلاك
+  let receiptStatusClause = '';
+  if (normalizedStatusFilter === 'unclean') {
+    receiptStatusClause = `AND cr.cleaning_date IS NULL`;
+  } else if (normalizedStatusFilter === 'undelivered') {
+    receiptStatusClause = `AND cr.delivery_date IS NULL`;
+  } else if (normalizedStatusFilter === 'cleaned') {
+    receiptStatusClause = `AND cr.cleaning_date IS NOT NULL`;
+  } else if (normalizedStatusFilter === 'delivered') {
+    receiptStatusClause = `AND cr.delivery_date IS NOT NULL`;
+  }
+
+  // ابحث عن العميل برقم ملف الاشتراك أولاً
+  const [[customer]] = await pool.query(
+    `SELECT id FROM customers WHERE subscription_number = ? LIMIT 1`,
+    [trimmed]
+  );
+  if (!customer) return [];
+  const customerId = customer.id;
+
+  const [orderRows] = await pool.query(`
+    SELECT o.id, o.order_number, o.invoice_seq, o.total_amount,
+           o.paid_amount, o.remaining_amount, o.fully_paid_at,
+           o.payment_method, o.payment_status,
+           o.created_at, o.paid_at, o.cleaning_date, o.delivery_date,
+           o.notes,
+           c.id AS customer_id, c.customer_name, c.phone
+    FROM orders o
+    LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.customer_id = ?
+    AND COALESCE(o.is_consumption_only, 0) = 0
+    ${orderStatusClause}
+    ORDER BY FIELD(o.payment_status, 'partial', 'pending', 'paid'), o.created_at DESC
+    LIMIT 2000
+  `, [customerId]);
+
+  if (!includeReceipts) return orderRows;
+
+  const [receiptRows] = await pool.query(`
+    SELECT cr.id, NULL AS order_number, cr.receipt_seq AS invoice_seq, cr.amount_consumed AS total_amount,
+           cr.amount_consumed AS paid_amount, 0 AS remaining_amount, cr.created_at AS fully_paid_at,
+           'subscription' AS payment_method, 'paid' AS payment_status,
+           cr.created_at, cr.created_at AS paid_at, cr.cleaning_date, cr.delivery_date,
+           cr.notes,
+           c.id AS customer_id, c.customer_name, c.phone,
+           'receipt' AS rowType, cr.receipt_seq
+    FROM consumption_receipts cr
+    LEFT JOIN customers c ON c.id = cr.customer_id
+    WHERE cr.customer_id = ?
+    ${receiptStatusClause}
+    ORDER BY cr.created_at DESC
+    LIMIT 2000
+  `, [customerId]);
+
+  return [...orderRows, ...receiptRows];
 }
 
 async function payDeferredOrder({ orderId, paymentMethod, paidCash = 0, paidCard = 0 }) {
@@ -4767,6 +4975,18 @@ async function markOrderDelivered({ orderId }) {
   } catch (e) {
     console.error('markOrderDelivered hanger release error:', e);
   }
+}
+
+async function markReceiptCleaned({ receiptId }) {
+  const id = Number(receiptId);
+  if (!id) throw new Error('معرّف الإيصال غير صالح');
+  await pool.query(`UPDATE consumption_receipts SET cleaning_date = NOW() WHERE id = ?`, [id]);
+}
+
+async function markReceiptDelivered({ receiptId }) {
+  const id = Number(receiptId);
+  if (!id) throw new Error('معرّف الإيصال غير صالح');
+  await pool.query(`UPDATE consumption_receipts SET delivery_date = NOW() WHERE id = ?`, [id]);
 }
 
 // ============================================================================
@@ -5114,8 +5334,8 @@ async function createCreditNotesTable() {
     CREATE TABLE IF NOT EXISTS credit_note_items (
       id                INT AUTO_INCREMENT PRIMARY KEY,
       credit_note_id    INT NOT NULL,
-      product_id        INT NOT NULL,
-      laundry_service_id INT NOT NULL,
+      product_id        INT NULL,
+      laundry_service_id INT NULL,
       product_name_ar   VARCHAR(255) DEFAULT NULL,
       product_name_en   VARCHAR(255) DEFAULT NULL,
       service_name_ar   VARCHAR(255) DEFAULT NULL,
@@ -5137,6 +5357,12 @@ async function createCreditNotesTable() {
   } catch (e) {
     console.error('migrate credit_note_seq:', e);
   }
+
+  // migrate: allow NULL for product_id and laundry_service_id in credit_note_items (subscription invoices have no product/service)
+  try {
+    await pool.query(`ALTER TABLE credit_note_items MODIFY COLUMN product_id INT NULL`);
+    await pool.query(`ALTER TABLE credit_note_items MODIFY COLUMN laundry_service_id INT NULL`);
+  } catch (_) {}
 
   try {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cn_created_at ON credit_notes(created_at DESC)`);
@@ -5199,15 +5425,26 @@ async function getCreditNotes({ page = 1, pageSize = 50, search = '', dateFrom =
   const offset = (safePage - 1) * safeSize;
   const like = `%${search}%`;
 
-  let whereClauses = `WHERE (
-    cn.credit_note_number LIKE ? OR
-    COALESCE(cn.original_order_number,'') LIKE ? OR
-    CAST(cn.credit_note_seq AS CHAR) LIKE ? OR
-    CAST(cn.original_invoice_seq AS CHAR) LIKE ? OR
-    COALESCE(c.customer_name,'') LIKE ? OR
-    COALESCE(c.phone,'') LIKE ?
-  )`;
-  const params = [like, like, like, like, like, like];
+  // support "c1", "C2" etc. as receipt seq search
+  const seqMatch = search.match(/^[cC](\d+)$/);
+  const seqNum = seqMatch ? parseInt(seqMatch[1], 10) : null;
+
+  let whereClauses;
+  let params;
+  if (seqNum !== null) {
+    whereClauses = `WHERE cn.credit_note_seq = ?`;
+    params = [seqNum];
+  } else {
+    whereClauses = `WHERE (
+      cn.credit_note_number LIKE ? OR
+      COALESCE(cn.original_order_number,'') LIKE ? OR
+      CAST(cn.credit_note_seq AS CHAR) LIKE ? OR
+      CAST(cn.original_invoice_seq AS CHAR) LIKE ? OR
+      COALESCE(c.customer_name,'') LIKE ? OR
+      COALESCE(c.phone,'') LIKE ?
+    )`;
+    params = [like, like, like, like, like, like];
+  }
 
   if (dateFrom) {
     whereClauses += ' AND DATE(cn.created_at) >= ?';
@@ -5309,7 +5546,7 @@ async function getInvoiceBySeq(invoiceSeq) {
     SELECT o.id, o.order_number, o.invoice_seq, o.order_type, o.subscription_period_id, o.subtotal, o.discount_amount, o.discount_label, o.extra_amount,
            o.vat_rate, o.vat_amount, o.total_amount, o.payment_method, o.payment_status,
            o.paid_amount, o.remaining_amount, o.price_display_mode,
-           o.created_at, o.created_by, o.starch, o.bluing,
+           o.created_at, o.created_by, o.starch, o.bluing, o.notes,
            c.id AS customer_id, c.customer_name, c.phone, c.subscription_number
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
@@ -5345,14 +5582,32 @@ async function getInvoiceBySeq(invoiceSeq) {
     throw e;
   }
 
+  // فاتورة اشتراك: تحقق من عدم وجود ايصالات استهلاك نشطة للفترة
+  const isSubInvoice = order.order_type === 'subscription_new' || order.order_type === 'subscription_renewal';
+  if (isSubInvoice && order.subscription_period_id) {
+    const [[activeReceipts]] = await pool.query(`
+      SELECT COUNT(*) AS cnt
+      FROM consumption_receipts cr
+      WHERE cr.period_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM credit_notes cn WHERE cn.original_order_id = cr.order_id
+        )
+    `, [order.subscription_period_id]);
+    if (activeReceipts && Number(activeReceipts.cnt) > 0) {
+      const e = new Error(`لا يمكن معالجة فاتورة الاشتراك — يوجد ${activeReceipts.cnt} ايصال استهلاك لم يُرجع بعد. يجب إرجاع جميع الايصالات المرتبطة بهذا الاشتراك أولاً`);
+      e.appCode = 'SUBSCRIPTION_HAS_ACTIVE_RECEIPTS';
+      throw e;
+    }
+  }
+
   const [items] = await pool.query(`
     SELECT oi.id, oi.quantity, oi.unit_price, oi.line_total,
            oi.product_id, oi.laundry_service_id,
            p.name_ar AS product_name_ar, p.name_en AS product_name_en,
            ls.name_ar AS service_name_ar, ls.name_en AS service_name_en
     FROM order_items oi
-    JOIN products p ON p.id = oi.product_id
-    JOIN laundry_services ls ON ls.id = oi.laundry_service_id
+    LEFT JOIN products p ON p.id = oi.product_id
+    LEFT JOIN laundry_services ls ON ls.id = oi.laundry_service_id
     WHERE oi.order_id = ?
     ORDER BY oi.id ASC
   `, [order.id]);
@@ -5367,7 +5622,7 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
     await conn.beginTransaction();
 
     const [[orderRow]] = await conn.query(
-      `SELECT id, invoice_seq, order_number, payment_status, payment_method FROM orders WHERE id = ? FOR UPDATE`,
+      `SELECT id, invoice_seq, order_number, payment_status, payment_method, order_type, subscription_period_id, notes FROM orders WHERE id = ? FOR UPDATE`,
       [originalOrderId]
     );
     if (!orderRow) {
@@ -5389,6 +5644,24 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       const e = new Error('تم إنشاء إشعار دائن لهذه الفاتورة مسبقاً');
       e.appCode = 'CREDIT_NOTE_EXISTS';
       throw e;
+    }
+
+    // فاتورة اشتراك: تحقق من عدم وجود ايصالات استهلاك نشطة للفترة
+    const isSubInvoice = orderRow.order_type === 'subscription_new' || orderRow.order_type === 'subscription_renewal';
+    if (isSubInvoice && orderRow.subscription_period_id) {
+      const [[activeReceipts]] = await conn.query(`
+        SELECT COUNT(*) AS cnt
+        FROM consumption_receipts cr
+        WHERE cr.period_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM credit_notes cn WHERE cn.original_order_id = cr.order_id
+          )
+      `, [orderRow.subscription_period_id]);
+      if (activeReceipts && Number(activeReceipts.cnt) > 0) {
+        const e = new Error(`لا يمكن معالجة فاتورة الاشتراك — يوجد ${activeReceipts.cnt} ايصال استهلاك لم يُرجع بعد. يجب إرجاع جميع الايصالات المرتبطة بهذا الاشتراك أولاً`);
+        e.appCode = 'SUBSCRIPTION_HAS_ACTIVE_RECEIPTS';
+        throw e;
+      }
     }
 
     const [[seqRow]] = await conn.query(
@@ -5485,6 +5758,42 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
         }
       } catch (refErr) {
         console.error('subscription refund on credit note error:', refErr);
+      }
+    }
+
+    // فاتورة اشتراك جديد أو تجديد: إلغاء فترة الاشتراك واسترجاع الرصيد
+    let subscriptionPeriodCancelled = false;
+    if (isSubInvoice && orderRow.subscription_period_id) {
+      try {
+        const [[periodRow]] = await conn.query(
+          `SELECT sp.id, sp.credit_remaining, sp.customer_subscription_id FROM subscription_periods sp WHERE sp.id = ? FOR UPDATE`,
+          [orderRow.subscription_period_id]
+        );
+        if (periodRow) {
+          await conn.query(
+            `UPDATE subscription_periods SET status = 'closed', credit_remaining = 0 WHERE id = ?`,
+            [orderRow.subscription_period_id]
+          );
+          const pkgName = orderRow.notes || '';
+          const cancelNote = `إلغاء اشتراك${pkgName ? ' (' + pkgName + ')' : ''} بموجب إشعار دائن ${cnNumber}`;
+          await conn.query(
+            `INSERT INTO subscription_ledger
+               (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
+             VALUES (?, 'refund', ?, 0, 'credit_note', ?, ?, ?)`,
+            [orderRow.subscription_period_id,
+             Number(periodRow.credit_remaining) || 0, cnId, cancelNote, createdBy || 'system']
+          );
+          subscriptionPeriodCancelled = true;
+          subscriptionRefund = subscriptionRefund || {
+            amount: Number(periodRow.credit_remaining) || 0,
+            newBalance: 0,
+            periodId: orderRow.subscription_period_id,
+            originalInvoiceSeq: orderRow.invoice_seq,
+            note: cancelNote
+          };
+        }
+      } catch (cancelErr) {
+        console.error('subscription period cancel on credit note error:', cancelErr);
       }
     }
 
@@ -6028,7 +6337,9 @@ module.exports = {
   createConsumptionReceipt, getConsumptionReceipts, getConsumptionReceiptById,
   searchConsumptionReceiptForRefund, refundConsumptionReceipt,
   getOrdersBySubscription, getSubscriptionInvoices,
-  getDeferredOrders, payDeferredOrder, markOrderCleaned, markOrderDelivered,
+  getDeferredOrders, getDeferredBySubscription, payDeferredOrder,
+  markOrderCleaned, markOrderDelivered,
+  markReceiptCleaned, markReceiptDelivered,
   // Partial invoice payment functions
   calculateRemainingBalance, determinePaymentStatus, validatePaymentAmount,
   getInvoiceWithPayments, recordInvoicePayment, getPaymentHistory,
@@ -6048,7 +6359,49 @@ module.exports = {
   getAllInvoicesReport,
   getSubscriptionsReport,
   getTypesReport,
+  getWhatsappQuota,
+  incrementWhatsappUsed,
+  setWhatsappQuota,
 };
+
+// ── WhatsApp Quota ────────────────────────────────────────────────────────────
+
+async function migrateWhatsappQuota() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_quota (
+        id          INT NOT NULL DEFAULT 1 PRIMARY KEY,
+        quota_total INT NOT NULL DEFAULT 0,
+        quota_used  INT NOT NULL DEFAULT 0,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await pool.query(`INSERT IGNORE INTO whatsapp_quota (id, quota_total, quota_used) VALUES (1, 0, 0)`);
+  } catch (e) {
+    console.error('migrateWhatsappQuota:', e);
+  }
+}
+
+async function getWhatsappQuota() {
+  const [[row]] = await pool.query(
+    'SELECT quota_total, quota_used, (quota_total - quota_used) AS quota_remaining FROM whatsapp_quota WHERE id = 1'
+  );
+  return row || { quota_total: 0, quota_used: 0, quota_remaining: 0 };
+}
+
+async function incrementWhatsappUsed() {
+  await pool.query(
+    'UPDATE whatsapp_quota SET quota_used = quota_used + 1 WHERE id = 1 AND quota_used < quota_total'
+  );
+}
+
+async function setWhatsappQuota(total) {
+  await pool.query(
+    'UPDATE whatsapp_quota SET quota_total = ?, quota_used = 0 WHERE id = 1',
+    [total]
+  );
+}
 
 async function getTypesReport(filters = {}) {
   const dateFrom = toSqlDateTime(filters.dateFrom) || '1970-01-01 00:00:00';

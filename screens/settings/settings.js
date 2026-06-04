@@ -107,7 +107,13 @@ window.addEventListener('DOMContentLoaded', () => {
     barcodeAutoClean: document.getElementById('barcodeAutoClean'),
     barcodeAutoDeliver: document.getElementById('barcodeAutoDeliver'),
     showBarcodeInInvoice: document.getElementById('showBarcodeInInvoice'),
-    zatcaEnabled
+    zatcaEnabled,
+    whatsappSendOnPrint:        document.getElementById('whatsappSendOnPrint'),
+    whatsappSendOnClean:        document.getElementById('whatsappSendOnClean'),
+    whatsappSendOnDeliver:      document.getElementById('whatsappSendOnDeliver'),
+    whatsappSendOnSubscription: document.getElementById('whatsappSendOnSubscription'),
+    whatsappSendOnPay:          document.getElementById('whatsappSendOnPay'),
+    whatsappInvoiceMessage:     document.getElementById('whatsappInvoiceMessage'),
   };
 
   let priceDisplayMode = 'exclusive';
@@ -249,6 +255,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (fields.allowSubscriptionDebt) fields.allowSubscriptionDebt.checked = s.allowSubscriptionDebt === true;
     if (fields.showBarcodeInInvoice) fields.showBarcodeInInvoice.checked = s.showBarcodeInInvoice !== false;
     if (fields.zatcaEnabled) fields.zatcaEnabled.checked = s.zatcaEnabled === true;
+    if (fields.whatsappSendOnPrint)        fields.whatsappSendOnPrint.checked        = s.whatsappSendOnPrint === true;
+    if (fields.whatsappSendOnClean)        fields.whatsappSendOnClean.checked        = s.whatsappSendOnClean === true;
+    if (fields.whatsappSendOnDeliver)      fields.whatsappSendOnDeliver.checked      = s.whatsappSendOnDeliver === true;
+    if (fields.whatsappSendOnSubscription) fields.whatsappSendOnSubscription.checked = s.whatsappSendOnSubscription === true;
+    if (fields.whatsappSendOnPay)          fields.whatsappSendOnPay.checked          = s.whatsappSendOnPay === true;
+    if (fields.whatsappInvoiceMessage)     fields.whatsappInvoiceMessage.value       = s.whatsappInvoiceMessage || '';
     // Barcode auto-action toggles
     const barcodeActions = (s.barcodeAutoAction || 'none').split(',');
     if (fields.barcodeAutoPay) fields.barcodeAutoPay.checked = barcodeActions.includes('pay');
@@ -385,7 +397,13 @@ window.addEventListener('DOMContentLoaded', () => {
         reportEmailSendMinute ? reportEmailSendMinute.value : '00',
         reportEmailIsPM
       ),
-      zatcaEnabled: fields.zatcaEnabled ? fields.zatcaEnabled.checked : false
+      zatcaEnabled: fields.zatcaEnabled ? fields.zatcaEnabled.checked : false,
+      whatsappSendOnPrint:        fields.whatsappSendOnPrint        ? fields.whatsappSendOnPrint.checked        : false,
+      whatsappSendOnClean:        fields.whatsappSendOnClean        ? fields.whatsappSendOnClean.checked        : false,
+      whatsappSendOnDeliver:      fields.whatsappSendOnDeliver      ? fields.whatsappSendOnDeliver.checked      : false,
+      whatsappSendOnSubscription: fields.whatsappSendOnSubscription ? fields.whatsappSendOnSubscription.checked : false,
+      whatsappSendOnPay:          fields.whatsappSendOnPay          ? fields.whatsappSendOnPay.checked          : false,
+      whatsappInvoiceMessage:     fields.whatsappInvoiceMessage     ? fields.whatsappInvoiceMessage.value.trim() : ''
     };
 
     const appPwd = reportEmailAppPassword ? reportEmailAppPassword.value.trim() : '';

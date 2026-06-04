@@ -66,15 +66,19 @@
   }
 
   async function invoke(method, payload) {
-    const r = await jsonFetch('/api/invoke', {
-      method: 'POST',
-      body: JSON.stringify({ method, payload: payload === undefined ? {} : payload })
-    });
-    if (r.status === 401) {
-      location.href = '/screens/login/login.html';
-      return { success: false, message: 'غير مصرح' };
+    try {
+      const r = await jsonFetch('/api/invoke', {
+        method: 'POST',
+        body: JSON.stringify({ method, payload: payload === undefined ? {} : payload })
+      });
+      if (r.status === 401) {
+        location.href = '/screens/login/login.html';
+        return { success: false, message: 'غير مصرح' };
+      }
+      return await r.json();
+    } catch (e) {
+      return { success: false, message: e.message || 'فشل الاتصال بالخادم' };
     }
-    return r.json();
   }
 
   window.api = {
@@ -287,8 +291,9 @@
     getOrdersBySubscription: (data) => invoke('getOrdersBySubscription', data),
     getSubscriptionInvoices: (filters) => invoke('getSubscriptionInvoices', filters),
     getOrderById: (data) => invoke('getOrderById', data),
-    getDeferredOrders:  (data) => invoke('getDeferredOrders',  data),
-    payDeferredOrder:   (data) => invoke('payDeferredOrder',   data),
+    getDeferredOrders:       (data) => invoke('getDeferredOrders',       data),
+    getDeferredBySubscription: (data) => invoke('getDeferredBySubscription', data),
+    payDeferredOrder:        (data) => invoke('payDeferredOrder',        data),
     getInvoiceWithPayments: (data) => invoke('getInvoiceWithPayments', data),
     recordInvoicePayment:   (data) => invoke('recordInvoicePayment',   data),
     getPaymentHistory:      (data) => invoke('getPaymentHistory',      data),
@@ -333,6 +338,16 @@
     exportWorkerReport: (data) => exportBinary('/api/export/worker-report', data),
     exportAllInvoicesReport: (data) => exportBinary('/api/export/all-invoices-report', data),
     exportSubscriptionsReport: (data) => exportBinary('/api/export/subscriptions-report', data),
+
+    // WhatsApp
+    whatsappGetStatus:  ()     => invoke('whatsappGetStatus'),
+    whatsappConnect:    ()     => invoke('whatsappConnect'),
+    whatsappDisconnect: ()     => invoke('whatsappDisconnect'),
+    whatsappSendTest:        (data) => invoke('whatsappSendTest', data),
+    whatsappGetQuota:        ()     => invoke('whatsappGetQuota'),
+    whatsappSetQuota:        (data) => invoke('whatsappSetQuota', data),
+    whatsappSendInvoicePdf:         (data) => invoke('whatsappSendInvoicePdf', data),
+    whatsappSendInvoicePdfFromHtml: (data) => invoke('whatsappSendInvoicePdfFromHtml', data),
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

@@ -365,7 +365,7 @@
       <span data-i18n="pos-tab-deferred">الفواتير الآجلة</span>
     </div>
 
-    <!-- Search box -->
+    <!-- Row 1: invoice search + sub search (+ filter on desktop) -->
     <div class="deferred-search-row">
       <div class="deferred-search-inner">
         <span class="search-icon">
@@ -379,14 +379,62 @@
           placeholder="ابحث برقم الفاتورة أو الإيصال (C-5) أو رقم الجوال..."
           autocomplete="off" />
       </div>
-      <div class="deferred-filter-wrap">
+      <div class="deferred-search-inner deferred-sub-search-inner">
+        <span class="search-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+          </svg>
+        </span>
+        <input id="deferredSubSearch" type="search" class="deferred-search-input"
+          placeholder="رقم الاشتراك..."
+          autocomplete="off" inputmode="numeric" />
+      </div>
+      <!-- Filter: visible on desktop inside search row -->
+      <div class="deferred-filter-wrap deferred-filter-desktop">
         <label for="deferredStatusFilter" class="deferred-filter-label">فلترة الحالة</label>
         <select id="deferredStatusFilter" class="deferred-filter-select" aria-label="فلترة حالة الفاتورة">
           <option value="unpaid" selected>غير مدفوعة</option>
           <option value="settled">تم السداد</option>
           <option value="cleaned">تم التنظيف</option>
+          <option value="unclean">غير منظفة</option>
           <option value="delivered">تم التسليم</option>
+          <option value="undelivered">غير مسلمة</option>
         </select>
+      </div>
+    </div>
+
+    <!-- Row 2: barcode (full width on desktop; 50%+50% with filter on mobile) -->
+    <div class="deferred-barcode-row">
+      <!-- Filter: visible on mobile only, paired with barcode -->
+      <div class="deferred-filter-wrap deferred-filter-mobile">
+        <label for="deferredStatusFilterMobile" class="deferred-filter-label">فلترة الحالة</label>
+        <select id="deferredStatusFilterMobile" class="deferred-filter-select" aria-label="فلترة حالة الفاتورة">
+          <option value="unpaid" selected>غير مدفوعة</option>
+          <option value="settled">تم السداد</option>
+          <option value="cleaned">تم التنظيف</option>
+          <option value="unclean">غير منظفة</option>
+          <option value="delivered">تم التسليم</option>
+          <option value="undelivered">غير مسلمة</option>
+        </select>
+      </div>
+      <div class="deferred-barcode-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+          <line x1="8" y1="12" x2="16" y2="12"/>
+        </svg>
+        <input id="deferredBarcodeInput" type="text" class="deferred-barcode-input"
+          placeholder="امسح الباركود للدفع السريع..."
+          autocomplete="off" />
+        <button id="btnCameraScan" class="btn-camera-scan" type="button" title="مسح بالكاميرا">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
+            <path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill-rule="evenodd"/>
+          </svg>
+        </button>
+        <!-- Hidden file input: opens native camera on mobile (works on HTTP) -->
+        <input type="file" id="cameraCaptureInput" accept="image/*" capture="environment" style="display:none" />
       </div>
     </div>
 
@@ -418,27 +466,6 @@
       </div>
     </div>
 
-    <!-- Barcode scanner row -->
-    <div class="deferred-barcode-row">
-      <div class="deferred-barcode-inner">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-          <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-          <line x1="8" y1="12" x2="16" y2="12"/>
-        </svg>
-        <input id="deferredBarcodeInput" type="text" class="deferred-barcode-input"
-          placeholder="امسح الباركود للدفع السريع..."
-          autocomplete="off" />
-        <button id="btnCameraScan" class="btn-camera-scan" type="button" title="مسح بالكاميرا">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
-            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
-            <path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill-rule="evenodd"/>
-          </svg>
-        </button>
-        <!-- Hidden file input: opens native camera on mobile (works on HTTP) -->
-        <input type="file" id="cameraCaptureInput" accept="image/*" capture="environment" style="display:none" />
-      </div>
-    </div>
   </div>
 
   <!-- Results area -->

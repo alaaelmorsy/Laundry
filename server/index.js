@@ -28,6 +28,18 @@ const loginLimiter = rateLimit({
 async function start() {
   await db.initialize();
 
+  // Auto-restore WhatsApp session if session files exist
+  try {
+    const whatsappService = require('./services/whatsappService');
+    const waDir = path.join(__dirname, '../data/whatsapp_session');
+    const fs = require('fs');
+    if (fs.existsSync(waDir) && fs.readdirSync(waDir).length > 0) {
+      whatsappService.connect().catch(e => console.error('[WhatsApp] auto-connect failed:', e.message));
+    }
+  } catch (e) {
+    console.error('[WhatsApp] service load failed:', e.message);
+  }
+
   // Start background scheduler for daily report email
   try {
     reportEmailScheduler.startScheduler(cron);

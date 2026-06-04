@@ -284,10 +284,10 @@
           <td class="a4m-td-name">${nameCell}</td>
           <td class="a4m-td-name">${svcCell}</td>
           <td class="a4m-td-num">${it.qty || 1}</td>
-          <td class="a4m-td-num">${sarSpan}${Number(it.unitPrice || 0).toFixed(2)}</td>
-          <td class="a4m-td-num">${sarSpan}${net.toFixed(2)}</td>
-          <td class="a4m-td-num">${sarSpan}${itemVat.toFixed(2)}</td>
-          <td class="a4m-td-num">${sarSpan}${gross.toFixed(2)}</td>
+          <td class="a4m-td-num">${Number(it.unitPrice || 0).toFixed(2)}</td>
+          <td class="a4m-td-num">${net.toFixed(2)}</td>
+          <td class="a4m-td-num">${itemVat.toFixed(2)}</td>
+          <td class="a4m-td-num">${gross.toFixed(2)}</td>
         </tr>`;
       }).join('');
     }

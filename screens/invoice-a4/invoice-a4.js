@@ -184,10 +184,10 @@
           + '<td class="a4-td-name">' + nameCell + '</td>'
           + '<td class="a4-td-name">' + svcCell + '</td>'
           + '<td class="a4-td-num">' + (it.qty || 1) + '</td>'
-          + '<td class="a4-td-num">' + sarSpan + Number(it.unitPrice || 0).toFixed(2) + '</td>'
-          + '<td class="a4-td-num">' + sarSpan + net.toFixed(2) + '</td>'
-          + '<td class="a4-td-num">' + sarSpan + itemVat.toFixed(2) + '</td>'
-          + '<td class="a4-td-num">' + sarSpan + gross.toFixed(2) + '</td>'
+          + '<td class="a4-td-num">' + Number(it.unitPrice || 0).toFixed(2) + '</td>'
+          + '<td class="a4-td-num">' + net.toFixed(2) + '</td>'
+          + '<td class="a4-td-num">' + itemVat.toFixed(2) + '</td>'
+          + '<td class="a4-td-num">' + gross.toFixed(2) + '</td>'
           + '</tr>';
       }).join('');
     }

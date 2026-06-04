@@ -1086,7 +1086,7 @@ window.addEventListener('DOMContentLoaded', () => {
     subscriptionsTableBody.querySelectorAll('[data-sub-delete]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const sid = Number(btn.dataset.subDelete);
-        const ref = btn.getAttribute('data-sub-ref') || '';
+        const ref = fmtSubRef(btn.getAttribute('data-sub-ref') || '');
         if (!sid) return;
         const msg = I18N.t('subscriptions-delete-confirm').replace('{ref}', ref);
         if (!(await showConfirmModal(msg))) return;
@@ -1102,7 +1102,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const kind = btn.getAttribute('data-sub-power-toggle');
         if (kind !== 'stop' && kind !== 'resume') return;
         const sid = Number(btn.dataset.subToggle);
-        const ref = btn.getAttribute('data-sub-ref') || '';
+        const ref = fmtSubRef(btn.getAttribute('data-sub-ref') || '');
         if (!sid) return;
         if (kind === 'stop') {
           const msg = I18N.t('subscriptions-stop-confirm').replace('{ref}', ref);

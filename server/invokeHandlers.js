@@ -8,6 +8,7 @@ const { encryptText, decryptText, sendDailyReportEmail, buildProfessionalEmailHt
 const { LocalZatcaBridge } = require('./services/zatcaBridge');
 
 const MAX_PRODUCT_IMAGE_RAW_BYTES = 15 * 1024 * 1024;
+const whatsappService = require('./services/whatsappService');
 
 /**
  * دالة مساعدة داخلية — تحسب الضريبة وتحفظ فاتورة اشتراك
@@ -137,7 +138,13 @@ async function invoke(method, payload, _user) {
           if (!v) return null;
           return encryptText(v);
         })(),
-        zatcaEnabled: data.zatcaEnabled
+        zatcaEnabled: data.zatcaEnabled,
+        whatsappSendOnPrint:        data.whatsappSendOnPrint,
+        whatsappSendOnClean:        data.whatsappSendOnClean,
+        whatsappSendOnDeliver:      data.whatsappSendOnDeliver,
+        whatsappSendOnSubscription: data.whatsappSendOnSubscription,
+        whatsappSendOnPay:          data.whatsappSendOnPay,
+        whatsappInvoiceMessage:     data.whatsappInvoiceMessage
       };
       if (data.removeLogo === true) {
         savePayload.clearLogo = true;
@@ -964,6 +971,18 @@ async function invoke(method, payload, _user) {
       }
     }
 
+    case 'getDeferredBySubscription': {
+      try {
+        const rows = await db.getDeferredBySubscription({
+          subscriptionSearch: (payload && payload.subscriptionSearch) || '',
+          statusFilter: (payload && payload.statusFilter) || 'unpaid',
+        });
+        return { success: true, orders: rows };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'payDeferredOrder': {
       try {
         await db.payDeferredOrder({
@@ -1486,6 +1505,103 @@ async function invoke(method, payload, _user) {
       } catch (err) {
         return { success: false, message: err.message };
       }
+    }
+
+    // ── WhatsApp ──────────────────────────────────────────────────────────────
+    case 'whatsappGetStatus': {
+      const quota          = await db.getWhatsappQuota();
+      const { status, qr } = whatsappService.getStatus();
+      return { success: true, status, qr, quota };
+    }
+
+    case 'whatsappConnect': {
+      await whatsappService.connect();
+      const quota          = await db.getWhatsappQuota();
+      const { status, qr } = whatsappService.getStatus();
+      return { success: true, status, qr, quota };
+    }
+
+    case 'whatsappDisconnect': {
+      await whatsappService.disconnect();
+      return { success: true, status: 'disconnected' };
+    }
+
+    case 'whatsappSendTest': {
+      const { phone, message } = payload || {};
+      if (!phone || !message) return { success: false, message: 'الرجاء إدخال رقم الجوال والرسالة' };
+      const quota = await db.getWhatsappQuota();
+      if (quota.quota_remaining <= 0) return { success: false, message: 'انتهت حصة الرسائل المتاحة' };
+      const result = await whatsappService.sendMessage(phone, message);
+      if (result.success) {
+        await db.incrementWhatsappUsed();
+        return { success: true, message: 'تم إرسال الرسالة بنجاح' };
+      }
+      return { success: false, message: result.error || 'فشل إرسال الرسالة' };
+    }
+
+    case 'whatsappGetQuota': {
+      const quota = await db.getWhatsappQuota();
+      return { success: true, ...quota };
+    }
+
+    case 'whatsappSetQuota': {
+      const total = parseInt(payload && payload.total, 10);
+      if (!total || total < 0) return { success: false, message: 'رقم غير صالح' };
+      await db.setWhatsappQuota(total);
+      const quota = await db.getWhatsappQuota();
+      return { success: true, ...quota };
+    }
+
+    case 'whatsappSendInvoicePdf': {
+      const { orderId, phone, caption, paperType } = payload || {};
+      if (!phone) return { success: false, message: 'رقم الجوال مطلوب' };
+      if (!orderId) return { success: false, message: 'رقم الفاتورة مطلوب' };
+      const quota = await db.getWhatsappQuota();
+      if (quota.quota_total > 0 && quota.quota_used >= quota.quota_total) return { success: false, message: 'تم استنفاد الحصة اليومية للواتساب' };
+      const pdfResult = await exportsService.exportInvoicePdf(Number(orderId), paperType || 'thermal');
+      const result = await whatsappService.sendDocument(phone, pdfResult.buffer, pdfResult.filename, caption || '');
+      if (result.success) await db.incrementWhatsappUsed();
+      return result.success ? { success: true } : { success: false, message: result.error };
+    }
+
+    case 'whatsappSendInvoicePdfFromHtml': {
+      let { html, paperType, phone, caption, orderNum, zatcaPayload } = payload || {};
+      if (!phone) return { success: false, message: 'رقم الجوال مطلوب' };
+      if (!html)  return { success: false, message: 'محتوى الفاتورة مطلوب' };
+      const quota = await db.getWhatsappQuota();
+      if (quota.quota_total > 0 && quota.quota_used >= quota.quota_total) return { success: false, message: 'تم استنفاد الحصة اليومية للواتساب' };
+
+      // حقن QR في الـ HTML إذا كان العنصر فارغاً (ضمان ظهور QR في PDF)
+      const _hasEmptyQr = /<div[^>]+id="invQR"[^>]*>\s*<\/div>/.test(html)
+                       || /<div[^>]+id="a4mQR"[^>]*>\s*<\/div>/.test(html);
+      if (_hasEmptyQr && zatcaPayload) {
+        try {
+          let _qrInput = zatcaPayload.tlvBase64;
+          if (!_qrInput) {
+            // بناء TLV يدوياً إن لم يكن موجوداً
+            const _appSettings = await db.getAppSettings();
+            const _sellerName  = String(zatcaPayload.sellerName  || _appSettings.laundryNameAr || '');
+            const _vatNumber   = String(zatcaPayload.vatNumber   || _appSettings.vatNumber     || '');
+            const _ts          = String(zatcaPayload.timestamp   || new Date().toISOString());
+            const _total       = String(zatcaPayload.totalAmount || '0.00');
+            const _vat         = String(zatcaPayload.vatAmount   || '0.00');
+            function _encTag(tag, val) {
+              const b = Buffer.from(val, 'utf8');
+              const out = Buffer.alloc(2 + b.length);
+              out[0] = tag; out[1] = b.length; b.copy(out, 2); return out;
+            }
+            _qrInput = Buffer.concat([_encTag(1,_sellerName),_encTag(2,_vatNumber),_encTag(3,_ts),_encTag(4,_total),_encTag(5,_vat)]).toString('base64');
+          }
+          const _qrSvg = await QRCode.toString(_qrInput, { type: 'svg', errorCorrectionLevel: 'M', margin: 1, width: 120 });
+          html = html.replace(/(<div[^>]+id="invQR"[^>]*>)\s*(<\/div>)/, `$1${_qrSvg}$2`);
+          html = html.replace(/(<div[^>]+id="a4mQR"[^>]*>)\s*(<\/div>)/, `$1${_qrSvg}$2`);
+        } catch (_) {}
+      }
+
+      const pdfResult = await exportsService.exportInvoicePdfFromHtml(html, paperType || 'thermal', orderNum || '');
+      const result = await whatsappService.sendDocument(phone, pdfResult.buffer, pdfResult.filename, caption || '');
+      if (result.success) await db.incrementWhatsappUsed();
+      return result.success ? { success: true } : { success: false, message: result.error };
     }
 
     default:

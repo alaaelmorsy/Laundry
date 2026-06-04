@@ -24,8 +24,10 @@
     deferredPage: 1,
     deferredPageSize: 20,
     deferredSearchTimer: null,
+    deferredSubSearchTimer: null,
     deferredStatusFilter: 'unpaid',
     deferredInvoiceSearchMode: false,
+    deferredSubSearch: '',
     deferredFilteredInvoices: [],
     deferredPayingOrder: null,
     viewingDeferredInvoice: null,
@@ -213,7 +215,9 @@
     saleView:              document.getElementById('saleView'),
     deferredView:          document.getElementById('deferredView'),
     deferredSearch:        document.getElementById('deferredSearch'),
+    deferredSubSearch:     document.getElementById('deferredSubSearch'),
     deferredStatusFilter:  document.getElementById('deferredStatusFilter'),
+    deferredStatusFilterMobile: document.getElementById('deferredStatusFilterMobile'),
     btnDeferredSearch:     document.getElementById('btnDeferredSearch'),
     deferredEmptyState:    document.getElementById('deferredEmptyState'),
     deferredList:          document.getElementById('deferredList'),
@@ -1695,12 +1699,14 @@
     if (!svg) return;
     if (receiptSeq) {
       try {
+        svg.innerHTML = '';
         JsBarcode(svg, 'C-' + receiptSeq, {
           format: 'CODE128', displayValue: true, fontSize: 11,
           height: 40, margin: 4, background: 'transparent'
         });
         if (wrap) wrap.style.display = '';
-      } catch (_) {
+      } catch (e) {
+        console.error('renderConsumptionBarcode error:', e);
         if (wrap) wrap.style.display = 'none';
         svg.innerHTML = '';
       }
@@ -1803,6 +1809,9 @@
       };
 
       openA4Invoice(data);
+      if ((state.appSettings || {}).whatsappSendOnSubscription) {
+        sendInvoiceWhatsApp(orderId, order.phone || '');
+      }
     } catch (e) {
       console.error('printSubscriptionA4 error:', e);
     }
@@ -1945,10 +1954,10 @@
           + '<td class="a4m-td-name">' + nameCell + '</td>'
           + '<td class="a4m-td-name">' + svcCell  + '</td>'
           + '<td class="a4m-td-num">'  + (it.qty || 1) + '</td>'
-          + '<td class="a4m-td-num">'  + sarSpan + Number(it.unitPrice || 0).toFixed(2) + '</td>'
-          + '<td class="a4m-td-num">'  + sarSpan + net.toFixed(2) + '</td>'
-          + '<td class="a4m-td-num">'  + sarSpan + itemVat.toFixed(2) + '</td>'
-          + '<td class="a4m-td-num">'  + sarSpan + gross.toFixed(2) + '</td>'
+          + '<td class="a4m-td-num">'  + Number(it.unitPrice || 0).toFixed(2) + '</td>'
+          + '<td class="a4m-td-num">'  + net.toFixed(2) + '</td>'
+          + '<td class="a4m-td-num">'  + itemVat.toFixed(2) + '</td>'
+          + '<td class="a4m-td-num">'  + gross.toFixed(2) + '</td>'
           + '</tr>';
       }).join('');
     }
@@ -2124,9 +2133,19 @@
           setTimeout(printNext, 120);
         } else {
           document.body.classList.remove('print-consumption-receipt');
+          // نحفظ بيانات الواتساب قبل مسح السلة
+          const _crWaSettings = state.appSettings || {};
+          const _crWaPhone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
+          const _crPaperEl = document.getElementById('crModalPaper');
+          const _crHtml = _crPaperEl ? _crPaperEl.outerHTML : null;
+          const _crOrderNum = state.viewingConsumptionReceiptNum || '';
           // After a successful save + print request, empty the cart automatically.
           if (!state._creditNoteModalMode && !state.viewingDeferredInvoice && state.shouldClearCartAfterConsumptionPrint !== false) {
             clearCart();
+          }
+          // إرسال إيصال الاستهلاك عبر الواتساب عند الطباعة
+          if (_crWaSettings.whatsappSendOnPrint && _crHtml && _crWaPhone) {
+            sendInvoiceWhatsAppFromHtml(_crHtml, 'thermal', _crWaPhone, _crOrderNum);
           }
           // Keep the receipt modal visible after printing so the user can
           // export PDF or review details. The user closes it manually.
@@ -2965,6 +2984,7 @@
         order.id,
         order.notes || ''
       );
+      state._printingSubscription = true;
     } catch (e) {
       console.error('showSubscriptionInvoiceModal error:', e);
       showTopToast('خطأ في عرض الفاتورة', 'error');
@@ -3198,6 +3218,141 @@
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // إرسال من HTML الشاشة (مطابق للطباعة تماماً)
+  async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload) {
+    if (!html || !phone) return;
+    const s = state.appSettings || {};
+    try {
+      await window.api.whatsappSendInvoicePdfFromHtml({
+        html, paperType: paperType || 'thermal', phone,
+        caption: s.whatsappInvoiceMessage || '',
+        orderNum: orderNum || '',
+        zatcaPayload: zatcaPayload || null
+      });
+    } catch (_) {}
+  }
+
+  // إرسال من orderId — يحمّل الفاتورة في المودال بصمت ويلتقط HTML مطابق للشاشة
+  async function sendInvoiceWhatsApp(orderId, phone) {
+    if (!orderId || !phone) return;
+    const s = state.appSettings || {};
+    try {
+      // نحفظ الحالة الحالية
+      const _prevCart          = state.cart.slice();
+      const _prevCustomer      = state.selectedCustomer;
+      const _prevPayment       = state.paymentMethod;
+      const _prevVatRate       = state.vatRate;
+      const _prevPriceMode     = state.priceDisplayMode;
+      const _prevZatcaQr       = state.lastZatcaQr;
+      const _prevViewingId     = state.viewingOrderId;
+      const _prevModalDisplay  = els.invoiceModal ? els.invoiceModal.style.display : 'none';
+
+      // نخفي المودال أثناء التحميل
+      if (els.invoiceModal) els.invoiceModal.style.display = 'none';
+
+      // نحمّل بيانات الفاتورة
+      const res = await window.api.getOrderById({ id: Number(orderId) });
+      if (!res || !res.success || !res.order) return;
+      const { order, items } = res;
+
+      // نجمع الدفعات
+      let totalCash = parseFloat(order.paid_cash || 0);
+      let totalCard = parseFloat(order.paid_card || 0);
+      try {
+        const paymentsRes = await window.api.getInvoiceWithPayments({ orderId: Number(orderId) });
+        if (paymentsRes && paymentsRes.success && Array.isArray(paymentsRes.payments) && paymentsRes.payments.length) {
+          totalCash = 0; totalCard = 0;
+          paymentsRes.payments.forEach(function(p) {
+            if (p.payment_method === 'cash') totalCash += Number(p.payment_amount || 0);
+            else if (p.payment_method === 'card') totalCard += Number(p.payment_amount || 0);
+            else if (p.payment_method === 'mixed') { totalCash += Number(p.cash_amount || 0); totalCard += Number(p.card_amount || 0); }
+          });
+        }
+      } catch (_) {}
+
+      // نضبط state مؤقتاً لملء المودال
+      state.cart = (items || []).map(function(item) {
+        return { productNameAr: item.product_name_ar || '', productNameEn: item.product_name_en || '',
+          serviceNameAr: item.service_name_ar || '', serviceNameEn: item.service_name_en || '',
+          serviceName: item.service_name_ar || '', qty: item.quantity,
+          unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0) };
+      });
+      state.selectedCustomer = { name: order.customer_name || '', phone: order.phone || '' };
+      state.paymentMethod    = (totalCash > 0 && totalCard > 0) ? 'mixed' : (order.payment_method || 'cash');
+      if (totalCash > 0 && totalCard > 0) { state.mixedCash = totalCash; state.mixedCard = totalCard; }
+      state.vatRate          = Number(order.vat_rate != null ? order.vat_rate : (state.vatRate || 15));
+      state.priceDisplayMode = order.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
+      state.lastZatcaQr      = order.zatca_qr || null;
+      state.viewingOrderId   = order.id;
+
+      // نملأ المودال بدون طباعة (autoOpenPrint = false) مع تواريخ السداد/التنظيف/التسليم
+      showInvoiceModal(order.order_number, order.created_at,
+        { subtotal: Number(order.subtotal || 0), discount: Number(order.discount_amount || 0),
+          extra: Number(order.extra_amount || 0), vatAmount: Number(order.vat_amount || 0),
+          total: Number(order.total_amount || 0), paid: Number(order.paid_amount || 0),
+          remaining: Number(order.remaining_amount || 0), paidCash: totalCash, paidCard: totalCard },
+        res.subscription || null, order.invoice_seq,
+        { paidAt: order.paid_at || null, cleaningDate: order.cleaning_date || null, deliveryDate: order.delivery_date || null },
+        false, order.id, order.notes || '');
+
+      // نولّد QR مباشرةً ونحقنه (بدلاً من الانتظار على renderInvoiceQR async)
+      const paperType = s.invoicePaperType || 'thermal';
+      const _qrEl = paperType === 'a4'
+        ? document.getElementById('a4mQR')
+        : (els.invQR || document.getElementById('invQR'));
+      if (_qrEl && Number(order.vat_rate || 0) > 0) {
+        try {
+          const _qrPayload = order.zatca_qr
+            ? { tlvBase64: order.zatca_qr }
+            : { sellerName: s.laundryNameAr || '',
+                vatNumber:   s.vatNumber || '',
+                timestamp:   order.created_at || new Date().toISOString(),
+                totalAmount: String(Number(order.total_amount  || 0).toFixed(2)),
+                vatAmount:   String(Number(order.vat_amount    || 0).toFixed(2)) };
+          const _qrRes = await window.api.generateZatcaQR(_qrPayload);
+          if (_qrRes && _qrRes.success && _qrRes.svg) {
+            _qrEl.innerHTML = _qrRes.svg;
+          }
+        } catch (_) {}
+      }
+
+      // نلتقط HTML من المودال
+      const paperEl = paperType === 'a4'
+        ? document.getElementById('invoicePaperA4m')
+        : document.getElementById('invoicePaper');
+      const capturedHtml = paperEl ? paperEl.outerHTML : null;
+      const orderNumEl = document.getElementById('invOrderNum');
+      const orderNum = orderNumEl ? orderNumEl.textContent : String(order.invoice_seq || orderId);
+
+      // نعيد إخفاء المودال فوراً
+      if (els.invoiceModal) els.invoiceModal.style.display = 'none';
+
+      // نستعيد الحالة السابقة
+      state.cart             = _prevCart;
+      state.selectedCustomer = _prevCustomer;
+      state.paymentMethod    = _prevPayment;
+      state.vatRate          = _prevVatRate;
+      state.priceDisplayMode = _prevPriceMode;
+      state.lastZatcaQr      = _prevZatcaQr;
+      state.viewingOrderId   = _prevViewingId;
+      if (els.invoiceModal) els.invoiceModal.style.display = _prevModalDisplay;
+
+      // نرسل HTML كـ PDF مع بيانات QR كاحتياط
+      if (capturedHtml) {
+        const _zatcaPayload = order.zatca_qr
+          ? { tlvBase64: order.zatca_qr }
+          : (Number(order.vat_rate || 0) > 0 ? {
+              sellerName:  s.laundryNameAr    || '',
+              vatNumber:   s.vatNumber        || '',
+              timestamp:   order.created_at   || new Date().toISOString(),
+              totalAmount: String(Number(order.total_amount || 0).toFixed(2)),
+              vatAmount:   String(Number(order.vat_amount   || 0).toFixed(2))
+            } : null);
+        await sendInvoiceWhatsAppFromHtml(capturedHtml, paperType, phone, orderNum, _zatcaPayload);
+      }
+    } catch (_) {}
+  }
+
   function getPrintCopies() {
     var copies = Number(state.appSettings && state.appSettings.printCopies);
     if (!Number.isFinite(copies)) return 1;
@@ -3245,10 +3400,39 @@
           setTimeout(printNextCopy, 120);
         } else {
           cleanupPrintArtifacts();
+          // نحفظ بيانات الواتساب قبل مسح السلة (clearCart يمسح state.selectedCustomer)
+          const _waSettings = state.appSettings || {};
+          const _waPhone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
+          const _waSub = state._printingSubscription;
+          const _waPaperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+          // التقاط HTML الفاتورة — QR مرسوم بالفعل لأن المستخدم أغلق نافذة الطباعة
+          const _waPaperEl = _waPaperType === 'a4'
+            ? document.getElementById('invoicePaperA4m')
+            : document.getElementById('invoicePaper');
+          const _waHtml = _waPaperEl ? _waPaperEl.outerHTML : null;
+          const _waOrderNumEl = document.getElementById('invOrderNum');
+          const _waOrderNum = _waOrderNumEl ? _waOrderNumEl.textContent : '';
+          // بيانات QR كاحتياط للسيرفر
+          const _waZatca = state.lastZatcaQr
+            ? { tlvBase64: state.lastZatcaQr }
+            : (state.vatRate > 0 ? {
+                sellerName:  (_waSettings.laundryNameAr || ''),
+                vatNumber:   (_waSettings.vatNumber     || ''),
+                timestamp:   new Date().toISOString(),
+                totalAmount: '0.00', vatAmount: '0.00'
+              } : null);
           // After a successful save + print request, empty the cart automatically.
           if (!state._creditNoteModalMode && !state.viewingDeferredInvoice) {
             clearCart();
           }
+          // إرسال الفاتورة عبر الواتساب إذا كان الإعداد مفعلاً (من HTML مطابق للطباعة)
+          if (_waSub && _waSettings.whatsappSendOnSubscription) {
+            state._printingSubscription = false;
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca);
+          } else if (!_waSub && _waSettings.whatsappSendOnPrint) {
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca);
+          }
+          state._printingSubscription = false;
           // Keep the invoice modal visible after printing so the user can
           // export PDF or review details. The user closes it manually.
         }
@@ -3282,14 +3466,26 @@
     els.invoiceSeqInput.disabled = true;
     els.btnProcessInvoice.disabled = true;
 
-    state.cart = items.map(item => ({
+    const isSubInv = invoice.order_type === 'subscription_new' || invoice.order_type === 'subscription_renewal';
+    const subPkgName = isSubInv ? (invoice.notes || 'باقة اشتراك') : '';
+    const subSvcLabel = isSubInv
+      ? (invoice.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد')
+      : '';
+
+    const cartItems = (items && items.length > 0) ? items
+      : (isSubInv ? [{ product_id: null, laundry_service_id: null, product_name_ar: null,
+          service_name_ar: null, quantity: 1,
+          unit_price: parseFloat(invoice.total_amount || 0),
+          line_total: parseFloat(invoice.total_amount || 0), id: 0 }] : []);
+
+    state.cart = cartItems.map(item => ({
       productId: item.product_id,
       serviceId: item.laundry_service_id,
-      productNameAr: item.product_name_ar || '',
+      productNameAr: item.product_name_ar || subPkgName,
       productNameEn: item.product_name_en || '',
-      serviceNameAr: item.service_name_ar || '',
+      serviceNameAr: item.service_name_ar || subSvcLabel,
       serviceNameEn: item.service_name_en || '',
-      serviceName: item.service_name_ar || '',
+      serviceName: item.service_name_ar || subSvcLabel,
       key: `proc_${item.product_id}_${item.laundry_service_id}_${item.id}`,
       qty: item.quantity,
       unitPrice: parseFloat(item.unit_price || 0),
@@ -3585,10 +3781,15 @@
     var vatAmount   = parseFloat(inv.vat_amount      || 0);
     var totalAmount = parseFloat(inv.total_amount    || 0);
 
-    els.invItemsTbody.innerHTML = items.map(function(it) {
-      var nameAr = escHtml(it.product_name_ar || '');
+    var isCNSubInvoice = inv.order_type === 'subscription_new' || inv.order_type === 'subscription_renewal';
+    var cnSubPkgName = isCNSubInvoice ? (inv.notes || '') : '';
+    var cnSubSvcLabel = isCNSubInvoice ? (inv.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد') : '';
+    var cnDisplayItems = (items && items.length > 0) ? items
+      : (isCNSubInvoice ? [{ product_name_ar: '', service_name_ar: '', quantity: 1, line_total: parseFloat(inv.total_amount || 0) }] : []);
+    els.invItemsTbody.innerHTML = cnDisplayItems.map(function(it) {
+      var nameAr = escHtml(it.product_name_ar || cnSubPkgName);
       var nameEn = escHtml(it.product_name_en || '');
-      var svcAr  = escHtml(it.service_name_ar || '');
+      var svcAr  = escHtml(it.service_name_ar || cnSubSvcLabel);
       var svcEn  = escHtml(it.service_name_en || '');
       var productCell = nameAr + (nameEn && nameEn !== nameAr ? '<br><span class="inv-td-en">' + nameEn + '</span>' : '');
       var serviceCell = svcAr + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '');
@@ -4162,6 +4363,15 @@
       clearTimeout(state.deferredSearchTimer);
       state.deferredSearchTimer = setTimeout(searchDeferredInvoices, 500);
     });
+    if (els.deferredSubSearch) {
+      els.deferredSubSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') searchDeferredBySubscription();
+      });
+      els.deferredSubSearch.addEventListener('input', () => {
+        clearTimeout(state.deferredSubSearchTimer);
+        state.deferredSubSearchTimer = setTimeout(searchDeferredBySubscription, 500);
+      });
+    }
     if (els.deferredBarcodeInput) {
       els.deferredBarcodeInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleDeferredBarcodeScan();
@@ -4179,17 +4389,26 @@
         if (e.target === els.cameraScannerModal) closeCameraScanner();
       });
     }
+    const applyDeferredFilter = (val) => {
+      if (els.deferredStatusFilter) els.deferredStatusFilter.value = val;
+      if (els.deferredStatusFilterMobile) els.deferredStatusFilterMobile.value = val;
+      state.deferredStatusFilter = val || 'unpaid';
+      state.deferredPage = 1;
+      const currentSearch = els.deferredSearch ? els.deferredSearch.value.trim() : '';
+      const currentSubSearch = els.deferredSubSearch ? els.deferredSubSearch.value.trim() : '';
+      if (currentSubSearch) {
+        searchDeferredBySubscription();
+      } else if (currentSearch) {
+        searchDeferredInvoices();
+      } else {
+        renderDeferredInvoices(state.deferredInvoices || []);
+      }
+    };
     if (els.deferredStatusFilter) {
-      els.deferredStatusFilter.addEventListener('change', () => {
-        state.deferredStatusFilter = els.deferredStatusFilter.value || 'unpaid';
-        state.deferredPage = 1;
-        const currentSearch = els.deferredSearch ? els.deferredSearch.value.trim() : '';
-        if (currentSearch) {
-          searchDeferredInvoices();
-        } else {
-          renderDeferredInvoices(state.deferredInvoices || []);
-        }
-      });
+      els.deferredStatusFilter.addEventListener('change', () => applyDeferredFilter(els.deferredStatusFilter.value));
+    }
+    if (els.deferredStatusFilterMobile) {
+      els.deferredStatusFilterMobile.addEventListener('change', () => applyDeferredFilter(els.deferredStatusFilterMobile.value));
     }
 
     els.defBtnFirst.addEventListener('click', () => { state.deferredPage = 1; renderDeferredTable(); });
@@ -4348,6 +4567,49 @@
       return;
     }
 
+    state.deferredInvoices = res.orders || [];
+    state.deferredPage = 1;
+    renderDeferredInvoices(state.deferredInvoices);
+  }
+
+  /* ========== DEFERRED SUBSCRIPTION SEARCH ========== */
+  async function searchDeferredBySubscription() {
+    const subSearch = els.deferredSubSearch ? els.deferredSubSearch.value.trim() : '';
+
+    if (!subSearch) {
+      state.deferredInvoices = [];
+      state.deferredFilteredInvoices = [];
+      state.deferredPage = 1;
+      els.deferredList.innerHTML = '';
+      els.defTableWrap.style.display = 'none';
+      els.defPaginationBar.style.display = 'none';
+      els.defSummaryCards.style.display = 'none';
+      els.deferredEmptyState.style.display = 'flex';
+      const et = document.getElementById('deferredEmptyTitle');
+      if (et) et.textContent = t('pos-deferred-start-hint');
+      return;
+    }
+
+    els.deferredList.innerHTML = '';
+    els.defTableWrap.style.display = 'none';
+    els.defPaginationBar.style.display = 'none';
+    els.defSummaryCards.style.display = 'none';
+    els.deferredEmptyState.style.display = 'flex';
+    const emptyTitle = document.getElementById('deferredEmptyTitle');
+    if (emptyTitle) emptyTitle.textContent = t('pos-deferred-loading');
+
+    const res = await window.api.getDeferredBySubscription({
+      subscriptionSearch: subSearch,
+      statusFilter: state.deferredStatusFilter || 'unpaid',
+    });
+
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-load'), 'error');
+      if (emptyTitle) emptyTitle.textContent = t('pos-deferred-no-results');
+      return;
+    }
+
+    state.deferredInvoiceSearchMode = true;
     state.deferredInvoices = res.orders || [];
     state.deferredPage = 1;
     renderDeferredInvoices(state.deferredInvoices);
@@ -4789,6 +5051,12 @@
 
     showTopToast(t('pos-deferred-payment-saved') || 'تم تسجيل الدفعة بنجاح', 'success');
 
+    // إرسال الفاتورة عبر الواتساب عند الدفع
+    if ((state.appSettings || {}).whatsappSendOnPay) {
+      const _payInv = state.deferredInvoices.find(o => o.id === orderId);
+      if (_payInv && _payInv.phone) sendInvoiceWhatsApp(orderId, _payInv.phone);
+    }
+
     // Refresh modal content
     els.payAmountInput.value = '';
     if (els.payMixedCashInput) els.payMixedCashInput.value = '';
@@ -4836,6 +5104,10 @@
     }
     showTopToast(t('pos-deferred-clean-success'), 'success');
     refreshRowInPlace(Number(orderId), 'invoice', 'cleaning_date');
+    if ((state.appSettings || {}).whatsappSendOnClean) {
+      const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
+      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone);
+    }
   }
 
   async function deferredMarkDelivered(orderId) {
@@ -4846,6 +5118,10 @@
     }
     showTopToast(t('pos-deferred-deliver-success'), 'success');
     refreshRowInPlace(Number(orderId), 'invoice', 'delivery_date');
+    if ((state.appSettings || {}).whatsappSendOnDeliver) {
+      const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
+      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone);
+    }
   }
 
   async function showDeferredReceiptPreview(receiptId) {
@@ -4914,9 +5190,8 @@
     const tbody = document.getElementById('crModalItemsBody');
     if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(r.items || []);
 
-    renderConsumptionBarcode(r.refund_id ? null : r.receipt_seq);
-
     if (els.consumptionReceiptModal) els.consumptionReceiptModal.style.display = 'flex';
+    setTimeout(() => renderConsumptionBarcode(r.refund_id ? null : r.receipt_seq), 0);
   }
 
   window._posDeferredViewReceipt = (id) => showDeferredReceiptPreview(id);
@@ -4997,6 +5272,18 @@
     if (actions.includes('deliver')) labels.push('التسليم');
     showTopToast('تم ' + labels.join(' و ') + ' تلقائياً', 'success');
 
+    // إرسال الواتساب حسب الإعدادات
+    const _waBarcode = state.appSettings || {};
+    if (inv.phone) {
+      if (actions.includes('deliver') && _waBarcode.whatsappSendOnDeliver) {
+        sendInvoiceWhatsApp(orderId, inv.phone);
+      } else if (actions.includes('clean') && _waBarcode.whatsappSendOnClean) {
+        sendInvoiceWhatsApp(orderId, inv.phone);
+      } else if (actions.includes('pay') && _waBarcode.whatsappSendOnPay) {
+        sendInvoiceWhatsApp(orderId, inv.phone);
+      }
+    }
+
     // Refresh and show just the processed invoice for verification (without touching search box)
     const refreshRes = await window.api.getDeferredOrders({
       search: String(inv.invoice_seq || inv.order_number || inv.id || ''),
@@ -5068,20 +5355,38 @@
     }
 
     const autoAction = state.appSettings && state.appSettings.barcodeAutoAction;
-    if (autoAction && autoAction !== 'none') {
-      const actions = autoAction.split(',');
-      if (actions.includes('clean') && !receipt.cleaning_date) {
-        const cr = await window.api.markReceiptCleaned({ receiptId: Number(receipt.id) });
-        if (!cr || !cr.success) { showTopToast('فشل تحديث حالة التنظيف', 'error'); return; }
+    const actions = (autoAction && autoAction !== 'none') ? autoAction.split(',') : [];
+
+    // If pay is enabled and receipt has a linked order, fetch and pay that order
+    if (actions.includes('pay') && receipt.order_id) {
+      const orderRes = await window.api.getDeferredOrders({
+        search: String(receipt.order_id),
+        statusFilter: 'unpaid'
+      });
+      const inv = orderRes && orderRes.success && orderRes.orders && orderRes.orders[0];
+      if (inv && inv.payment_status !== 'paid' && num(inv.remaining_amount) > 0) {
+        await barcodeAutoAction(inv, autoAction);
+      } else if (inv) {
+        // Order exists but no payment needed — still handle clean/deliver on receipt
+        await _applyReceiptActions(receipt, actions, barcodeVal);
+      } else {
+        // No linked deferred order — open pay modal if no auto-action specified
+        await _applyReceiptActions(receipt, actions, barcodeVal);
       }
-      if (actions.includes('deliver') && !receipt.delivery_date) {
-        const dr = await window.api.markReceiptDelivered({ receiptId: Number(receipt.id) });
-        if (!dr || !dr.success) { showTopToast('فشل تحديث حالة التسليم', 'error'); return; }
+    } else if (actions.length > 0) {
+      await _applyReceiptActions(receipt, actions, barcodeVal);
+    } else {
+      // No auto-action: if receipt has linked order open pay modal, otherwise just show receipt
+      if (receipt.order_id) {
+        const orderRes = await window.api.getDeferredOrders({
+          search: String(receipt.order_id),
+          statusFilter: 'unpaid'
+        });
+        const inv = orderRes && orderRes.success && orderRes.orders && orderRes.orders[0];
+        if (inv) {
+          openPayDeferredModal(inv.id);
+        }
       }
-      const labels = [];
-      if (actions.includes('clean')) labels.push('التنظيف');
-      if (actions.includes('deliver')) labels.push('التسليم');
-      showTopToast('تم ' + labels.join(' و ') + ' للإيصال ' + barcodeVal, 'success');
     }
 
     // Refresh display
@@ -5097,6 +5402,21 @@
       els.deferredBarcodeInput.value = '';
       els.deferredBarcodeInput.focus();
     }
+  }
+
+  async function _applyReceiptActions(receipt, actions, barcodeVal) {
+    if (actions.includes('clean') && !receipt.cleaning_date) {
+      const cr = await window.api.markReceiptCleaned({ receiptId: Number(receipt.id) });
+      if (!cr || !cr.success) { showTopToast('فشل تحديث حالة التنظيف', 'error'); return; }
+    }
+    if (actions.includes('deliver') && !receipt.delivery_date) {
+      const dr = await window.api.markReceiptDelivered({ receiptId: Number(receipt.id) });
+      if (!dr || !dr.success) { showTopToast('فشل تحديث حالة التسليم', 'error'); return; }
+    }
+    const labels = [];
+    if (actions.includes('clean')) labels.push('التنظيف');
+    if (actions.includes('deliver')) labels.push('التسليم');
+    if (labels.length) showTopToast('تم ' + labels.join(' و ') + ' للإيصال ' + barcodeVal, 'success');
   }
 
   /* ========== CAMERA BARCODE SCANNER ========== */

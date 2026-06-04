@@ -3554,6 +3554,10 @@ html, body {
   padding: 8px 14px;
   transition: border-color 0.18s, box-shadow 0.18s;
 }
+.deferred-sub-search-inner {
+  flex: 0 0 160px;
+  min-width: 0;
+}
 .deferred-search-inner:focus-within {
   border-color: #22c55e;
   box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
@@ -3578,6 +3582,10 @@ html, body {
   min-width: 0;
 }
 .deferred-search-input::placeholder { color: #94a3b8; }
+
+/* Desktop: show desktop filter, hide mobile filter */
+.deferred-filter-desktop { display: flex; }
+.deferred-filter-mobile  { display: none; }
 
 /* Barcode scanner row */
 .deferred-barcode-row { margin-top: 8px; }
@@ -5016,25 +5024,52 @@ html, body {
 
   .deferred-panel-header { padding: 10px 14px 8px; }
   .deferred-toolbar      { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
-  .deferred-search-row   {
+
+  /* Row 1: invoice + sub search, each 50% */
+  .deferred-search-row {
     min-width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 150px;
-    grid-template-areas: "search filter";
+    display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
     align-items: stretch;
   }
   .deferred-search-inner {
+    flex: 1 1 0;
     width: auto;
-    grid-area: search;
     min-height: 44px;
+    min-width: 0;
   }
-  .deferred-filter-wrap  {
+  .deferred-sub-search-inner {
+    flex: 1 1 0;
     width: auto;
-    grid-area: filter;
+    min-height: 44px;
+    min-width: 0;
+  }
+  /* Hide desktop filter (inside search row) on mobile */
+  .deferred-filter-desktop { display: none !important; }
+
+  /* Row 2: filter (mobile) + barcode, each 50% */
+  .deferred-barcode-row {
+    min-width: 100%;
+    margin-top: 0;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .deferred-filter-mobile {
+    display: flex !important;
+    flex: 0 0 50%;
+    min-width: 0;
     justify-content: center;
     padding: 6px 10px;
+    min-height: 44px;
   }
+  .deferred-barcode-inner {
+    flex: 0 0 50%;
+    min-width: 0;
+  }
+
   .deferred-filter-label { display: none; }
   .deferred-filter-select {
     min-width: 0;
@@ -5132,17 +5167,14 @@ html, body {
 @media (max-width: 479px) {
   .deferred-toolbar { padding: 8px 10px; }
   .deferred-search-row { gap: 6px; }
-  .deferred-search-row {
-    grid-template-columns: 1fr 120px;
-  }
-  .deferred-filter-wrap {
+  .deferred-filter-mobile {
     flex-direction: row;
     align-items: center;
     padding: 6px 10px;
     min-height: 44px;
   }
   .deferred-filter-label { display: none; }
-  .deferred-filter-select { width: auto; min-width: 120px; font-size: 13px; }
+  .deferred-filter-select { width: auto; min-width: 0; font-size: 13px; }
 }
 
 /* ═══════════════════ HANGER INLINE SELECT ═══════════════════ */
@@ -5649,13 +5681,31 @@ html, body {
 @media (max-width: 480px) {
   .inv-proc-idle {
     flex-wrap: nowrap;
+    gap: 5px;
   }
   .inv-proc-input-wrap {
     flex: 1 1 0;
     min-width: 0;
   }
+  .inv-proc-icon {
+    display: none;
+  }
+  .inv-proc-input {
+    font-size: 12px;
+  }
   .btn-process-invoice {
-    flex-shrink: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 9px;
+    padding: 8px 4px;
+    gap: 0;
+  }
+  .btn-process-invoice svg {
+    display: none;
+  }
+  .btn-process-invoice span {
     white-space: nowrap;
   }
   .cn-detail-row {
