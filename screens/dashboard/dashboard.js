@@ -8,6 +8,10 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.menu-card').forEach(card => {
     card.addEventListener('click', () => {
       const screen = card.dataset.screen;
+      if (screen === 'roles') {
+        location.href = '/screens/roles/roles.html';
+        return;
+      }
       window.api.navigateTo(screen);
     });
   });
@@ -24,4 +28,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
   I18N.apply();
   updateLangButton();
+
+  function applyPermissions(user) {
+    if (!user) return;
+    if (user.role === 'admin') return; // admin sees everything
+
+    document.querySelectorAll('.menu-card[data-permission]').forEach(card => {
+      const perm = card.dataset.permission;
+      const allowed = user.permissions && user.permissions[perm];
+      card.style.display = allowed ? '' : 'none';
+    });
+
+    const welcomeEl = document.getElementById('welcomeUser');
+    if (welcomeEl && user.full_name) {
+      welcomeEl.textContent = 'مرحباً، ' + user.full_name;
+    }
+  }
+
+  if (window.__currentUser) {
+    applyPermissions(window.__currentUser);
+  } else {
+    window.addEventListener('userReady', (e) => applyPermissions(e.detail));
+  }
 });

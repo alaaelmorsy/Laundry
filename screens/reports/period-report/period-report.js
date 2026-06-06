@@ -756,6 +756,7 @@ window.addEventListener('DOMContentLoaded', () => {
       fillA4InvoiceModal(a4Data);
     }
     document.getElementById('invoiceViewModal').style.display = 'flex';
+    document.body.classList.add('printing-invoice');
     const dialogBody = document.querySelector('.inv-dialog-body');
     if (dialogBody) dialogBody.scrollTop = 0;
   }
@@ -780,6 +781,7 @@ window.addEventListener('DOMContentLoaded', () => {
   window.closeInvoiceModal = function() {
     document.getElementById('invoiceViewModal').style.display = 'none';
     document.body.classList.remove('invtype-a4');
+    document.body.classList.remove('printing-invoice');
   };
 
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInvoiceModal(); });
@@ -797,19 +799,24 @@ window.addEventListener('DOMContentLoaded', () => {
         <td>${cn.phone || '—'}</td>
         <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
         <td class="neg-cell">-${SAR(cn.total_amount, false)}</td>
-        <td class="no-print"><button class="view-btn" onclick="showCreditNoteModal(${cn.id})">${I18N.t('all-invoices-view')}</button></td>
+        <td class="no-print action-cell"><button class="btn-view-sub" onclick="showCreditNoteModal(${cn.id})" title="${I18N.t('all-invoices-view')}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>
       </tr>`;
     }).join('');
   }
 
   function buildSubscriptionsTable(subscriptions) {
-    if (!subscriptions.length) return `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('period-report-no-subscriptions')}</td></tr>`;
+    if (!subscriptions.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('period-report-no-subscriptions')}</td></tr>`;
     return subscriptions.map((sub) => {
       const dt = fmtDT(sub.created_at);
       const dtParts = dt.split(', ');
       const dateStr = dtParts[0] || dt;
       const timeStr = dtParts[1] || '';
       const typeLabel = sub.entry_type === 'renewal' ? I18N.t('subscription-renewal') : I18N.t('subscription-new');
+      const viewBtn = sub.order_id
+        ? `<button class="btn-view-sub" onclick="showInvoiceModal(${sub.order_id})" title="عرض الاشتراك">
+             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+           </button>`
+        : '';
       return `
       <tr>
         <td>${sub.phone || '—'}</td>
@@ -817,6 +824,7 @@ window.addEventListener('DOMContentLoaded', () => {
         <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
         <td class="num-cell">${SAR(sub.amount, false)}</td>
         <td>${typeLabel}</td>
+        <td class="action-cell">${viewBtn}</td>
       </tr>`;
     }).join('');
   }
@@ -1188,12 +1196,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('cnViewModal').style.display = 'flex';
+    document.body.classList.add('printing-cn');
     const cnDialogBody = document.querySelector('#cnViewModal .inv-dialog-body');
     if (cnDialogBody) cnDialogBody.scrollTop = 0;
   }
 
   window.closeCreditNoteModal = function() {
     document.getElementById('cnViewModal').style.display = 'none';
+    document.body.classList.remove('printing-cn');
   };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCreditNoteModal(); });
 

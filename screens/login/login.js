@@ -68,6 +68,9 @@ window.addEventListener('DOMContentLoaded', () => {
         } else {
           localStorage.removeItem(REMEMBER_KEY);
         }
+        if (result.user) {
+          window.__currentUser = result.user;
+        }
         window.api.openMain();
       } else {
         showError(result.message || I18N.t('error-login-failed'));

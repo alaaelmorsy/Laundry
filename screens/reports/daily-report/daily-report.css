@@ -77,6 +77,9 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .report-table tbody tr.row-net td{background:#eff6ff;color:#1d4ed8;font-weight:700}
 .report-table tbody tr.row-total td{background:#f0fdf4;color:#166534}
 .num-cell{font-weight:700;color:#1e293b;white-space:nowrap}
+.action-cell{text-align:center;width:40px;padding:4px 8px}
+.btn-view-sub{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#3b82f6;cursor:pointer;transition:background .15s,color .15s}
+.btn-view-sub:hover{background:#3b82f6;color:#fff;border-color:#3b82f6}
 .neg-cell{font-weight:700;color:#ef4444;white-space:nowrap}
 .tax-cell{color:#f59e0b;font-weight:700}
 .detail-table{min-width:560px}
@@ -297,6 +300,25 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
   @page{size:80mm auto;margin:4mm 3mm}
   html,body{height:auto;overflow:visible;background:#fff}
   body{max-height:none;overflow:visible}
+
+  /* عند فتح مودال الفاتورة: اخفِ كل شيء ماعدا المودال — نفس سلوك شاشة البيع */
+  body.printing-invoice > *:not(#invoiceViewModal){display:none !important}
+  body.printing-invoice #invoiceViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  body.printing-cn > *:not(#cnViewModal){display:none !important}
+  body.printing-cn #cnViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  body.printing-cn .inv-dialog{max-height:none !important;box-shadow:none !important;background:none !important;border-radius:0 !important;overflow:visible !important;width:100% !important;height:auto !important}
+  body.printing-cn .inv-dialog-body{overflow:visible !important;padding:0 !important;height:auto !important;max-height:none !important;flex:none !important}
+  body.printing-cn .inv-dialog-footer{display:none !important}
+  body.printing-cn .inv-paper{box-shadow:none !important;border-radius:0 !important;width:80mm !important;max-width:80mm !important;margin:0 auto !important;padding:4mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
+  body.printing-cn.invtype-a4 .inv-paper{display:none !important}
+  body.printing-cn.invtype-a4 .inv-paper-a4m{display:block !important;width:210mm !important;max-width:210mm !important;padding:8mm 10mm 20mm !important}
+  body.printing-invoice .inv-dialog{max-height:none !important;box-shadow:none !important;background:none !important;border-radius:0 !important;overflow:visible !important;width:100% !important;height:auto !important}
+  body.printing-invoice .inv-dialog-body{overflow:visible !important;padding:0 !important;height:auto !important;max-height:none !important;flex:none !important}
+  body.printing-invoice .inv-dialog-footer{display:none !important}
+  body.printing-invoice .inv-paper{box-shadow:none !important;border-radius:0 !important;width:80mm !important;max-width:80mm !important;margin:0 auto !important;padding:4mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
+  body.printing-invoice.invtype-a4 .inv-paper{display:none !important}
+  body.printing-invoice.invtype-a4 .inv-paper-a4m{display:block !important;width:210mm !important;max-width:210mm !important;padding:8mm 10mm 20mm !important}
+
   .page-wrapper{display:block;height:auto;max-height:none}
   .print-header{display:block;text-align:center;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}
   .print-title{font-size:11px;font-weight:900;color:#000}

@@ -269,6 +269,15 @@
     a4s('a4mRowCleanedAt',   !!data.cleanedAt);   if (data.cleanedAt)   a4t('a4mCleanedAt',   data.cleanedAt);
     a4s('a4mRowDeliveredAt', !!data.deliveredAt); if (data.deliveredAt) a4t('a4mDeliveredAt', data.deliveredAt);
     a4s('a4mRowPaidAt',      !!data.paidAt);      if (data.paidAt)      a4t('a4mPaidAt',      data.paidAt);
+    (function() {
+      const section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
+      if (!section) return;
+      const rightCard = section.querySelector('.a4m-card:last-child');
+      if (!rightCard) return;
+      const hasVisible = Array.from(rightCard.children).some(el => el.style.display !== 'none');
+      rightCard.style.display = hasVisible ? '' : 'none';
+      section.style.gridTemplateColumns = hasVisible ? '' : '1fr';
+    })();
 
     const vatRate   = data.vatRate || 0;
     const priceMode = data.priceDisplayMode || 'exclusive';
@@ -410,6 +419,15 @@
     a4s('RowCleanedAt',   !!data.cleanedAt);   if (data.cleanedAt)   a4t('CleanedAt',   data.cleanedAt);
     a4s('RowDeliveredAt', !!data.deliveredAt); if (data.deliveredAt) a4t('DeliveredAt', data.deliveredAt);
     a4s('RowPaidAt',      !!data.paidAt);      if (data.paidAt)      a4t('PaidAt',      data.paidAt);
+    (function() {
+      const section = document.querySelector('#cnPaperA4m .a4m-bill-to');
+      if (!section) return;
+      const rightCard = section.querySelector('.a4m-card:last-child');
+      if (!rightCard) return;
+      const hasVisible = Array.from(rightCard.children).some(el => el.style.display !== 'none');
+      rightCard.style.display = hasVisible ? '' : 'none';
+      section.style.gridTemplateColumns = hasVisible ? '' : '1fr';
+    })();
 
     const vatRate   = data.vatRate || 0;
     const priceMode = data.priceDisplayMode || 'exclusive';

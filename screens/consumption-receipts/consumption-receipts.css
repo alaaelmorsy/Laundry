@@ -1,13 +1,483 @@
 @import url('../invoices/invoices.css');
 
-.back-btn{background:linear-gradient(90deg,#14b8a6,#0d9488)!important;box-shadow:0 2px 8px rgba(20,184,166,.25)!important}
-.logo-icon{background:linear-gradient(135deg,#14b8a6,#0d9488)!important}
-.search-wrap:focus-within{border-color:#14b8a6!important;box-shadow:0 0 0 3px rgba(20,184,166,.1)!important}
-.invoices-table thead tr{background:linear-gradient(90deg,rgba(20,184,166,.06),rgba(13,148,136,.06))!important}
-.invoices-table thead th{color:#0d9488!important}
-.spinner{border-top-color:#14b8a6!important}
-.cr-num-cell{font-weight:700;color:#0d9488;font-size:13px}
+/* ═══════════════════════════════════════════════════════════════
+   إيصالات الاستهلاك — تصميم احترافي v2
+   تعتمد اللون الزمردي/الفيروزي كهوية مميزة عن شاشة الفواتير
+   ═══════════════════════════════════════════════════════════════ */
 
+/* ── Tokens ── */
+:root {
+  --cr-primary:     #0d9488;
+  --cr-primary-2:   #14b8a6;
+  --cr-primary-3:   #5eead4;
+  --cr-bg:          #f0fdfa;
+  --cr-surface:     #ffffff;
+  --cr-border:      #ccfbf1;
+  --cr-text:        #0f766e;
+  --cr-shadow:      0 2px 8px rgba(13,148,136,0.10), 0 1px 3px rgba(0,0,0,0.05);
+  --cr-shadow-md:   0 6px 20px rgba(13,148,136,0.14), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Body & Page ── */
+body {
+  background: var(--cr-bg) !important;
+}
+.page-wrapper {
+  background: var(--cr-bg) !important;
+}
+
+/* ══════════════════════════════
+   HEADER
+══════════════════════════════ */
+.header-bar {
+  background: #ffffff !important;
+  border-bottom: 1.5px solid #99f6e4 !important;
+  box-shadow: 0 3px 16px rgba(13,148,136,0.12) !important;
+  min-height: 56px !important;
+}
+
+.logo-icon {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(140deg, #14b8a6 0%, #0d9488 100%) !important;
+  box-shadow: 0 4px 14px rgba(13,148,136,0.42) !important;
+}
+
+.header-title {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #134e4a !important;
+}
+
+/* رابط الفواتير الضريبية */
+.link-tax-invoices {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #7c3aed !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  padding: 6px 14px;
+  border-radius: 50px;
+  background: rgba(124,58,237,0.07);
+  border: 1px solid rgba(124,58,237,0.2);
+  transition: all 0.2s;
+}
+.link-tax-invoices:hover {
+  background: rgba(124,58,237,0.13) !important;
+  border-color: rgba(124,58,237,0.4) !important;
+  text-decoration: none !important;
+  transform: translateY(-1px);
+}
+
+/* زر العودة — فيروزي */
+.back-btn {
+  background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
+  box-shadow: 0 3px 10px rgba(13,148,136,0.38) !important;
+  border-radius: 50px !important;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1) !important;
+}
+.back-btn:hover {
+  background: linear-gradient(135deg, #0d9488, #0f766e) !important;
+  box-shadow: 0 5px 16px rgba(13,148,136,0.48) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ══════════════════════════════
+   TOOLBAR
+══════════════════════════════ */
+.toolbar {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: var(--cr-shadow);
+  border: 1px solid var(--cr-border);
+}
+
+/* حقل البحث */
+.search-wrap {
+  background: #f0fdfa !important;
+  border: 1.5px solid #99f6e4 !important;
+  border-radius: 12px !important;
+  max-width: 420px !important;
+  box-shadow: none !important;
+  transition: all 0.2s !important;
+}
+.search-wrap:focus-within {
+  border-color: #0d9488 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(13,148,136,0.12) !important;
+}
+
+.search-icon svg {
+  color: #5eead4 !important;
+}
+.search-wrap:focus-within .search-icon svg {
+  color: #0d9488 !important;
+}
+
+/* مجموعة فلاتر التاريخ */
+.toolbar-filters {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  align-items: center !important;
+  background: #f0fdfa;
+  border: 1.5px solid #99f6e4;
+  border-radius: 12px;
+  padding: 6px 10px;
+  box-shadow: 0 1px 3px rgba(13,148,136,0.08);
+  flex-shrink: 0;
+}
+
+/* label "من" قبل أول date */
+.toolbar-filters::before {
+  content: 'من';
+  font-size: 11px;
+  font-weight: 800;
+  color: #0d9488;
+  flex-shrink: 0;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* سهم فاصل بين التاريخين — نضيف span عبر pseudo على الـ input الثاني */
+.filter-date:last-child {
+  position: relative;
+}
+
+/* label "إلى" يُضاف قبل آخر date بـ CSS */
+.filter-date + .filter-date::before {
+  /* لا يعمل على inputs — نستخدم gap + wrapper label */
+}
+
+.filter-date {
+  padding: 6px 8px !important;
+  border: 1.5px solid #ccfbf1 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  font-family: 'Cairo', sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #0f766e !important;
+  outline: none !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  min-width: 130px !important;
+}
+.filter-date:focus {
+  border-color: #0d9488 !important;
+  box-shadow: 0 0 0 2px rgba(13,148,136,0.15) !important;
+}
+.filter-date::-webkit-calendar-picker-indicator {
+  filter: invert(40%) sepia(80%) saturate(400%) hue-rotate(140deg);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+/* ══════════════════════════════
+   TABLE
+══════════════════════════════ */
+.table-container {
+  background: #ffffff !important;
+  border: 1px solid #ccfbf1 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 3px 16px rgba(13,148,136,0.09), 0 1px 4px rgba(0,0,0,0.05) !important;
+  overflow: hidden !important;
+}
+
+/* رأس الجدول */
+.invoices-table thead tr {
+  background: linear-gradient(90deg, #f0fdfa, #e8faf7) !important;
+  border-bottom: 2px solid #a7f3d0 !important;
+}
+.invoices-table thead th {
+  color: #0d9488 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  padding: 15px 18px !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* صفوف الجدول */
+.invoices-table tbody tr {
+  border-bottom: 1px solid #f0fdfa !important;
+  transition: background 0.15s !important;
+}
+.invoices-table tbody tr:last-child {
+  border-bottom: none !important;
+}
+.invoices-table tbody tr:hover {
+  background: rgba(13,148,136,0.04) !important;
+}
+.invoices-table tbody td {
+  padding: 14px 18px !important;
+  font-size: 13.5px !important;
+  color: #475569 !important;
+}
+
+/* رقم الإيصال — badge فيروزي */
+.cr-num-cell {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1) !important;
+  border: 1.5px solid #5eead4 !important;
+  color: #0d9488 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  padding: 4px 12px !important;
+  border-radius: 50px !important;
+  letter-spacing: 0.3px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 4px rgba(13,148,136,0.12) !important;
+}
+
+/* اسم العميل — تميّز */
+.invoices-table tbody td:nth-child(2) {
+  color: #1e293b !important;
+  font-weight: 700 !important;
+}
+
+/* رقم الجوال */
+.invoices-table tbody td:nth-child(3) {
+  color: #64748b !important;
+  font-size: 13px !important;
+  direction: ltr !important;
+  text-align: right !important;
+}
+
+/* المبلغ المستهلك */
+.invoices-table tbody td:nth-child(6) {
+  color: #dc2626 !important;
+  font-weight: 800 !important;
+}
+
+/* الرصيد بعد */
+.invoices-table tbody td:nth-child(8) {
+  color: #059669 !important;
+  font-weight: 800 !important;
+}
+
+/* ══════════════════════════════
+   ACTION BUTTON
+══════════════════════════════ */
+.btn-view {
+  background: rgba(13,148,136,0.08) !important;
+  color: #0d9488 !important;
+  border: 1.5px solid rgba(13,148,136,0.22) !important;
+  border-radius: 10px !important;
+  padding: 7px 14px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1) !important;
+  box-shadow: 0 1px 3px rgba(13,148,136,0.08) !important;
+}
+.btn-view:hover {
+  background: rgba(13,148,136,0.15) !important;
+  border-color: #0d9488 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(13,148,136,0.22) !important;
+}
+
+/* ══════════════════════════════
+   EMPTY STATE
+══════════════════════════════ */
+.empty-state {
+  padding: 80px 20px !important;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px dashed #a7f3d0;
+}
+.empty-state svg {
+  color: #5eead4 !important;
+  width: 60px !important;
+  height: 60px !important;
+  opacity: 0.7 !important;
+}
+.empty-state p {
+  color: #5eead4 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+/* ══════════════════════════════
+   SPINNER
+══════════════════════════════ */
+.spinner {
+  border-top-color: #14b8a6 !important;
+  border-color: #ccfbf1 !important;
+  border-top-color: #0d9488 !important;
+}
+
+/* ══════════════════════════════
+   PAGINATION
+══════════════════════════════ */
+.pagination-bar {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 10px 16px !important;
+  border: 1px solid var(--cr-border);
+  box-shadow: var(--cr-shadow);
+}
+
+.pagination-info {
+  color: #0d9488 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+.page-btn {
+  border-color: #ccfbf1 !important;
+  color: #0d9488 !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s !important;
+}
+.page-btn:hover:not(:disabled) {
+  border-color: #0d9488 !important;
+  color: #0d9488 !important;
+  background: rgba(13,148,136,0.08) !important;
+  transform: translateY(-1px) !important;
+}
+.page-btn:disabled {
+  opacity: 0.3 !important;
+}
+
+.page-num {
+  border-color: #ccfbf1 !important;
+  color: #475569 !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s !important;
+}
+.page-num:hover {
+  border-color: #0d9488 !important;
+  color: #0d9488 !important;
+  background: rgba(13,148,136,0.08) !important;
+}
+.page-num.active {
+  background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(13,148,136,0.38) !important;
+}
+
+.page-size-selector select {
+  border-color: #ccfbf1 !important;
+  color: #0d9488 !important;
+  border-radius: 8px !important;
+}
+.page-size-selector select:focus {
+  border-color: #0d9488 !important;
+}
+.page-size-selector {
+  color: #5eead4 !important;
+}
+
+/* ══════════════════════════════
+   TOOLBAR LAYOUT — responsive
+══════════════════════════════ */
+.toolbar {
+  align-items: flex-start !important;
+}
+
+/* search يأخذ أكبر مساحة ممكنة */
+.search-wrap {
+  flex: 1 1 240px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* filters تتكيف مع المساحة */
+.toolbar-filters {
+  flex: 0 1 auto !important;
+  max-width: 100% !important;
+}
+
+/* ══════════════════════════════
+   MAIN CONTENT SCROLLBAR
+══════════════════════════════ */
+.main-content::-webkit-scrollbar { width: 4px; }
+.main-content::-webkit-scrollbar-thumb {
+  background: rgba(13,148,136,0.25);
+  border-radius: 4px;
+}
+.main-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(13,148,136,0.45);
+}
+
+/* ══════════════════════════════
+   LOADING CELL
+══════════════════════════════ */
+.loading-cell {
+  color: #5eead4 !important;
+}
+
+/* ══════════════════════════════
+   WARNING BANNER (مرتجع)
+══════════════════════════════ */
+.cr-warning-banner {
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  color: #854d0e;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: 10px;
+  line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(253,224,71,0.2);
+}
+
+.cr-vat-note {
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ══════════════════════════════
+   RECEIPT MODAL (thermal)
+   لا تُغيّر — هذه أنماط الطباعة
+══════════════════════════════ */
+.inv-overlay {
+  z-index: 600;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+}
+
+.inv-dialog {
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45) !important;
+}
+
+.inv-dialog-footer {
+  background: linear-gradient(90deg, #1e293b, #134e4a) !important;
+  border-radius: 14px 14px 0 0 !important;
+  gap: 8px !important;
+  justify-content: flex-end !important;
+}
+
+.btn-inv-close {
+  background: rgba(255,255,255,0.12) !important;
+  color: #e2e8f0 !important;
+  border-radius: 8px !important;
+}
+.btn-inv-close:hover {
+  background: rgba(255,255,255,0.2) !important;
+}
+.btn-inv-pdf {
+  border-radius: 8px !important;
+}
+.btn-inv-print {
+  border-radius: 8px !important;
+}
+
+/* ══════════════════════════════
+   RECEIPT CONTENT (بيانات الإيصال)
+   يجب أن تبقى بالأسود للطباعة
+══════════════════════════════ */
 #receiptViewModal .inv-shop-name,
 #receiptViewModal .inv-shop-sub,
 #receiptViewModal .inv-meta-label,
@@ -16,41 +486,44 @@
 #receiptViewModal .inv-table td,
 #receiptViewModal .cr-receipt-title,
 #receiptViewModal .cr-vat-note,
-#receiptViewModal .cr-warning-banner {
+#receiptViewModal .cr-warning-banner,
+#consumptionPrintZone .inv-shop-name,
+#consumptionPrintZone .inv-shop-sub,
+#consumptionPrintZone .inv-meta-label,
+#consumptionPrintZone .inv-meta-val,
+#consumptionPrintZone .inv-table th,
+#consumptionPrintZone .inv-table td,
+#consumptionPrintZone .cr-receipt-title,
+#consumptionPrintZone .cr-vat-note,
+#consumptionPrintZone .cr-warning-banner,
+#receiptViewModal .cr-info-label,
+#consumptionPrintZone .cr-info-label {
   color: #000 !important;
   font-weight: 700 !important;
+  font-size: 9px !important;
+}
+#receiptViewModal .cr-info-val,
+#consumptionPrintZone .cr-info-val {
+  color: #000 !important;
+  font-weight: 900 !important;
+  font-size: 10px !important;
 }
 
+/* ══════════════════════════════
+   PRINT STYLES — لا تُعدَّل
+══════════════════════════════ */
 @media print {
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
-  body > *:not(#receiptViewModal) { display: none !important; }
-  #receiptViewModal {
+  body > *:not(#consumptionPrintZone) { display: none !important; }
+  #consumptionPrintZone {
+    display: block !important;
     position: static !important;
     background: none !important;
     padding: 0 !important;
-    display: block !important;
     overflow: visible !important;
     height: auto !important;
-    max-height: none !important;
   }
-  #receiptViewModal .inv-dialog {
-    max-height: none !important;
-    box-shadow: none !important;
-    background: none !important;
-    border-radius: 0 !important;
-    overflow: visible !important;
-    width: 100% !important;
-    height: auto !important;
-  }
-  #receiptViewModal .inv-dialog-body {
-    overflow: visible !important;
-    padding: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    flex: none !important;
-  }
-  #receiptViewModal .inv-dialog-footer { display: none !important; }
-  #receiptViewModal .inv-paper {
+  #consumptionPrintZone .inv-paper {
     box-shadow: none !important;
     border-radius: 0 !important;
     width: 80mm !important;
@@ -61,11 +534,241 @@
     max-height: none !important;
     overflow: visible !important;
   }
-  #receiptViewModal .no-print { display: none !important; }
+  #consumptionPrintZone .no-print { display: none !important; }
 }
-.cr-warning-banner{background:#fef9c3;border:1px solid #fde047;color:#854d0e;padding:10px 12px;border-radius:8px;font-size:12px;text-align:center;margin-bottom:10px;line-height:1.5}
-.cr-vat-note{font-size:11px;color:#64748b;text-align:center;margin-top:8px}
-.toolbar-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.filter-date{padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px}
-.link-tax-invoices{color:#8b5cf6;font-size:13px;text-decoration:none;font-weight:700}
-.link-tax-invoices:hover{text-decoration:underline}
+
+/* ═══════════════════════════════════════════════════════════════
+   Thermal receipt inner styles (من pos.css — لا تُحذف)
+   ═══════════════════════════════════════════════════════════════ */
+.inv-header-wrap{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0 6px}
+.inv-logo-wrap{display:flex;justify-content:center;align-items:center;margin-bottom:4px;width:100%}
+.inv-logo{max-width:80px;max-height:60px;object-fit:contain;display:block;margin:0 auto}
+.inv-shop-name{font-size:15px;font-weight:900;text-align:center;color:#000;line-height:1.4;letter-spacing:.3px}
+.inv-shop-sub{font-size:11px;font-weight:700;text-align:center;color:#000;line-height:1.4}
+.inv-shop-contact-row{display:flex;align-items:center;justify-content:center;gap:4px;direction:ltr}
+.inv-contact-icon{width:11px;height:11px;min-width:11px;min-height:11px;max-width:11px;max-height:11px;flex-shrink:0;display:inline-block;overflow:hidden}
+.inv-divider{border:none;margin:0;display:none}
+.inv-divider-thick{border-top:2px solid #000}
+.inv-sep{display:block;border:none;border-top:2px solid #000;margin:6px 0}
+.inv-meta-row{display:flex;justify-content:space-between;align-items:baseline;gap:4px;margin-bottom:2px;font-size:12px;font-weight:700;line-height:1.5}
+.inv-meta-label{color:#000;flex-shrink:0;font-weight:700}
+.inv-meta-val{font-weight:700;text-align:left;color:#000;word-break:break-all}
+.cr-info-grid{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid #000;margin:2px 0;border-collapse:collapse}
+.cr-info-cell{display:flex;flex-direction:column;padding:2px 4px;border:1px solid #000}
+.cr-info-label{font-size:9px;font-weight:700;color:#000;line-height:1.3}
+.cr-info-val{font-size:10px;font-weight:900;color:#000;line-height:1.3;word-break:break-word}
+.cr-receipt-title{font-size:13px!important;font-weight:900!important;text-align:center}
+.inv-table{width:100%;border-collapse:collapse;font-size:12px;font-weight:700;margin-top:4px;border:3px solid #000}
+.inv-table thead tr{background:transparent}
+.inv-table th{font-weight:700;font-size:11px;padding:4px 5px;color:#000;border-bottom:3px solid #000;border-left:3px solid #000}
+.inv-table th:last-child{border-left:none}
+.inv-th-name{text-align:right}
+.inv-th-num{text-align:center;white-space:nowrap}
+.inv-table tbody tr{background:transparent;border-bottom:3px solid #000}
+.inv-table tbody tr:last-child{border-bottom:none}
+.inv-table td{padding:4px 5px;vertical-align:middle;font-weight:700;color:#000;border-left:3px solid #000}
+.inv-table td:last-child{border-left:none}
+.inv-td-name{text-align:right;font-size:9px;font-weight:700;color:#000;line-height:1.3;white-space:normal;word-break:break-word}
+.inv-td-en{font-size:9px;font-weight:700;color:#000;display:block;direction:ltr;text-align:right;white-space:normal;word-break:break-word}
+.inv-td-num{text-align:center;direction:ltr;white-space:nowrap;font-weight:700;color:#000}
+.inv-td-amt{text-align:center;direction:ltr;white-space:nowrap;font-weight:700;color:#000}
+.inv-totals-box{border:2px solid #000;margin:6px 0 4px}
+.inv-totals-box .inv-total-row,.inv-totals-box .inv-grand-row{padding:2px 8px;margin-bottom:0}
+.inv-total-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;margin-bottom:2px}
+.inv-total-label{color:#000;font-weight:700}
+.inv-total-val{font-weight:700;color:#000}
+.inv-grand-row{margin-top:4px}
+.inv-grand-label{font-size:12px;font-weight:700;color:#000}
+.inv-grand-val{font-size:13px;font-weight:700;color:#000}
+.inv-barcode-wrap{text-align:center;margin:4px 0 2px;width:100%;display:flex;justify-content:center}
+.inv-barcode-wrap svg{max-width:100%;height:auto}
+
+/* ══════════════════════════════════════════════════════
+   RESPONSIVE — Tablet & Mobile
+══════════════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 768px) ── */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .search-wrap {
+    max-width: 100% !important;
+    width: 100% !important;
+    align-self: auto !important;   /* منع الامتداد العمودي */
+    height: auto !important;
+    flex: 0 0 auto !important;
+  }
+
+  .search-input {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+  }
+
+  .toolbar-filters {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+
+  .filter-date {
+    flex: 1 1 120px !important;
+    min-width: 110px !important;
+    font-size: 12px !important;
+  }
+
+  /* الجدول يستخدم scroll أفقي على الجوال */
+  .table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .invoices-table {
+    min-width: 720px !important;
+  }
+
+  /* إخفاء بعض أعمدة أقل أهمية على الشاشات الصغيرة */
+  .invoices-table thead th:nth-child(5),
+  .invoices-table tbody td:nth-child(5) {
+    /* الباقة — نبقيها مرئية */
+  }
+}
+
+/* ── Mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+
+  /* الهيدر */
+  .header-bar {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+    min-height: auto !important;
+  }
+
+  .header-right {
+    flex: 1;
+    min-width: 0;
+    gap: 8px !important;
+  }
+
+  .logo-icon {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 10px !important;
+  }
+
+  .header-title {
+    font-size: 13px !important;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* رابط الفواتير الضريبية — icon فقط */
+  .link-tax-invoices {
+    font-size: 0 !important;
+    padding: 7px 10px !important;
+    border-radius: 10px !important;
+  }
+  .link-tax-invoices::before {
+    content: '📄';
+    font-size: 14px;
+  }
+
+  /* زر العودة — أصغر */
+  .back-btn {
+    font-size: 12px !important;
+    padding: 7px 12px 7px 10px !important;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .filter-date {
+    font-size: 12px !important;
+    padding: 5px 7px !important;
+    min-width: 100px !important;
+  }
+
+  .toolbar-filters::before {
+    font-size: 10px !important;
+  }
+
+  /* الجدول على الجوال */
+  .invoices-table {
+    min-width: 640px !important;
+  }
+
+  .invoices-table thead th {
+    padding: 11px 12px !important;
+    font-size: 11px !important;
+  }
+
+  .invoices-table tbody td {
+    padding: 11px 12px !important;
+    font-size: 12.5px !important;
+  }
+
+  .cr-num-cell {
+    font-size: 11.5px !important;
+    padding: 3px 9px !important;
+  }
+
+  /* Pagination */
+  .pagination-bar {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+
+  .page-size-selector {
+    font-size: 12px !important;
+  }
+
+  /* حد أقصى للـ main content padding */
+  .main-content {
+    gap: 12px !important;
+  }
+}
+
+/* ── Small Mobile (≤ 360px) ── */
+@media (max-width: 360px) {
+  .header-title {
+    font-size: 12px !important;
+    max-width: 100px !important;
+  }
+
+  .link-tax-invoices {
+    display: none !important; /* مخفي تماماً على أصغر الشاشات */
+  }
+
+  .filter-date {
+    font-size: 11px !important;
+    min-width: 90px !important;
+  }
+
+  .toolbar-filters {
+    gap: 4px !important;
+    padding: 5px 8px !important;
+  }
+
+  .invoices-table {
+    min-width: 580px !important;
+  }
+}

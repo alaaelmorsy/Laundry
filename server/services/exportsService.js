@@ -280,8 +280,18 @@ ${bodyStyle}
 .inv-footer{text-align:center;font-size:12px;font-weight:700;color:#000;line-height:1.6}
 .inv-footer-sub{font-size:11px;font-weight:700;color:#000}
 .inv-notes-box{margin-top:6px;padding-top:5px;border-top:1px dashed #000;direction:rtl;text-align:right}
+#invFooterNotes{text-align:center}
 .inv-notes-title{display:block;font-size:11px;font-weight:900;color:#000;margin-bottom:3px}
+#invFooterNotes .inv-notes-title,#invFooterNotes .inv-notes-content{text-align:center}
 .inv-notes-content{display:block;font-size:10px;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.7}
+.inv-shop-contact-row{display:flex;align-items:center;justify-content:center;gap:4px;direction:ltr}
+.inv-contact-icon{width:11px!important;height:11px!important;min-width:11px;min-height:11px;max-width:11px;max-height:11px;flex-shrink:0;display:inline-block;overflow:hidden}
+.cr-info-grid{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid #000;margin:2px 0}
+.cr-info-cell{display:flex;flex-direction:column;padding:2px 4px;border:1px solid #000}
+.cr-info-label{font-size:9px;font-weight:700;color:#000;line-height:1.3}
+.cr-info-val{font-size:10px;font-weight:900;color:#000;line-height:1.3;word-break:break-word}
+.inv-paid-row,.inv-remaining-row{border-top:1px dashed #ccc;padding:2px 8px}
+.inv-loyalty-row{border-top:1px dashed #000;padding:2px 8px;font-size:10px}
 /* ===== A4 PAPER ===== */
 .inv-paper-a4m{background:#fff;width:210mm;min-width:210mm;font-family:'Cairo',sans-serif;font-size:9.5pt;font-weight:700;color:#000;direction:rtl;position:relative;padding:8mm 10mm 20mm}
 .a4m-header{display:grid;grid-template-columns:1fr 90px 1fr;gap:3mm;align-items:center;padding-bottom:1mm;border-bottom:none;margin-bottom:0}
@@ -326,8 +336,8 @@ ${bodyStyle}
 .a4m-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0}
 .a4m-totals{border:3px solid #000;width:95mm;flex-shrink:0;background:#fff}
 .a4m-notes-box{width:100%;background:#fff;padding:2mm 0 0 0;font-size:8pt;font-weight:700;color:#000;line-height:1.7;direction:rtl;text-align:center}
-.a4m-notes-title{font-size:8.5pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
-.a4m-notes-content{font-size:7.5pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
+.a4m-notes-title{font-size:8.5pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block;text-align:center}
+.a4m-notes-content{font-size:7.5pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8;text-align:center}
 .a4m-trow{display:flex;justify-content:space-between;align-items:stretch;padding:0;font-size:8.5pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
 .a4m-trow:last-child{border-bottom:none}
 .a4m-trow span{color:#000;flex:1;padding:1.5mm 3mm;display:flex;align-items:center}
@@ -380,8 +390,8 @@ ${bodyStyle}
 .a4-totals{border:2px solid #000;width:95mm;flex-shrink:0;background:#fff;direction:rtl}
 .a4-totals-col{display:flex;flex-direction:column;gap:3mm;flex-shrink:0}
 .a4-notes-box{width:100%;background:#fff;direction:rtl;padding:2.5mm 0 0 0;font-size:8.5pt;font-weight:700;color:#000;line-height:1.7;text-align:center}
-.a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
-.a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
+.a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block;text-align:center}
+.a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8;text-align:center}
 .a4-trow{display:flex;justify-content:space-between;align-items:center;padding:0;font-size:9pt;font-weight:700;border-bottom:2px solid #000;gap:0;background:#fff}
 .a4-trow:last-child{border-bottom:none}
 .a4-trow span{color:#000;padding:2mm 3mm;flex:1}

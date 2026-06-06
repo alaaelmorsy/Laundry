@@ -47,6 +47,10 @@
     lastZatcaQr: null,
     refundSearchTarget: null,
     shouldClearCartAfterConsumptionPrint: true,
+    loyaltySettings: null,
+    loyaltyDiscount: 0,
+    loyaltyPointsToRedeem: 0,
+    customerLoyaltyBalance: 0,
   };
 
   /* ========== DOM REFS ========== */
@@ -67,6 +71,24 @@
     chipSubscription: document.getElementById('chipSubscription'),
     chipSubLabel: document.getElementById('chipSubLabel'),
     chipSubBalance: document.getElementById('chipSubBalance'),
+    chipLoyaltyBadge: document.getElementById('chipLoyaltyBadge'),
+    chipLoyaltyPoints: document.getElementById('chipLoyaltyPoints'),
+    loyaltyRow: document.getElementById('loyaltyRow'),
+    btnLoyaltyToggle: document.getElementById('btnLoyaltyToggle'),
+    loyaltyBtnLabel: document.getElementById('loyaltyBtnLabel'),
+    loyaltyAppliedBadge: document.getElementById('loyaltyAppliedBadge'),
+    loyaltyPopup: document.getElementById('loyaltyPopup'),
+    loyaltyPointsInput: document.getElementById('loyaltyPointsInput'),
+    btnApplyLoyalty: document.getElementById('btnApplyLoyalty'),
+    btnClearLoyalty: document.getElementById('btnClearLoyalty'),
+    summaryLoyaltyDiscount: document.getElementById('summaryLoyaltyDiscount'),
+    loyaltyAvailableHint: document.getElementById('loyaltyAvailableHint'),
+    loyaltyModal: document.getElementById('loyaltyModal'),
+    btnLoyaltyModalClose: document.getElementById('btnLoyaltyModalClose'),
+    loyaltySheetInput: document.getElementById('loyaltySheetInput'),
+    loyaltySheetHint: document.getElementById('loyaltySheetHint'),
+    btnApplyLoyaltySheet: document.getElementById('btnApplyLoyaltySheet'),
+    btnClearLoyaltySheet: document.getElementById('btnClearLoyaltySheet'),
     btnRemoveCustomer: document.getElementById('btnRemoveCustomer'),
     btnAddCustomer: document.getElementById('btnAddCustomer'),
     btnAddSubscription: document.getElementById('btnAddSubscription'),
@@ -397,10 +419,15 @@
     }
     I18N.apply();
 
-    const [settingsRes, offersRes] = await Promise.all([
+    const [settingsRes, offersRes, loyaltyRes] = await Promise.all([
       window.api.getAppSettings(),
-      window.api.getActiveOffers()
+      window.api.getActiveOffers(),
+      window.api.getLoyaltySettings().catch(() => null)
     ]);
+
+    if (loyaltyRes && loyaltyRes.success) {
+      state.loyaltySettings = loyaltyRes.settings;
+    }
 
     if (settingsRes && settingsRes.success && settingsRes.settings) {
       state.appSettings = settingsRes.settings;
@@ -423,6 +450,56 @@
 
     updateVatLabel();
     await Promise.all([loadServices(), loadProducts(), loadHangers()]);
+
+    if (window.__currentUser) {
+      applyPosPermissions();
+    } else {
+      window.addEventListener('userReady', applyPosPermissions, { once: true });
+    }
+  }
+
+  function applyPosPermissions() {
+    const u = window.__currentUser;
+    if (!u || u.role === 'admin') return;
+
+    // Discount column
+    if (!window.hasPermission('pos_discount')) {
+      const discCol = els.discountInput && els.discountInput.closest('.de-col');
+      if (discCol) discCol.style.display = 'none';
+    }
+    // Extra column
+    if (!window.hasPermission('pos_extra')) {
+      const extraCol = els.extraInput && els.extraInput.closest('.de-col');
+      if (extraCol) extraCol.style.display = 'none';
+    }
+    // Process invoice button + search row
+    if (!window.hasPermission('pos_process_invoice')) {
+      if (els.btnProcessInvoice) els.btnProcessInvoice.style.display = 'none';
+      if (els.invoiceProcessRow) els.invoiceProcessRow.style.display = 'none';
+    }
+    // Refund receipt button
+    if (!window.hasPermission('pos_refund_receipt')) {
+      if (els.btnRefundConsumptionReceipt) els.btnRefundConsumptionReceipt.style.display = 'none';
+    }
+    // Add customer button
+    if (!window.hasPermission('customers')) {
+      if (els.btnAddCustomer) els.btnAddCustomer.style.display = 'none';
+    }
+    // Add/renew subscription button
+    if (!window.hasPermission('subscriptions')) {
+      if (els.btnAddSubscription) els.btnAddSubscription.style.display = 'none';
+    }
+    // Hanger select
+    if (!window.hasPermission('hangers')) {
+      if (els.hangerSelect) els.hangerSelect.style.display = 'none';
+    }
+    // Deferred invoices tab
+    if (!window.hasPermission('payment')) {
+      const tabD  = document.getElementById('tabDeferred');
+      const tabDD = document.getElementById('tabDeferredDesktop');
+      if (tabD)  tabD.style.display  = 'none';
+      if (tabDD) tabDD.style.display = 'none';
+    }
   }
 
   function updateVatLabel() {
@@ -1089,8 +1166,14 @@
       }
     }
 
-    // Total discount (capped at pre-tax base)
-    return Math.min(manualDisc + offerDisc, base);
+    // Loyalty discount (capped: total all discounts ≤ 90% of base)
+    const loyaltyDisc = Math.max(0, state.loyaltyDiscount || 0);
+    const combinedBeforeLoyalty = manualDisc + offerDisc;
+    const maxTotal = base * 0.90;
+    const loyaltyCapped = Math.min(loyaltyDisc, Math.max(0, maxTotal - combinedBeforeLoyalty));
+
+    // Total discount (capped at 90% of pre-tax base)
+    return Math.min(combinedBeforeLoyalty + loyaltyCapped, maxTotal);
   }
 
   function getOfferDiscountAmount(subtotal) {
@@ -1134,8 +1217,11 @@
       : subtotal;
 
     els.summarySubtotal.innerHTML = riyalHtml(fmtLtr(displaySubtotal));
-    if (discount > 0) {
-      els.summaryDiscount.innerHTML = `<span class="amt-sar disc-neg"><span>−</span><span class="sar">&#xE900;</span><span>${fmtLtr(discount)}</span></span>`;
+    // عرض الخصم اليدوي فقط (بدون خصم النقاط — يظهر في زر النقاط)
+    const manualDiscOnly = discount - Math.max(0, state.loyaltyDiscount || 0);
+    const displayDisc = Math.max(0, manualDiscOnly);
+    if (displayDisc > 0) {
+      els.summaryDiscount.innerHTML = `<span class="amt-sar disc-neg"><span>−</span><span class="sar">&#xE900;</span><span>${fmtLtr(displayDisc)}</span></span>`;
       els.summaryDiscount.className = 'summary-amount discount-val has-discount';
       els.summaryDiscount.style.visibility = 'visible';
     } else {
@@ -1154,6 +1240,8 @@
     }
     els.summaryVat.innerHTML = riyalHtml(fmtLtr(vatAmount));
     els.summaryTotal.innerHTML = riyalHtml(fmtLtr(total));
+
+    // صف نقاط الولاء — القيمة مدمجة في الزر، لا حاجة لعرضها منفصلة
 
     if (state.paymentMethod === 'mixed') {
       updateMixedPayFields();
@@ -1274,6 +1362,7 @@
 
   async function selectCustomer(customer) {
     state.selectedCustomer = customer;
+    state.customerLoyaltyBalance = 0;
     els.customerDropdown.style.display = 'none';
     els.customerSearch.value = '';
     els.btnClearCustomer.style.display = 'none';
@@ -1293,6 +1382,29 @@
     els.selectedCustomerChip.style.display = 'flex';
 
     if (customer.id) {
+      // جلب رصيد النقاط إذا كان النظام مفعلاً
+      if (state.loyaltySettings && state.loyaltySettings.loyaltyEnabled) {
+        try {
+          const lr = await window.api.getCustomerLoyaltyBalance({ customerId: customer.id });
+          if (lr && lr.success) {
+            state.customerLoyaltyBalance = Number(lr.balance) || 0;
+            const pts = state.customerLoyaltyBalance;
+            const val = (pts * (state.loyaltySettings.loyaltySarPerPoint || 0.05)).toFixed(2);
+            if (els.chipLoyaltyPoints) els.chipLoyaltyPoints.textContent = pts.toLocaleString();
+            if (els.chipLoyaltyBadge) {
+              els.chipLoyaltyBadge.title = `= ${val} ر.س`;
+              els.chipLoyaltyBadge.style.display = pts > 0 ? '' : 'none';
+            }
+            if (els.loyaltyRow) els.loyaltyRow.style.display = 'flex';
+            const hintText = `متاح: ${pts.toLocaleString()} نقطة = ${val} ر.س`;
+            if (els.loyaltyAvailableHint) els.loyaltyAvailableHint.textContent = `(${hintText})`;
+            if (els.loyaltySheetHint) els.loyaltySheetHint.textContent = hintText;
+            if (els.loyaltyPointsInput) els.loyaltyPointsInput.max = pts;
+            if (els.loyaltySheetInput) els.loyaltySheetInput.max = pts;
+          }
+        } catch (_) {}
+      }
+
       try {
         const res = await window.api.getCustomerActiveSubscription({ customerId: customer.id });
         if (res && res.success && res.subscription) {
@@ -1319,11 +1431,82 @@
 
   function clearCustomer() {
     state.selectedCustomer = null;
+    state.customerLoyaltyBalance = 0;
     els.customerSearch.value = '';
     els.btnClearCustomer.style.display = 'none';
     els.selectedCustomerChip.style.display = 'none';
     els.chipSubscription.style.display = 'none';
     els.customerDropdown.style.display = 'none';
+    if (els.chipLoyaltyBadge) els.chipLoyaltyBadge.style.display = 'none';
+    clearLoyaltyDiscount(true);
+  }
+
+  function clearLoyaltyDiscount(hideRow = false) {
+    state.loyaltyDiscount = 0;
+    state.loyaltyPointsToRedeem = 0;
+    if (els.loyaltyRow) els.loyaltyRow.style.display = hideRow ? 'none' : 'flex';
+    if (els.loyaltyPointsInput) els.loyaltyPointsInput.value = '';
+    if (els.loyaltySheetInput) els.loyaltySheetInput.value = '';
+    if (els.btnClearLoyalty) els.btnClearLoyalty.style.display = 'none';
+    if (els.btnClearLoyaltySheet) els.btnClearLoyaltySheet.style.display = 'none';
+    if (els.loyaltyPopup) els.loyaltyPopup.style.display = 'none';
+    if (els.loyaltyModal) els.loyaltyModal.style.display = 'none';
+    if (els.btnLoyaltyToggle) els.btnLoyaltyToggle.classList.remove('loyalty-active');
+    if (els.loyaltyBtnLabel) els.loyaltyBtnLabel.textContent = 'النقاط';
+    updateSummary();
+  }
+
+  function isMobile() { return window.innerWidth < 480; }
+
+  function openLoyaltyUI() {
+    const pts = state.customerLoyaltyBalance;
+    const val = (pts * ((state.loyaltySettings && state.loyaltySettings.loyaltySarPerPoint) || 0.05)).toFixed(2);
+    if (els.loyaltySheetHint) els.loyaltySheetHint.textContent = `متاح: ${pts.toLocaleString()} نقطة = ${val} ر.س`;
+    if (els.loyaltySheetInput) {
+      els.loyaltySheetInput.max = pts;
+      els.loyaltySheetInput.value = state.loyaltyPointsToRedeem || '';
+    }
+    if (els.btnClearLoyaltySheet) {
+      els.btnClearLoyaltySheet.style.display = state.loyaltyPointsToRedeem > 0 ? '' : 'none';
+    }
+    if (els.loyaltyModal) {
+      els.loyaltyModal.style.display = 'flex';
+      setTimeout(() => els.loyaltySheetInput && els.loyaltySheetInput.focus(), 100);
+    }
+  }
+
+  function closeLoyaltyPopup() {
+    if (els.loyaltyPopup) els.loyaltyPopup.style.display = 'none';
+    if (els.loyaltyModal) els.loyaltyModal.style.display = 'none';
+  }
+
+  function applyLoyaltyPoints(pts) {
+    if (!state.loyaltySettings || !state.loyaltySettings.loyaltyEnabled) return;
+    const maxPts = state.customerLoyaltyBalance;
+    const actualPts = Math.min(Math.max(0, Math.floor(pts)), maxPts);
+    if (actualPts <= 0) { clearLoyaltyDiscount(); return; }
+    const spp = state.loyaltySettings.loyaltySarPerPoint || 0.05;
+    const subtotal = state.cart.reduce((s, item) => s + item.lineTotal, 0);
+    const base = (state.priceDisplayMode === 'inclusive' && state.vatRate > 0)
+      ? subtotal * 100 / (100 + state.vatRate) : subtotal;
+    const maxDiscount = base * 0.90;
+    const existingDisc = (() => {
+      let md = 0;
+      if (state.discountType === 'pct') md = Math.min(Math.max(0, state.discount) / 100 * base, base);
+      else md = Math.min(Math.max(0, state.discount), base);
+      return md;
+    })();
+    const available = Math.max(0, maxDiscount - existingDisc);
+    const loyaltyDiscAmt = Math.min(actualPts * spp, available);
+    const finalPts = Math.ceil(loyaltyDiscAmt / spp);
+    state.loyaltyDiscount = Math.round(loyaltyDiscAmt * 100) / 100;
+    state.loyaltyPointsToRedeem = finalPts;
+    if (els.loyaltyPointsInput) els.loyaltyPointsInput.value = finalPts;
+    if (els.btnClearLoyalty) els.btnClearLoyalty.style.display = '';
+    if (els.btnLoyaltyToggle) els.btnLoyaltyToggle.classList.add('loyalty-active');
+    if (els.loyaltyBtnLabel) els.loyaltyBtnLabel.textContent = '- ' + state.loyaltyDiscount.toFixed(2);
+    closeLoyaltyPopup();
+    updateSummary();
   }
 
   /* ========== ADD CUSTOMER MODAL ========== */
@@ -1387,9 +1570,11 @@
 
       if (!res || !res.success) {
         let msg = 'حدث خطأ أثناء الحفظ';
+        if (res && res.code === 'NAME_DUPLICATE')  msg = 'اسم العميل مسجل مسبقاً، يرجى اختيار اسم آخر';
         if (res && res.code === 'PHONE_DUPLICATE') msg = 'رقم الهاتف مسجل مسبقاً لدى عميل آخر';
-        if (res && res.code === 'PHONE_INVALID') msg = 'رقم الهاتف غير صحيح';
-        if (res && res.code === 'PHONE_TOO_LONG') msg = 'رقم الهاتف طويل جداً';
+        if (res && res.code === 'PHONE_INVALID')   msg = 'رقم الهاتف غير صحيح';
+        if (res && res.code === 'PHONE_TOO_LONG')  msg = 'رقم الهاتف طويل جداً';
+        if (res && res.message && msg === 'حدث خطأ أثناء الحفظ') msg = res.message;
         showFormError(msg);
         return;
       }
@@ -1810,7 +1995,7 @@
 
       openA4Invoice(data);
       if ((state.appSettings || {}).whatsappSendOnSubscription) {
-        sendInvoiceWhatsApp(orderId, order.phone || '');
+        sendInvoiceWhatsApp(orderId, order.phone || '', 'subscription');
       }
     } catch (e) {
       console.error('printSubscriptionA4 error:', e);
@@ -1924,6 +2109,15 @@
     if (data.starch)      a4mText('a4mStarch',      data.starch);
     a4mShow('a4mRowBluing',      !!data.bluing);
     if (data.bluing)      a4mText('a4mBluing',      data.bluing);
+    (function() {
+      var section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
+      if (!section) return;
+      var rightCard = section.querySelector('.a4m-card:last-child');
+      if (!rightCard) return;
+      var hasVisible = Array.from(rightCard.children).some(function(el) { return el.style.display !== 'none'; });
+      rightCard.style.display = hasVisible ? '' : 'none';
+      section.style.gridTemplateColumns = hasVisible ? '' : '1fr';
+    })();
 
     var vatRate  = data.vatRate || 0;
     var priceMode = data.priceDisplayMode || 'exclusive';
@@ -2047,6 +2241,40 @@
       }
     }
 
+    /* Loyalty points */
+    var a4mLoyaltyRow = document.getElementById('a4mLoyaltyRow');
+    var a4mLoyaltyPoints = document.getElementById('a4mLoyaltyPoints');
+    var a4mLoyaltyLabel = document.getElementById('a4mLoyaltyLabel');
+    if (a4mLoyaltyRow && a4mLoyaltyPoints) {
+      var loyEarned   = Number(data.loyaltyEarned   || 0);
+      var loyRedeemed = Number(data.loyaltyRedeemed || 0);
+      var loyEnabled  = state.loyaltySettings && state.loyaltySettings.loyaltyEnabled;
+      var isCredit    = state.paymentMethod === 'credit';
+      var loyBal = Number(data.loyaltyBalance != null ? data.loyaltyBalance : (state.customerLoyaltyBalance - loyRedeemed + loyEarned));
+      var loyRev = data.loyaltyReversal;
+      if (loyEnabled && loyRev && (loyRev.earned > 0 || loyRev.redeemed > 0)) {
+        // إشعار دائن: عرض استرجاع النقاط
+        a4mLoyaltyPoints.textContent = loyRev.newBalance.toLocaleString();
+        if (a4mLoyaltyLabel) {
+          var revTxt = loyRev.netReverse > 0
+            ? 'استُرجع ' + loyRev.netReverse + ' نقطة — رصيدك / Points Restored'
+            : 'خُصم ' + Math.abs(loyRev.netReverse) + ' نقطة — رصيدك / Points Deducted';
+          a4mLoyaltyLabel.textContent = revTxt;
+        }
+        a4mLoyaltyRow.style.display = '';
+      } else if (loyEnabled && (loyEarned > 0 || loyRedeemed > 0)) {
+        a4mLoyaltyPoints.textContent = loyBal.toLocaleString();
+        if (a4mLoyaltyLabel) a4mLoyaltyLabel.textContent = 'رصيدك من النقاط / Loyalty Points';
+        a4mLoyaltyRow.style.display = '';
+      } else if (loyEnabled && loyBal > 0) {
+        a4mLoyaltyPoints.textContent = loyBal.toLocaleString();
+        if (a4mLoyaltyLabel) a4mLoyaltyLabel.textContent = 'رصيد نقاطك / Loyalty Balance';
+        a4mLoyaltyRow.style.display = '';
+      } else {
+        a4mLoyaltyRow.style.display = 'none';
+      }
+    }
+
     if (data.qrPayload) {
       var qrEl = document.getElementById('a4mQR');
       if (qrEl) {
@@ -2111,16 +2339,22 @@
   }
 
   function printConsumptionReceipt() {
-    document.body.classList.add('print-consumption-receipt');
     var copies = getPrintCopies();
-    if (copies === 0) {
-      document.body.classList.remove('print-consumption-receipt');
-      return;
+    if (copies === 0) return;
+
+    // نسخ محتوى الإيصال لـ print zone (خارج المودال) للتوافق مع متصفحات الجوال
+    var crPaperEl = document.getElementById('crModalPaper');
+    var printZone = document.getElementById('consumptionPrintZone');
+    if (crPaperEl && printZone) {
+      printZone.innerHTML = crPaperEl.outerHTML;
     }
+
+    document.body.classList.add('print-consumption-receipt');
     var currentCopy = 0;
     function printNext() {
       if (currentCopy >= copies) {
         document.body.classList.remove('print-consumption-receipt');
+        if (printZone) printZone.innerHTML = '';
         return;
       }
       currentCopy += 1;
@@ -2133,6 +2367,7 @@
           setTimeout(printNext, 120);
         } else {
           document.body.classList.remove('print-consumption-receipt');
+          if (printZone) printZone.innerHTML = '';
           // نحفظ بيانات الواتساب قبل مسح السلة
           const _crWaSettings = state.appSettings || {};
           const _crWaPhone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
@@ -2145,7 +2380,7 @@
           }
           // إرسال إيصال الاستهلاك عبر الواتساب عند الطباعة
           if (_crWaSettings.whatsappSendOnPrint && _crHtml && _crWaPhone) {
-            sendInvoiceWhatsAppFromHtml(_crHtml, 'thermal', _crWaPhone, _crOrderNum);
+            sendInvoiceWhatsAppFromHtml(_crHtml, 'thermal', _crWaPhone, _crOrderNum, null, 'consumption');
           }
           // Keep the receipt modal visible after printing so the user can
           // export PDF or review details. The user closes it manually.
@@ -2594,7 +2829,11 @@
 
     /* ── Build discount label with offer name ── */
     var discountLabel = 'الخصم';
-    if (state.activeOffer && totals.discount > 0) {
+    var loyaltyRedeemAmt = Number(totals.loyaltyDiscount || 0);
+    var loyaltyRedeemedPts = Number(totals.loyaltyRedeemed || 0);
+    if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
+      discountLabel = 'خصم نقاط الولاء';
+    } else if (state.activeOffer && totals.discount > 0) {
       var offerName = state.activeOffer.name || '';
       var offerValTxt = state.activeOffer.discount_type === 'percentage'
         ? parseFloat(state.activeOffer.discount_value) + '%'
@@ -2781,6 +3020,44 @@
       }
     }
 
+    /* ── Loyalty Points — سطر في بيانات العميل ── */
+    var invLoyaltyRow    = document.getElementById('invLoyaltyRow');
+    var invLoyaltyPoints = document.getElementById('invLoyaltyPoints');
+    var invLoyaltyLabel  = invLoyaltyRow ? invLoyaltyRow.querySelector('.inv-meta-label') : null;
+    if (invLoyaltyRow && invLoyaltyPoints) {
+      var loyaltyEarned   = Number(totals.loyaltyEarned   || 0);
+      var loyaltyRedeemed = Number(totals.loyaltyRedeemed || 0);
+      var isCredit        = state.paymentMethod === 'credit';
+      var loyEnabled      = state.loyaltySettings && state.loyaltySettings.loyaltyEnabled;
+      if (isCredit && loyEnabled && state.customerLoyaltyBalance > 0) {
+        // فاتورة آجلة: نعرض الرصيد الحالي قبل الدفع
+        invLoyaltyPoints.textContent = state.customerLoyaltyBalance.toLocaleString();
+        if (invLoyaltyLabel) invLoyaltyLabel.textContent = 'رصيد نقاطك';
+        invLoyaltyRow.style.display = '';
+      } else if (loyaltyEarned > 0 || loyaltyRedeemed > 0) {
+        // فاتورة مدفوعة: نعرض الرصيد الجديد بعد العملية
+        var newLoyaltyBal = state.customerLoyaltyBalance - loyaltyRedeemed + loyaltyEarned;
+        invLoyaltyPoints.textContent = newLoyaltyBal.toLocaleString();
+        if (invLoyaltyLabel) invLoyaltyLabel.textContent = 'رصيدك من النقاط';
+        invLoyaltyRow.style.display = '';
+      } else {
+        invLoyaltyRow.style.display = 'none';
+      }
+    }
+
+    /* ── إخفاء الـ footer القديم للنقاط ── */
+    var invLoyaltyFooter = document.getElementById('invLoyaltyFooter');
+    if (invLoyaltyFooter) invLoyaltyFooter.style.display = 'none';
+
+    (function fixInvCrInfoGrid() {
+      var grid = document.querySelector('#invoicePaper .cr-info-grid');
+      if (!grid) return;
+      var cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
+      cells.forEach(function(c) { c.style.gridColumn = ''; });
+      var visible = cells.filter(function(c) { return c.style.display !== 'none'; });
+      if (visible.length % 2 !== 0) visible[visible.length - 1].style.gridColumn = '1 / -1';
+    })();
+
     /* ── ZATCA QR — use stored zatcaQr from createOrder result when available ── */
     var ts = isoTimestamp(orderDate);
     if (state.vatRate > 0) {
@@ -2883,6 +3160,10 @@
         vatAmount:   fmtLtr(totals.vatAmount),
         tlvBase64:   state.lastZatcaQr || null
       } : null,
+      loyaltyEarned:    totals.loyaltyEarned   || 0,
+      loyaltyRedeemed:  totals.loyaltyRedeemed || 0,
+      loyaltyDiscount:  totals.loyaltyDiscount || 0,
+      loyaltyBalance:   state.customerLoyaltyBalance - (totals.loyaltyRedeemed || 0) + (totals.loyaltyEarned || 0),
       autoPrint: false
     };
 
@@ -2930,6 +3211,9 @@
       state.selectedCustomer = order.customer_name
         ? { name: order.customer_name, phone: order.phone || '' }
         : state.selectedCustomer;
+      if (order.customer_loyalty_points != null) {
+        state.customerLoyaltyBalance = Number(order.customer_loyalty_points);
+      }
       state.paymentMethod    = order.payment_method || 'cash';
       state.vatRate          = Number(order.vat_rate != null ? order.vat_rate : (state.vatRate || 15));
       state.priceDisplayMode = order.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
@@ -3083,7 +3367,17 @@
         items,
         subtotal: parseFloat(subtotal.toFixed(2)),
         discountAmount: parseFloat(discount.toFixed(2)),
-        discountLabel: state.activeOffer ? ('خصم عرض (' + (state.activeOffer.name || '') + ' ' + (state.activeOffer.discount_type === 'percentage' ? parseFloat(state.activeOffer.discount_value) + '%' : parseFloat(state.activeOffer.discount_value) + ' ر.س') + ')') : null,
+        discountLabel: (() => {
+          const parts = [];
+          if (state.activeOffer) {
+            parts.push('خصم عرض (' + (state.activeOffer.name || '') + ' ' + (state.activeOffer.discount_type === 'percentage' ? parseFloat(state.activeOffer.discount_value) + '%' : parseFloat(state.activeOffer.discount_value) + ' ر.س') + ')');
+          }
+          if (state.loyaltyPointsToRedeem > 0) {
+            parts.push('خصم نقاط الولاء (' + state.loyaltyPointsToRedeem + ' نقطة)');
+          }
+          return parts.length ? parts.join(' + ') : null;
+        })(),
+        loyaltyPointsToRedeem: state.loyaltyPointsToRedeem || 0,
         extraAmount: parseFloat(extra.toFixed(2)),
         vatRate: state.vatRate,
         vatAmount: parseFloat(vatAmount.toFixed(2)),
@@ -3147,6 +3441,9 @@
           paidCash: state.paymentMethod === 'mixed' ? state.mixedCash : 0,
           paidCard: state.paymentMethod === 'mixed' ? state.mixedCard : 0
         };
+        invTotals.loyaltyEarned   = Number(res.loyaltyEarned   || 0);
+        invTotals.loyaltyRedeemed = Number(res.loyaltyRedeemed || 0);
+        invTotals.loyaltyDiscount = state.loyaltyDiscount || 0;
         setTimeout(function () {
           showInvoiceModal(res.orderNumber, res.createdAt || null,
             invTotals, subscription, res.invoiceSeq, null, consumed <= 0, res.id, state.invoiceNotes);
@@ -3219,21 +3516,35 @@
   }
 
   // إرسال من HTML الشاشة (مطابق للطباعة تماماً)
-  async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload) {
+  async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload, stage) {
     if (!html || !phone) return;
     const s = state.appSettings || {};
+    const num = orderNum || '';
+    const _stageMessages = {
+      receive:     'تم استلام ملابسكم 👔\nفاتورة رقم: ' + num,
+      subscription:'تم استلام ملابسكم 👔\nفاتورة رقم: ' + num,
+      pay:         'تم دفع الفاتورة بنجاح ✅\nفاتورة رقم: ' + num,
+      clean:       'تم تنظيف ملابسكم 🧺\nفاتورة رقم: ' + num,
+      deliver:     'تم تسليم ملابسكم 🎁\nفاتورة رقم: ' + num,
+      consumption: 'تم استلام ملابسكم 👔\nإيصال استهلاك رقم: ' + num,
+    };
+    const autoMsg = _stageMessages[stage] || '';
+    const optionalMsg = s.whatsappInvoiceMessage || '';
+    const caption = autoMsg
+      ? (optionalMsg ? autoMsg + '\n\n' + optionalMsg : autoMsg)
+      : optionalMsg;
     try {
       await window.api.whatsappSendInvoicePdfFromHtml({
         html, paperType: paperType || 'thermal', phone,
-        caption: s.whatsappInvoiceMessage || '',
-        orderNum: orderNum || '',
+        caption,
+        orderNum: num,
         zatcaPayload: zatcaPayload || null
       });
     } catch (_) {}
   }
 
   // إرسال من orderId — يحمّل الفاتورة في المودال بصمت ويلتقط HTML مطابق للشاشة
-  async function sendInvoiceWhatsApp(orderId, phone) {
+  async function sendInvoiceWhatsApp(orderId, phone, stage) {
     if (!orderId || !phone) return;
     const s = state.appSettings || {};
     try {
@@ -3348,7 +3659,7 @@
               totalAmount: String(Number(order.total_amount || 0).toFixed(2)),
               vatAmount:   String(Number(order.vat_amount   || 0).toFixed(2))
             } : null);
-        await sendInvoiceWhatsAppFromHtml(capturedHtml, paperType, phone, orderNum, _zatcaPayload);
+        await sendInvoiceWhatsAppFromHtml(capturedHtml, paperType, phone, orderNum, _zatcaPayload, stage);
       }
     } catch (_) {}
   }
@@ -3428,9 +3739,9 @@
           // إرسال الفاتورة عبر الواتساب إذا كان الإعداد مفعلاً (من HTML مطابق للطباعة)
           if (_waSub && _waSettings.whatsappSendOnSubscription) {
             state._printingSubscription = false;
-            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca);
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'subscription');
           } else if (!_waSub && _waSettings.whatsappSendOnPrint) {
-            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca);
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'receive');
           }
           state._printingSubscription = false;
           // Keep the invoice modal visible after printing so the user can
@@ -3528,6 +3839,8 @@
       }
     }
 
+    state.priceDisplayMode = invoice.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
+
     const discAmt  = parseFloat(invoice.discount_amount || 0);
     const extraAmt = parseFloat(invoice.extra_amount   || 0);
     state.discount = discAmt;
@@ -3559,6 +3872,8 @@
   function exitInvoiceProcessMode() {
     state.invoiceProcessMode = false;
     state.processingInvoice = null;
+
+    state.priceDisplayMode = state.appSettings && state.appSettings.priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive';
 
     els.invProcBanner.style.display = 'none';
     if (els.invProcIdle) els.invProcIdle.style.display = '';
@@ -3771,6 +4086,15 @@
     }
     if (els.invSubSection) els.invSubSection.style.display = 'none';
 
+    (function fixCnCrInfoGrid() {
+      var grid = document.querySelector('#invoicePaper .cr-info-grid');
+      if (!grid) return;
+      var cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
+      cells.forEach(function(c) { c.style.gridColumn = ''; });
+      var visible = cells.filter(function(c) { return c.style.display !== 'none'; });
+      if (visible.length % 2 !== 0) visible[visible.length - 1].style.gridColumn = '1 / -1';
+    })();
+
     var sarHtml = '<span class="sar">&#xE900;</span>';
     function sarFmt(n) { return sarHtml + ' ' + fmtLtr(n); }
 
@@ -3780,6 +4104,12 @@
     var vatRate     = parseFloat(inv.vat_rate        || 0);
     var vatAmount   = parseFloat(inv.vat_amount      || 0);
     var totalAmount = parseFloat(inv.total_amount    || 0);
+    var cnPriceMode = inv.price_display_mode || 'exclusive';
+
+    // في وضع inclusive يكون subtotal المحفوظ شاملاً للضريبة — نستخرج المبلغ قبل الضريبة للعرض
+    var cnDisplaySubtotal = (cnPriceMode === 'inclusive' && vatRate > 0)
+      ? subtotal * 100 / (100 + vatRate)
+      : subtotal;
 
     var isCNSubInvoice = inv.order_type === 'subscription_new' || inv.order_type === 'subscription_renewal';
     var cnSubPkgName = isCNSubInvoice ? (inv.notes || '') : '';
@@ -3801,7 +4131,7 @@
         + '</tr>';
     }).join('');
 
-    els.invSubtotal.innerHTML = sarFmt(subtotal);
+    els.invSubtotal.innerHTML = sarFmt(cnDisplaySubtotal);
     if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = vatRate > 0 ? 'المجموع قبل الضريبة' : 'المجموع';
     if (discAmt > 0) {
       els.invDiscount.innerHTML = sarFmt(discAmt);
@@ -3810,7 +4140,7 @@
         var discLblDeferred = els.invDiscRow.querySelector('.inv-total-label');
         if (discLblDeferred) discLblDeferred.textContent = inv.discount_label;
       }
-      var afterDiscDeferred = subtotal - discAmt;
+      var afterDiscDeferred = cnDisplaySubtotal - discAmt;
       els.invAfterDiscount.innerHTML = sarFmt(afterDiscDeferred);
       els.invAfterDiscRow.style.display = '';
     } else {
@@ -3838,6 +4168,28 @@
     if (els.invMixedCardRow) els.invMixedCardRow.style.display = 'none';
     els.invPaidRow.style.display = 'none';
     els.invRemainingRow.style.display = 'none';
+
+    /* ── Loyalty reversal in credit note ── */
+    var invLoyaltyRowCN = document.getElementById('invLoyaltyRow');
+    if (invLoyaltyRowCN) {
+      var loyRev = cnRes && cnRes.loyaltyReversal;
+      var loyEnabled = state.loyaltySettings && state.loyaltySettings.loyaltyEnabled;
+      if (loyEnabled && loyRev && (loyRev.earned > 0 || loyRev.redeemed > 0)) {
+        var invLoyaltyPointsCN = document.getElementById('invLoyaltyPoints');
+        var invLoyaltyLabelCN  = invLoyaltyRowCN.querySelector('.inv-meta-label');
+        if (invLoyaltyPointsCN) invLoyaltyPointsCN.textContent = loyRev.newBalance.toLocaleString();
+        if (invLoyaltyLabelCN) {
+          var reversedTxt = loyRev.netReverse > 0
+            ? 'استُرجع ' + loyRev.netReverse + ' نقطة — رصيدك'
+            : 'خُصم ' + Math.abs(loyRev.netReverse) + ' نقطة — رصيدك';
+          invLoyaltyLabelCN.textContent = reversedTxt;
+        }
+        invLoyaltyRowCN.style.display = '';
+        state.customerLoyaltyBalance = loyRev.newBalance;
+      } else {
+        invLoyaltyRowCN.style.display = 'none';
+      }
+    }
 
     var pmLabels = { cash: 'نقداً', card: 'شبكة', credit: 'آجل', mixed: 'مختلط', bank: 'تحويل بنكي', subscription: 'اشتراك' };
     els.invPayment.textContent = pmLabels[inv.payment_method] || inv.payment_method || 'إرجاع';
@@ -3935,6 +4287,10 @@
         autoPrint: false,
         creditNoteNumber: cnRes.creditNoteNumber || String(cnSeq),
         originalInvoiceSeq: String(cnRes.originalInvoiceSeq || inv.invoice_seq || inv.order_number || inv.id),
+        loyaltyReversal: cnRes.loyaltyReversal || null,
+        loyaltyBalance: (cnRes.loyaltyReversal) ? cnRes.loyaltyReversal.newBalance : null,
+        loyaltyEarned: 0,
+        loyaltyRedeemed: 0,
       };
       state.lastA4Data = a4Data;
       fillA4InvoiceModal(a4Data);
@@ -4284,6 +4640,61 @@
     });
 
     els.btnRemoveCustomer.addEventListener('click', clearCustomer);
+
+    // نقاط الولاء — زر + popup
+    // زر فتح النقاط — desktop: popup / mobile: bottom sheet
+    if (els.btnLoyaltyToggle) {
+      els.btnLoyaltyToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLoyaltyUI();
+      });
+    }
+    if (els.loyaltyPopup) {
+      els.loyaltyPopup.addEventListener('click', (e) => e.stopPropagation());
+    }
+    document.addEventListener('click', () => {
+      if (els.loyaltyPopup) els.loyaltyPopup.style.display = 'none';
+    });
+
+    // Desktop popup apply/clear
+    if (els.btnApplyLoyalty) {
+      els.btnApplyLoyalty.addEventListener('click', () => {
+        const pts = Number(els.loyaltyPointsInput && els.loyaltyPointsInput.value) || 0;
+        applyLoyaltyPoints(pts);
+      });
+    }
+    if (els.btnClearLoyalty) {
+      els.btnClearLoyalty.addEventListener('click', clearLoyaltyDiscount);
+    }
+    if (els.loyaltyPointsInput) {
+      els.loyaltyPointsInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && els.btnApplyLoyalty) els.btnApplyLoyalty.click();
+      });
+    }
+
+    // Mobile bottom sheet apply/clear/overlay
+    if (els.btnApplyLoyaltySheet) {
+      els.btnApplyLoyaltySheet.addEventListener('click', () => {
+        const pts = Number(els.loyaltySheetInput && els.loyaltySheetInput.value) || 0;
+        applyLoyaltyPoints(pts);
+      });
+    }
+    if (els.btnClearLoyaltySheet) {
+      els.btnClearLoyaltySheet.addEventListener('click', clearLoyaltyDiscount);
+    }
+    if (els.loyaltySheetInput) {
+      els.loyaltySheetInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && els.btnApplyLoyaltySheet) els.btnApplyLoyaltySheet.click();
+      });
+    }
+    if (els.btnLoyaltyModalClose) {
+      els.btnLoyaltyModalClose.addEventListener('click', closeLoyaltyPopup);
+    }
+    if (els.loyaltyModal) {
+      els.loyaltyModal.addEventListener('click', (e) => {
+        if (e.target === els.loyaltyModal) closeLoyaltyPopup();
+      });
+    }
 
     els.btnAddCustomer.addEventListener('click', openAddCustomerModal);
     els.btnAddCustomerClose.addEventListener('click', closeAddCustomerModal);
@@ -5049,12 +5460,24 @@
       return;
     }
 
-    showTopToast(t('pos-deferred-payment-saved') || 'تم تسجيل الدفعة بنجاح', 'success');
+    const earnedNow = Number(res.loyaltyEarned || 0);
+    if (earnedNow > 0) {
+      state.customerLoyaltyBalance = Number(res.newLoyaltyBalance || 0);
+      // تحديث عرض النقاط في شريحة العميل بالـ POS
+      if (els.chipLoyaltyPoints) els.chipLoyaltyPoints.textContent = state.customerLoyaltyBalance.toLocaleString();
+      if (els.chipLoyaltyBadge) {
+        const spp = (state.loyaltySettings && state.loyaltySettings.loyaltySarPerPoint) || 0.05;
+        els.chipLoyaltyBadge.title = `= ${(state.customerLoyaltyBalance * spp).toFixed(2)} ر.س`;
+      }
+      showTopToast((t('pos-deferred-payment-saved') || 'تم تسجيل الدفعة بنجاح') + ` • تم إضافة ${earnedNow} نقطة`, 'success');
+    } else {
+      showTopToast(t('pos-deferred-payment-saved') || 'تم تسجيل الدفعة بنجاح', 'success');
+    }
 
     // إرسال الفاتورة عبر الواتساب عند الدفع
     if ((state.appSettings || {}).whatsappSendOnPay) {
       const _payInv = state.deferredInvoices.find(o => o.id === orderId);
-      if (_payInv && _payInv.phone) sendInvoiceWhatsApp(orderId, _payInv.phone);
+      if (_payInv && _payInv.phone) sendInvoiceWhatsApp(orderId, _payInv.phone, 'pay');
     }
 
     // Refresh modal content
@@ -5106,7 +5529,7 @@
     refreshRowInPlace(Number(orderId), 'invoice', 'cleaning_date');
     if ((state.appSettings || {}).whatsappSendOnClean) {
       const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
-      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone);
+      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone, 'clean');
     }
   }
 
@@ -5120,7 +5543,7 @@
     refreshRowInPlace(Number(orderId), 'invoice', 'delivery_date');
     if ((state.appSettings || {}).whatsappSendOnDeliver) {
       const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
-      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone);
+      if (inv && inv.phone) sendInvoiceWhatsApp(Number(orderId), inv.phone, 'deliver');
     }
   }
 
@@ -5181,6 +5604,14 @@
       if (r.delivery_date) { deliverRow.style.display = ''; deliverDateEl.textContent = fmtDt(r.delivery_date); }
       else deliverRow.style.display = 'none';
     }
+    (function fixCrModalGrid() {
+      var g = document.querySelector('#crModalPaper .cr-info-grid');
+      if (!g) return;
+      var cs = Array.from(g.querySelectorAll('.cr-info-cell'));
+      cs.forEach(function(c) { c.style.gridColumn = ''; });
+      var vis = cs.filter(function(c) { return c.style.display !== 'none'; });
+      if (vis.length % 2 !== 0) vis[vis.length - 1].style.gridColumn = '1 / -1';
+    })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';
     document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
@@ -5196,6 +5627,103 @@
 
   window._posDeferredViewReceipt = (id) => showDeferredReceiptPreview(id);
 
+  // تملأ DOM إيصال الاستهلاك بصمت (بدون إظهار المودال) وتُرجع HTML الإيصال
+  async function _buildReceiptHtmlSilent(receiptId) {
+    const res = await window.api.getConsumptionReceiptById({ id: Number(receiptId) });
+    if (!res || !res.success || !res.receipt) return null;
+    const r = res.receipt;
+    const s = state.appSettings || {};
+    const lang = getLang();
+    const shopName = (lang === 'ar' ? s.laundryNameAr : s.laundryNameEn) || s.laundryNameAr || '';
+
+    if (document.getElementById('crModalShopName')) document.getElementById('crModalShopName').textContent = shopName;
+    if (document.getElementById('crModalShopAddress')) document.getElementById('crModalShopAddress').textContent = s.locationAr || s.locationEn || '';
+    if (document.getElementById('crModalShopPhone')) document.getElementById('crModalShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
+    const crLogoWrap = document.getElementById('crModalLogoWrap');
+    const crLogo = document.getElementById('crModalLogo');
+    if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
+    else if (crLogoWrap) crLogoWrap.style.display = 'none';
+
+    const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
+    if (titleEl) titleEl.textContent = 'إيصال استهلاك';
+    if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
+    if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = 'none';
+    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المستهلك';
+    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل';
+    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد';
+
+    const fmtDt = (d) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      const pad = n => String(n).padStart(2,'0');
+      const h = dt.getHours(), ampm = h >= 12 ? 'PM' : 'AM';
+      return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(h%12||12)}:${pad(dt.getMinutes())} ${ampm}`;
+    };
+
+    const rcptNum = 'C-' + Number(r.receipt_seq);
+    state.viewingConsumptionReceiptNum = rcptNum;
+    document.getElementById('crModalReceiptNum').textContent = rcptNum;
+    document.getElementById('crModalDate').textContent = fmtDt(r.created_at);
+    document.getElementById('crModalCustomer').textContent = r.customer_name || '—';
+    document.getElementById('crModalPhone').textContent = r.phone || '—';
+    const subRefEl = document.getElementById('crModalSubRef');
+    if (subRefEl) subRefEl.textContent = formatSubscriptionDisplayNum(r.subscription_number || '');
+    document.getElementById('crModalPackage').textContent = r.package_name || '—';
+
+    const cleanRow = document.getElementById('crModalCleanRow');
+    const deliverRow = document.getElementById('crModalDeliverRow');
+    const cleanDateEl = document.getElementById('crModalCleanDate');
+    const deliverDateEl = document.getElementById('crModalDeliverDate');
+    if (cleanRow && cleanDateEl) {
+      if (r.cleaning_date) { cleanRow.style.display = ''; cleanDateEl.textContent = fmtDt(r.cleaning_date); }
+      else cleanRow.style.display = 'none';
+    }
+    if (deliverRow && deliverDateEl) {
+      if (r.delivery_date) { deliverRow.style.display = ''; deliverDateEl.textContent = fmtDt(r.delivery_date); }
+      else deliverRow.style.display = 'none';
+    }
+    (function fixCrModalGrid2() {
+      var g = document.querySelector('#crModalPaper .cr-info-grid');
+      if (!g) return;
+      var cs = Array.from(g.querySelectorAll('.cr-info-cell'));
+      cs.forEach(function(c) { c.style.gridColumn = ''; });
+      var vis = cs.filter(function(c) { return c.style.display !== 'none'; });
+      if (vis.length % 2 !== 0) vis[vis.length - 1].style.gridColumn = '1 / -1';
+    })();
+
+    const sarHtml = '<span class="sar">&#xE900;</span> ';
+    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
+    document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
+    document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
+
+    const tbody = document.getElementById('crModalItemsBody');
+    if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(r.items || []);
+
+    const paperEl = document.getElementById('crModalPaper');
+    return { html: paperEl ? paperEl.outerHTML : null, rcptNum, phone: r.phone || '' };
+  }
+
+  async function _sendReceiptWhatsApp(receiptId, stage) {
+    const rcpt = (state.deferredInvoices || []).find(r => r.id === Number(receiptId) && r.rowType === 'receipt');
+    if (!rcpt || !rcpt.phone) return;
+    try {
+      const built = await _buildReceiptHtmlSilent(receiptId);
+      if (!built || !built.html) return;
+      const s = state.appSettings || {};
+      const optionalMsg = s.whatsappInvoiceMessage || '';
+      const stageAutoMsg = {
+        clean:   'تم تنظيف ملابسكم 🧺\nإيصال استهلاك رقم: ' + built.rcptNum,
+        deliver: 'تم تسليم ملابسكم 🎁\nإيصال استهلاك رقم: ' + built.rcptNum,
+      };
+      const autoMsg = stageAutoMsg[stage] || '';
+      const caption = autoMsg ? (optionalMsg ? autoMsg + '\n\n' + optionalMsg : autoMsg) : optionalMsg;
+      await window.api.whatsappSendInvoicePdfFromHtml({
+        html: built.html, paperType: 'thermal', phone: rcpt.phone,
+        caption, orderNum: built.rcptNum, zatcaPayload: null
+      });
+    } catch (_) {}
+  }
+
   async function deferredMarkReceiptCleaned(receiptId) {
     const res = await window.api.markReceiptCleaned({ receiptId: Number(receiptId) });
     if (!res || !res.success) {
@@ -5204,6 +5732,9 @@
     }
     showTopToast(t('pos-deferred-clean-success'), 'success');
     refreshRowInPlace(Number(receiptId), 'receipt', 'cleaning_date');
+    if ((state.appSettings || {}).whatsappSendOnClean) {
+      _sendReceiptWhatsApp(Number(receiptId), 'clean');
+    }
   }
 
   async function deferredMarkReceiptDelivered(receiptId) {
@@ -5214,6 +5745,9 @@
     }
     showTopToast(t('pos-deferred-deliver-success'), 'success');
     refreshRowInPlace(Number(receiptId), 'receipt', 'delivery_date');
+    if ((state.appSettings || {}).whatsappSendOnDeliver) {
+      _sendReceiptWhatsApp(Number(receiptId), 'deliver');
+    }
   }
 
   window._posMarkReceiptCleaned   = (id) => deferredMarkReceiptCleaned(id);
@@ -5276,11 +5810,11 @@
     const _waBarcode = state.appSettings || {};
     if (inv.phone) {
       if (actions.includes('deliver') && _waBarcode.whatsappSendOnDeliver) {
-        sendInvoiceWhatsApp(orderId, inv.phone);
+        sendInvoiceWhatsApp(orderId, inv.phone, 'deliver');
       } else if (actions.includes('clean') && _waBarcode.whatsappSendOnClean) {
-        sendInvoiceWhatsApp(orderId, inv.phone);
+        sendInvoiceWhatsApp(orderId, inv.phone, 'clean');
       } else if (actions.includes('pay') && _waBarcode.whatsappSendOnPay) {
-        sendInvoiceWhatsApp(orderId, inv.phone);
+        sendInvoiceWhatsApp(orderId, inv.phone, 'pay');
       }
     }
 
@@ -5582,19 +6116,37 @@
       state.paymentMethod = 'mixed';
     }
 
+    // نقاط الولاء المخزنة على الفاتورة
+    const loyaltyEarnedOnOrder   = Number(order.loyalty_points_earned   || 0);
+    const loyaltyRedeemedOnOrder = Number(order.loyalty_points_redeemed || 0);
+    const loyaltyDiscountOnOrder = Number(order.loyalty_discount_amount || 0);
+    if (order.customer_id && loyaltyEarnedOnOrder > 0) {
+      // نجلب الرصيد الحالي من DB ثم نطرح النقاط المكتسبة لأن صيغة showInvoiceModal ستجمعها
+      try {
+        const balRes = await window.api.getCustomerLoyaltyBalance({ customerId: order.customer_id });
+        if (balRes && balRes.success) {
+          const currentBal = Number(balRes.balance) || 0;
+          state.customerLoyaltyBalance = currentBal - loyaltyEarnedOnOrder + loyaltyRedeemedOnOrder;
+        }
+      } catch (_) {}
+    }
+
     showInvoiceModal(
       order.order_number,
       order.created_at,
       {
-        subtotal:  Number(order.subtotal         || 0),
-        discount:  Number(order.discount_amount  || 0),
-        extra:     Number(order.extra_amount     || 0),
-        vatAmount: Number(order.vat_amount       || 0),
-        total:     Number(order.total_amount     || 0),
-        paid:      Number(order.paid_amount      || 0),
-        remaining: Number(order.remaining_amount || 0),
-        paidCash:  totalCash,
-        paidCard:  totalCard,
+        subtotal:        Number(order.subtotal         || 0),
+        discount:        Number(order.discount_amount  || 0),
+        extra:           Number(order.extra_amount     || 0),
+        vatAmount:       Number(order.vat_amount       || 0),
+        total:           Number(order.total_amount     || 0),
+        paid:            Number(order.paid_amount      || 0),
+        remaining:       Number(order.remaining_amount || 0),
+        paidCash:        totalCash,
+        paidCard:        totalCard,
+        loyaltyEarned:   loyaltyEarnedOnOrder,
+        loyaltyRedeemed: loyaltyRedeemedOnOrder,
+        loyaltyDiscount: loyaltyDiscountOnOrder,
       },
       subscription,
       order.invoice_seq,

@@ -349,6 +349,15 @@
     if (data.starch) a4mText('a4mStarch', data.starch);
     a4mShow('a4mRowBluing', !!data.bluing);
     if (data.bluing) a4mText('a4mBluing', data.bluing);
+    (function() {
+      const section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
+      if (!section) return;
+      const rightCard = section.querySelector('.a4m-card:last-child');
+      if (!rightCard) return;
+      const hasVisible = Array.from(rightCard.children).some(el => el.style.display !== 'none');
+      rightCard.style.display = hasVisible ? '' : 'none';
+      section.style.gridTemplateColumns = hasVisible ? '' : '1fr';
+    })();
 
     if (data.qrPayload) {
       const qrEl = document.getElementById('a4mQR');
@@ -743,6 +752,17 @@
     }
   }
 
+  function fixCrInfoGridLastCell() {
+    const grid = document.querySelector('#invoicePaper .cr-info-grid');
+    if (!grid) return;
+    const cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
+    cells.forEach(c => { c.style.gridColumn = ''; });
+    const visible = cells.filter(c => c.style.display !== 'none');
+    if (visible.length % 2 !== 0) {
+      visible[visible.length - 1].style.gridColumn = '1 / -1';
+    }
+  }
+
   function renderInvoiceModal(order, items, seqNum, subscription) {
     const s = state.appSettings || {};
     const displaySeq = order.is_refund ? order.order_number : (order.invoice_seq || seqNum);
@@ -869,6 +889,8 @@
       if (els.invSubRefRow) els.invSubRefRow.style.display = 'none';
       if (els.invSubBalRow) els.invSubBalRow.style.display = 'none';
     }
+
+    fixCrInfoGridLastCell();
 
     /* Items — نفس منطق شاشة البيع */
     const sarSpan = '<span class="sar">&#xE900;</span>';

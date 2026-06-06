@@ -110,13 +110,16 @@ async function start() {
         path: '/',
         secure: req.secure || req.protocol === 'https'
       });
+      const permissions = await db.getPermissionsForUser(user.id);
       return res.json({
         success: true,
         user: {
           id: user.id,
           username: user.username,
           full_name: user.full_name,
-          role: user.role
+          role: user.role,
+          role_id: user.role_id || null,
+          permissions
         }
       });
     } catch (err) {
@@ -130,16 +133,23 @@ async function start() {
     res.json({ success: true });
   });
 
-  app.get('/api/auth/me', authMiddleware, (req, res) => {
-    res.json({
-      success: true,
-      user: {
-        id: req.user.id,
-        username: req.user.username,
-        full_name: req.user.full_name,
-        role: req.user.role
-      }
-    });
+  app.get('/api/auth/me', authMiddleware, async (req, res) => {
+    try {
+      const permissions = await db.getPermissionsForUser(req.user.id);
+      res.json({
+        success: true,
+        user: {
+          id: req.user.id,
+          username: req.user.username,
+          full_name: req.user.full_name,
+          role: req.user.role,
+          role_id: req.user.role_id || null,
+          permissions
+        }
+      });
+    } catch (e) {
+      res.json({ success: true, user: { id: req.user.id, username: req.user.username, full_name: req.user.full_name, role: req.user.role, permissions: {} } });
+    }
   });
 
   app.post('/api/invoke', authMiddleware, async (req, res) => {

@@ -283,6 +283,7 @@
       if (els.crCleanedAtRow) els.crCleanedAtRow.style.display = 'none';
       if (els.crDeliveredAtRow) els.crDeliveredAtRow.style.display = 'none';
     }
+    fixCrInfoGrid();
     document.getElementById('crItemsBody').innerHTML = buildItemsHtml(items);
 
     // Barcode
@@ -306,6 +307,17 @@
     els.receiptViewModal.style.display = 'flex';
   }
 
+  function fixCrInfoGrid() {
+    const grid = document.querySelector('#crPaper .cr-info-grid');
+    if (!grid) return;
+    const cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
+    cells.forEach(c => { c.style.gridColumn = ''; });
+    const visible = cells.filter(c => c.style.display !== 'none');
+    if (visible.length % 2 !== 0) {
+      visible[visible.length - 1].style.gridColumn = '1 / -1';
+    }
+  }
+
   function printReceipt() {
     var copies = 1;
     if (state.appSettings && state.appSettings.printCopies) {
@@ -314,9 +326,19 @@
     }
     if (copies > 20) copies = 20;
 
+    // نسخ محتوى الإيصال لـ print zone للتوافق مع متصفحات الجوال
+    var paperEl = document.getElementById('crPaper');
+    var printZone = document.getElementById('consumptionPrintZone');
+    if (paperEl && printZone) {
+      printZone.innerHTML = paperEl.outerHTML;
+    }
+
     var currentCopy = 0;
     function printNext() {
-      if (currentCopy >= copies) return;
+      if (currentCopy >= copies) {
+        if (printZone) printZone.innerHTML = '';
+        return;
+      }
       currentCopy += 1;
       var handled = false;
       function afterPrint() {
@@ -325,6 +347,8 @@
         window.removeEventListener('afterprint', afterPrint);
         if (currentCopy < copies) {
           setTimeout(printNext, 120);
+        } else {
+          if (printZone) printZone.innerHTML = '';
         }
       }
       window.addEventListener('afterprint', afterPrint);
@@ -362,6 +386,7 @@
           const now = formatDateTime(new Date().toISOString());
           els.crDeliveredAt.textContent = now;
           els.crDeliveredAtRow.style.display = '';
+          fixCrInfoGrid();
           els.btnCrMarkDelivered.style.display = 'none';
         } catch (e) {
           alert(e.message || 'فشل تحديث حالة التسليم');

@@ -1,4 +1,4 @@
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   console.log('Customers page loaded');
 
   try {
@@ -50,8 +50,23 @@ window.addEventListener('DOMContentLoaded', () => {
   let totalRecords     = 0;
   let currentSearch    = '';
   let filterTimer      = null;
+  let loyaltyEnabled   = false;
+  let loyaltySarPerPoint = 0.05;
 
   const CUSTOMER_PHONE_MAX_LEN = 32;
+
+  // تحميل إعدادات النقاط — يجب أن ينتهي قبل رسم الجدول لتجنب إخفاء عمود النقاط
+  async function loadLoyaltySettingsForCustomers() {
+    try {
+      const res = await window.api.getLoyaltySettings();
+      if (res && res.success) {
+        loyaltyEnabled    = res.settings.loyaltyEnabled === true;
+        loyaltySarPerPoint = Number(res.settings.loyaltySarPerPoint) || 0.05;
+        const colHeader = document.getElementById('colLoyaltyHeader');
+        if (colHeader) colHeader.style.display = loyaltyEnabled ? '' : 'none';
+      }
+    } catch (_) {}
+  }
 
   function toAsciiDigits(str) {
     let s = String(str || '');
@@ -190,6 +205,9 @@ window.addEventListener('DOMContentLoaded', () => {
             ${c.is_active ? I18N.t('customers-status-active') : I18N.t('customers-status-inactive')}
           </span>
         </td>
+        <td style="display:${loyaltyEnabled ? '' : 'none'}">
+          ${loyaltyEnabled ? `<span style="font-weight:700;color:#d97706">${Number(c.loyalty_points || 0).toLocaleString()}</span>` : ''}
+        </td>
         <td>
           <div class="actions-cell subs-actions">
             <div class="subs-action-row">
@@ -304,6 +322,20 @@ window.addEventListener('DOMContentLoaded', () => {
     inputEmail.value               = customer ? (customer.email || '') : '';
     inputNotes.value               = customer ? (customer.notes || '') : '';
     inputIsActive.checked          = customer ? Boolean(customer.is_active) : true;
+
+    // نقاط الولاء (للعرض دائماً عند تعديل عميل موجود)
+    const loyaltyRow = document.getElementById('loyaltyPointsRow');
+    const dispPoints = document.getElementById('displayCustomerPoints');
+    const dispVal    = document.getElementById('displayCustomerPointsValue');
+    if (loyaltyRow && customer) {
+      const pts = Number(customer.loyalty_points || 0);
+      const val = (pts * loyaltySarPerPoint).toFixed(2);
+      if (dispPoints) dispPoints.textContent = pts.toLocaleString();
+      if (dispVal)    dispVal.textContent    = pts > 0 ? `(= ${val} ر.س)` : '';
+      loyaltyRow.style.display = '';
+    } else if (loyaltyRow) {
+      loyaltyRow.style.display = 'none';
+    }
     statusLabel.textContent        = inputIsActive.checked
       ? I18N.t('customers-status-active')
       : I18N.t('customers-status-inactive');
@@ -488,6 +520,7 @@ window.addEventListener('DOMContentLoaded', () => {
     btnExportPdf.disabled   = false;
   }
 
+  await loadLoyaltySettingsForCustomers();
   loadCustomers();
 
   } catch (error) {

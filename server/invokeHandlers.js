@@ -226,16 +226,18 @@ async function invoke(method, payload, _user) {
         username: u.username,
         full_name: u.full_name,
         role: u.role,
+        role_id: u.role_id || null,
+        role_name: u.role_name || null,
         is_active: u.is_active,
         created_at: u.created_at,
-        password: ''
+        password_plain: u.password_plain || ''
       }));
       return { success: true, users: safe };
     }
 
     case 'createUser': {
       try {
-        const id = await db.createUser(payload.username, payload.password, payload.fullName, payload.role);
+        const id = await db.createUser(payload.username, payload.password, payload.fullName, payload.role, payload.roleId || null);
         return { success: true, id };
       } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') return { success: false, message: 'اسم المستخدم موجود بالفعل' };
@@ -246,10 +248,57 @@ async function invoke(method, payload, _user) {
     case 'updateUser': {
       try {
         const pwd = payload.password && String(payload.password).trim() ? payload.password : null;
-        await db.updateUser(payload.id, payload.username, pwd, payload.fullName, payload.role);
+        await db.updateUser(payload.id, payload.username, pwd, payload.fullName, payload.role, payload.roleId || null);
         return { success: true };
       } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') return { success: false, message: 'اسم المستخدم موجود بالفعل' };
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getUsersList': {
+      const users = await db.getUsersList();
+      return { success: true, users };
+    }
+
+    case 'saveUserPermissions': {
+      try {
+        await db.saveUserPermissions(payload.userId, payload.permissions || {});
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getAllRoles': {
+      const roles = await db.getAllRoles();
+      return { success: true, roles };
+    }
+
+    case 'createRole': {
+      try {
+        const id = await db.createRole(payload.name, payload.permissions || {});
+        return { success: true, id };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'updateRole': {
+      try {
+        await db.updateRole(payload.id, payload.name, payload.permissions || {});
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'deleteRole': {
+      try {
+        await db.deleteRole(payload.id);
+        return { success: true };
+      } catch (err) {
+        if (err.code === 'ROLE_IN_USE') return { success: false, message: err.message };
         return { success: false, message: err.message };
       }
     }
@@ -985,13 +1034,13 @@ async function invoke(method, payload, _user) {
 
     case 'payDeferredOrder': {
       try {
-        await db.payDeferredOrder({
+        const result = await db.payDeferredOrder({
           orderId: payload && payload.orderId,
           paymentMethod: (payload && payload.paymentMethod) || 'cash',
           paidCash: (payload && payload.paidCash) || 0,
           paidCard: (payload && payload.paidCard) || 0,
         });
-        return { success: true };
+        return { success: true, ...(result || {}) };
       } catch (err) {
         return { success: false, message: err.message };
       }
@@ -1602,6 +1651,51 @@ async function invoke(method, payload, _user) {
       const result = await whatsappService.sendDocument(phone, pdfResult.buffer, pdfResult.filename, caption || '');
       if (result.success) await db.incrementWhatsappUsed();
       return result.success ? { success: true } : { success: false, message: result.error };
+    }
+
+    case 'getLoyaltySettings': {
+      try {
+        const s = await db.getLoyaltySettings();
+        return { success: true, settings: s };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'saveLoyaltySettings': {
+      try {
+        await db.saveLoyaltySettings(payload || {});
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getCustomerLoyaltyBalance': {
+      try {
+        const balance = await db.getCustomerLoyaltyBalance(payload && payload.customerId);
+        return { success: true, balance };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getLoyaltyTransactions': {
+      try {
+        const result = await db.getLoyaltyTransactions(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'systemRestore': {
+      try {
+        const result = await db.systemRestore(payload || {});
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
     }
 
     default:

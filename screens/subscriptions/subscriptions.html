@@ -354,6 +354,18 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
 #panelSubscriptions .toolbar .search-wrap{grid-column:1/-1;width:100%;max-width:none}
 #panelSubscriptions .toolbar .filter-row{grid-column:1/-1}
 #panelSubscriptions .toolbar .filter-actions{grid-column:1/-1;justify-content:center}
+#panelSubscriptions .subs-filter-bar{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:8px!important}
+#panelSubscriptions .subs-filter-bar .search-wrap{flex:1;min-width:160px;width:auto!important;max-width:none}
+#panelSubscriptions .subs-filter-bar .filter-actions{grid-column:unset;justify-content:flex-start}
+#panelSubscriptions .subs-filter-bar .filter-field .filter-input{min-width:0;width:auto}
+/* ── على الجوال: إعادة التخطيط العمودي ── */
+@media(max-width:767px){
+#panelSubscriptions .subs-filter-bar{flex-direction:column!important;align-items:stretch!important}
+#panelSubscriptions .subs-filter-bar .search-wrap{flex:unset;width:100%!important;min-width:0}
+#panelSubscriptions .subs-filter-bar .filter-field{width:100%}
+#panelSubscriptions .subs-filter-bar .filter-field .filter-input{min-width:0;width:100%!important}
+#panelSubscriptions .subs-filter-bar .filter-actions{width:100%;justify-content:center!important}
+}
 #panelPackages .toolbar .btn-primary{padding:8px 14px;font-size:12px;justify-content:center}
 .table-container{border-radius:10px;max-height:none}
 .data-table th,.data-table td{padding:8px 10px;font-size:12px}
@@ -565,34 +577,30 @@ input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-
       </div>
 
       <div id="panelSubscriptions" class="panel active">
-        <div class="toolbar" style="margin-top:4px">
-          <div class="search-wrap" style="max-width:none;flex:1">
+        <div class="toolbar subs-filter-bar" style="margin-top:4px;flex-wrap:nowrap;gap:8px">
+          <div class="search-wrap" style="flex:1;min-width:180px;max-width:none">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             <input type="search" id="searchSubscriptions" class="search-input" data-i18n-placeholder="subscriptions-search-placeholder" placeholder="ابحث باسم العميل / رقم الجوال / رقم الاشتراك" />
           </div>
-        </div>
-        <div class="toolbar" style="margin-top:-4px">
-          <div class="filter-row" style="flex:1">
-            <label data-i18n="subscriptions-filter-status">الحالة</label>
-            <select id="filterStatus">
+          <label class="filter-field" style="flex-shrink:0">
+            <span class="filter-label" data-i18n="subscriptions-filter-status">الحالة</span>
+            <select id="filterStatus" class="filter-input" style="min-width:0;width:auto;border:none;background:transparent;outline:none;color:#1e293b;font-size:13px;font-family:inherit;font-weight:700;padding:2px;cursor:pointer">
               <option value="all" data-i18n="subscriptions-status-all">الكل</option>
               <option value="active" data-i18n="subscriptions-status-active">نشط</option>
               <option value="expired" data-i18n="subscriptions-status-expired">منتهي</option>
               <option value="closed" data-i18n="subscriptions-status-closed">مغلق</option>
               <option value="none" data-i18n="subscriptions-status-none">بدون فترة</option>
             </select>
-            <div class="date-range-row">
-              <label class="filter-field">
-                <span class="filter-label" data-i18n="subscriptions-date-from">من</span>
-                <input type="datetime-local" id="filterDateFrom" class="filter-input" step="1" />
-              </label>
-              <label class="filter-field">
-                <span class="filter-label" data-i18n="subscriptions-date-to">إلى</span>
-                <input type="datetime-local" id="filterDateTo" class="filter-input" step="1" />
-              </label>
-            </div>
-          </div>
-          <div class="filter-actions">
+          </label>
+          <label class="filter-field" style="flex-shrink:0">
+            <span class="filter-label" data-i18n="subscriptions-date-from">من تاريخ</span>
+            <input type="datetime-local" id="filterDateFrom" class="filter-input" step="1" style="min-width:160px" />
+          </label>
+          <label class="filter-field" style="flex-shrink:0">
+            <span class="filter-label" data-i18n="subscriptions-date-to">إلى تاريخ</span>
+            <input type="datetime-local" id="filterDateTo" class="filter-input" step="1" style="min-width:160px" />
+          </label>
+          <div class="filter-actions" style="flex-shrink:0;flex-wrap:nowrap">
             <button type="button" class="btn-filter-apply" id="btnApplySubscriptionFilters" data-i18n="subscriptions-btn-apply-filters">تطبيق الفلترة</button>
             <button type="button" class="btn-filter-clear" id="btnClearSubscriptionFilters" data-i18n="subscriptions-btn-clear-filters">مسح الفلاتر</button>
           </div>

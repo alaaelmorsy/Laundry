@@ -8,22 +8,22 @@
   <link rel="stylesheet" href="dashboard.css" />
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
 </head>
-<body class="dashboard-page bg-[#f8fafc] flex h-full max-h-[100dvh] flex-col overflow-hidden select-none text-[#1e293b]" data-page-title="page-title-dashboard">
+<body class="dashboard-page" data-page-title="page-title-dashboard">
 
-  <header class="header-bar flex shrink-0 flex-wrap items-center justify-between gap-2 relative" dir="ltr">
-    <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-      <div class="h-8 w-8 shrink-0 rounded-full flex items-center justify-center sm:h-9 sm:w-9" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
-        <svg class="h-4 w-4 text-white sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <header class="header-bar" dir="ltr">
+    <div class="header-logo">
+      <div class="header-logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
       </div>
-      <span class="truncate text-sm font-bold text-[#1e293b] sm:text-base md:text-lg" data-i18n="app-name">ادارة المغسلة</span>
+      <span class="header-app-name" data-i18n="app-name">ادارة المغسلة</span>
     </div>
 
-    <div class="pos-header-center">
-      <a href="/screens/pos/pos.html" class="pos-header-btn">
-        <svg class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <div class="header-center">
+      <a href="/screens/pos/pos.html" class="pos-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <path d="M8 21h8M12 17v4"/>
           <path d="M6 8h.01M10 8h4M6 12h12"/>
@@ -32,9 +32,9 @@
       </a>
     </div>
 
-    <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3 md:gap-4">
-      <a href="/screens/pos/pos.html" class="pos-header-btn-mobile">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <div class="header-actions">
+      <a href="/screens/pos/pos.html" class="pos-btn-mobile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <path d="M8 21h8M12 17v4"/>
           <path d="M6 8h.01M10 8h4M6 12h12"/>
@@ -42,21 +42,20 @@
         <span data-i18n="pos-header-title">نقطة البيع</span>
       </a>
 
-      <div class="hidden items-center gap-2 text-sm text-[#64748b] md:flex">
-        <svg class="h-4 w-4 shrink-0 text-[#6366f1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div class="header-user">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
         </svg>
-        <span id="welcomeUser" class="max-w-[140px] truncate lg:max-w-none" data-i18n="welcome-user">مرحباً، المدير</span>
+        <span id="welcomeUser" data-i18n="welcome-user">مرحباً، المدير</span>
       </div>
 
-      <button id="btnLang" type="button" class="lang-btn" data-i18n-title="logout-title">
+      <button id="btnLang" type="button" class="lang-btn">
         <span id="langLabel">EN</span>
       </button>
 
-      <button id="btnLogout" type="button" data-i18n-title="logout-title"
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e2e8f0] text-[#64748b] transition-all hover:bg-red-500/20 hover:text-red-400 cursor-pointer touch-manipulation">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button id="btnLogout" type="button" class="logout-btn" data-i18n-title="logout-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
           <polyline points="16 17 21 12 16 7"/>
           <line x1="21" y1="12" x2="9" y2="12"/>
@@ -65,12 +64,27 @@
     </div>
   </header>
 
-  <main class="main-dashboard min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain py-4 sm:py-6 lg:py-8">
-    <div class="mx-auto grid w-full max-w-[1600px] grid-cols-2 gap-3 sm:gap-4 min-[560px]:grid-cols-3 min-[560px]:gap-5 xl:grid-cols-4 xl:gap-6" dir="ltr">
+  <main class="main-dashboard">
+    <div class="cards-grid" dir="ltr">
 
-      <div class="menu-card" data-screen="users">
-        <div class="card-icon" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Roles -->
+      <div class="menu-card" data-screen="roles" data-permission="roles"
+           style="--c1:#9333ea;--c2:#5b21b6;--depth:rgba(79,20,160,0.55);--glow:rgba(124,58,237,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            <path d="M9 12l2 2 4-5"/>
+          </svg>
+        </div>
+        <h3 class="card-title" data-i18n="card-roles-title">الصلاحيات</h3>
+        <p class="card-desc" data-i18n="card-roles-desc">إدارة الأدوار وصلاحيات المستخدمين</p>
+      </div>
+
+      <!-- Users -->
+      <div class="menu-card" data-screen="users" data-permission="users"
+           style="--c1:#38bdf8;--c2:#0369a1;--depth:rgba(2,80,140,0.55);--glow:rgba(14,165,233,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
             <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -81,9 +95,11 @@
         <p class="card-desc" data-i18n="card-users-desc">إدارة حسابات المستخدمين</p>
       </div>
 
-      <div class="menu-card" data-screen="customers">
-        <div class="card-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Customers -->
+      <div class="menu-card" data-screen="customers" data-permission="customers"
+           style="--c1:#818cf8;--c2:#4338ca;--depth:rgba(55,48,163,0.55);--glow:rgba(99,102,241,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
             <circle cx="12" cy="7" r="4"/>
           </svg>
@@ -92,9 +108,11 @@
         <p class="card-desc" data-i18n="card-customers-desc">قائمة وإدارة العملاء</p>
       </div>
 
-      <div class="menu-card" data-screen="services">
-        <div class="card-icon" style="background:linear-gradient(135deg,#10b981,#059669)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Services -->
+      <div class="menu-card" data-screen="services" data-permission="services"
+           style="--c1:#34d399;--c2:#059669;--depth:rgba(4,120,87,0.55);--glow:rgba(16,185,129,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
             <path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
@@ -104,9 +122,11 @@
         <p class="card-desc" data-i18n="card-services-desc">تعريف وإدارة عمليات الغسيل</p>
       </div>
 
-      <div class="menu-card" data-screen="products">
-        <div class="card-icon" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Products -->
+      <div class="menu-card" data-screen="products" data-permission="products"
+           style="--c1:#2dd4bf;--c2:#0d9488;--depth:rgba(8,95,87,0.55);--glow:rgba(20,184,166,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
             <line x1="12" y1="22.08" x2="12" y2="12"/>
@@ -116,21 +136,26 @@
         <p class="card-desc" data-i18n="card-products-desc">المنتجات والأسعار حسب العميل والعملية</p>
       </div>
 
-      <div class="menu-card" data-screen="reports">
-        <div class="card-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Reports -->
+      <div class="menu-card" data-screen="reports" data-permission="reports"
+           style="--c1:#60a5fa;--c2:#1d4ed8;--depth:rgba(14,52,160,0.55);--glow:rgba(59,130,246,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <line x1="18" y1="20" x2="18" y2="10"/>
             <line x1="12" y1="20" x2="12" y2="4"/>
             <line x1="6" y1="20" x2="6" y2="14"/>
+            <path d="M3 20h18"/>
           </svg>
         </div>
         <h3 class="card-title" data-i18n="card-reports-title">التقارير</h3>
         <p class="card-desc" data-i18n="card-reports-desc">الإحصائيات والتقارير</p>
       </div>
 
-      <div class="menu-card" data-screen="pos">
-        <div class="card-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- POS -->
+      <div class="menu-card" data-screen="pos" data-permission="pos"
+           style="--c1:#4ade80;--c2:#16a34a;--depth:rgba(10,120,50,0.55);--glow:rgba(34,197,94,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <rect x="2" y="3" width="20" height="14" rx="2"/>
             <path d="M8 21h8M12 17v4"/>
             <path d="M6 8h.01M10 8h4M6 12h12"/>
@@ -140,9 +165,11 @@
         <p class="card-desc" data-i18n="card-pos-desc">إتمام البيع وإصدار الفواتير</p>
       </div>
 
-      <div class="menu-card" data-screen="zatca-settings">
-        <div class="card-icon" style="background:linear-gradient(135deg,#111827,#374151)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- ZATCA -->
+      <div class="menu-card" data-screen="zatca-settings" data-permission="zatca_settings"
+           style="--c1:#6b7280;--c2:#1f2937;--depth:rgba(10,15,25,0.65);--glow:rgba(55,65,81,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M12 2 19 6v6c0 5-3 9-7 10C8 21 5 17 5 12V6l7-4z"/>
             <path d="M9 12l2 2 4-5"/>
           </svg>
@@ -151,20 +178,24 @@
         <p class="card-desc" data-i18n="card-zatca-desc">إعدادات الربط الإلكتروني</p>
       </div>
 
-      <div class="menu-card" data-screen="expenses">
-        <div class="card-icon" style="background:linear-gradient(135deg,#f43f5e,#e11d48)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-            <path d="M12 6v6l4 2"/>
+      <!-- Expenses -->
+      <div class="menu-card" data-screen="expenses" data-permission="expenses"
+           style="--c1:#fb7185;--c2:#e11d48;--depth:rgba(159,18,57,0.55);--glow:rgba(244,63,94,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l3 3"/>
           </svg>
         </div>
         <h3 class="card-title" data-i18n="card-expenses-title">المصروفات</h3>
         <p class="card-desc" data-i18n="card-expenses-desc">متابعة وإدارة المصروفات</p>
       </div>
 
-      <div class="menu-card" data-screen="consumption-receipts">
-        <div class="card-icon" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Consumption Receipts -->
+      <div class="menu-card" data-screen="consumption-receipts" data-permission="consumption_receipts"
+           style="--c1:#f472b6;--c2:#9d174d;--depth:rgba(100,10,55,0.55);--glow:rgba(236,72,153,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <rect x="3" y="4" width="18" height="16" rx="2"/>
             <path d="M7 8h10M7 12h6M7 16h4"/>
           </svg>
@@ -173,9 +204,11 @@
         <p class="card-desc" data-i18n="card-consumption-receipts-desc">استهلاك رصيد الاشتراكات — بدون أثر ضريبي</p>
       </div>
 
-      <div class="menu-card" data-screen="invoices">
-        <div class="card-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Invoices -->
+      <div class="menu-card" data-screen="invoices" data-permission="invoices"
+           style="--c1:#c084fc;--c2:#7c3aed;--depth:rgba(91,33,182,0.55);--glow:rgba(139,92,246,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
             <line x1="16" y1="13" x2="8" y2="13"/>
@@ -187,9 +220,11 @@
         <p class="card-desc" data-i18n="card-invoices-desc">عرض جميع الفواتير المطبوعة</p>
       </div>
 
-      <div class="menu-card" data-screen="credit-invoices">
-        <div class="card-icon" style="background:linear-gradient(135deg,#e11d48,#be123c)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Credit Invoices -->
+      <div class="menu-card" data-screen="credit-invoices" data-permission="credit_invoices"
+           style="--c1:#fb7185;--c2:#be123c;--depth:rgba(136,10,40,0.55);--glow:rgba(225,29,72,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M9 14l-4-4 4-4"/>
             <path d="M5 10h11a4 4 0 0 1 0 8h-1"/>
           </svg>
@@ -198,32 +233,37 @@
         <p class="card-desc" data-i18n="card-credit-invoices-desc">عرض إشعارات الدائن والفواتير المعكوسة</p>
       </div>
 
-      <div class="menu-card" data-screen="hangers">
-        <div class="card-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 6h18"/>
-            <path d="M3 12h18"/>
-            <path d="M3 18h18"/>
+      <!-- Hangers -->
+      <div class="menu-card" data-screen="hangers" data-permission="hangers"
+           style="--c1:#fbbf24;--c2:#d97706;--depth:rgba(120,60,0,0.55);--glow:rgba(245,158,11,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M20.38 18H3.62a1 1 0 0 1-.73-1.68l7.12-7.7A3 3 0 0 1 12 8a3 3 0 0 1 2 .75V6a2 2 0 1 0-4 0"/>
+            <path d="M12 2v4"/>
           </svg>
         </div>
         <h3 class="card-title" data-i18n="card-hangers-title">سير الملابس</h3>
         <p class="card-desc" data-i18n="card-hangers-desc">إدارة الشماعات وربطها بالفواتير</p>
       </div>
 
-      <div class="menu-card" data-screen="subscriptions">
-        <div class="card-icon" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <path d="M7 8h10M7 12h6M7 16h4"/>
+      <!-- Subscriptions -->
+      <div class="menu-card" data-screen="subscriptions" data-permission="subscriptions"
+           style="--c1:#34d399;--c2:#0d9488;--depth:rgba(8,95,87,0.55);--glow:rgba(20,184,166,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <path d="M9 12l2 2 4-4"/>
           </svg>
         </div>
         <h3 class="card-title" data-i18n="card-subscriptions-title">الاشتراكات المسبقة</h3>
         <p class="card-desc" data-i18n="card-subscriptions-desc">باقات مدفوعة مسبقاً واشتراكات العملاء</p>
       </div>
 
-      <div class="menu-card" data-screen="offers">
-        <div class="card-icon" style="background:linear-gradient(135deg,#f97316,#ec4899)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Offers -->
+      <div class="menu-card" data-screen="offers" data-permission="offers"
+           style="--c1:#fb923c;--c2:#db2777;--depth:rgba(157,20,100,0.55);--glow:rgba(249,115,22,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
             <line x1="7" y1="7" x2="7.01" y2="7"/>
           </svg>
@@ -232,8 +272,10 @@
         <p class="card-desc" data-i18n="card-offers-desc">إدارة العروض والتخفيضات على المنتجات</p>
       </div>
 
-      <div class="menu-card" data-screen="whatsapp">
-        <div class="card-icon" style="background:linear-gradient(135deg,#25d366,#128c7e)">
+      <!-- WhatsApp -->
+      <div class="menu-card" data-screen="whatsapp" data-permission="whatsapp"
+           style="--c1:#25d366;--c2:#128c7e;--depth:rgba(7,90,70,0.55);--glow:rgba(37,211,102,0.15)">
+        <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.858L0 24l6.335-1.51A11.954 11.954 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.847 0-3.584-.5-5.086-1.376l-.364-.215-3.761.897.952-3.658-.237-.376A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
           </svg>
@@ -242,9 +284,11 @@
         <p class="card-desc">إدارة الاتصال وإرسال الرسائل</p>
       </div>
 
-      <div class="menu-card" data-screen="settings">
-        <div class="card-icon" style="background:linear-gradient(135deg,#6b7280,#4b5563)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <!-- Settings -->
+      <div class="menu-card" data-screen="settings" data-permission="settings"
+           style="--c1:#94a3b8;--c2:#475569;--depth:rgba(30,41,59,0.55);--glow:rgba(100,116,139,0.15)">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>

@@ -105,6 +105,36 @@
     setText('a4CustName',  data.custName || '—');
     setText('a4CustPhone', data.custPhone || '—');
 
+    /* ── Loyalty points ── */
+    var loyEarned   = Number(data.loyaltyEarned   || 0);
+    var loyRedeemed = Number(data.loyaltyRedeemed || 0);
+    var loyBal      = Number(data.loyaltyBalance  || 0);
+    var loyRev      = data.loyaltyReversal || null;
+    var loyRow      = document.getElementById('a4LoyaltyRow');
+    var loyPts      = document.getElementById('a4LoyaltyPoints');
+    var loyLbl      = document.getElementById('a4LoyaltyLabel');
+    if (loyRow && loyPts) {
+      if (loyRev && (loyRev.earned > 0 || loyRev.redeemed > 0)) {
+        loyPts.textContent = Number(loyRev.newBalance).toLocaleString();
+        if (loyLbl) {
+          loyLbl.textContent = loyRev.netReverse > 0
+            ? 'استُرجع ' + loyRev.netReverse + ' نقطة — رصيدك / Points Restored'
+            : 'خُصم ' + Math.abs(loyRev.netReverse) + ' نقطة — رصيدك / Points Deducted';
+        }
+        loyRow.style.display = '';
+      } else if (loyEarned > 0 || loyRedeemed > 0) {
+        loyPts.textContent = loyBal.toLocaleString();
+        if (loyLbl) loyLbl.textContent = 'رصيدك من النقاط / Loyalty Points';
+        loyRow.style.display = '';
+      } else if (loyBal > 0) {
+        loyPts.textContent = loyBal.toLocaleString();
+        if (loyLbl) loyLbl.textContent = 'رصيد نقاطك / Loyalty Balance';
+        loyRow.style.display = '';
+      } else {
+        loyRow.style.display = 'none';
+      }
+    }
+
     if (data.subRef) {
       setText('a4SubRef', data.subRef);
       showRow('a4RowSubRef', true);

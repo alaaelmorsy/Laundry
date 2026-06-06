@@ -109,6 +109,166 @@ async function initialize() {
   await migrateOrdersRefundColumns();
   await fixSubscriptionLedgerNotesEncoding();
   await migrateWhatsappQuota();
+  await migrateLoyalty();
+  await expireLoyaltyPoints();
+  await migrateUsersPasswordPlain();
+  await migrateRolesSystem();
+}
+
+// ── Roles & Permissions ─────────────────────────────────────────────────────
+
+const ALL_PERMISSION_KEYS = [
+  'pos','invoices','credit_invoices','consumption_receipts','payment',
+  'customers','products','services','hangers','subscriptions',
+  'expenses','offers','users','roles','settings','whatsapp','zatca_settings',
+  'reports'
+];
+
+function buildAllPermissions(val = true) {
+  const p = {};
+  ALL_PERMISSION_KEYS.forEach(k => { p[k] = val; });
+  return p;
+}
+
+async function migrateRolesSystem() {
+  try {
+    // Add permissions JSON column directly to users table
+    const [userCols2] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'users'`
+    );
+    const colSet2 = new Set(userCols2.map(r => r.COLUMN_NAME));
+    if (!colSet2.has('permissions')) {
+      await pool.query(`ALTER TABLE users ADD COLUMN permissions JSON NULL`);
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        permissions JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const [userCols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'users'`
+    );
+    const colSet = new Set(userCols.map(r => r.COLUMN_NAME));
+    if (!colSet.has('role_id')) {
+      await pool.query(`ALTER TABLE users ADD COLUMN role_id INT NULL`);
+    }
+
+    // Seed default roles if empty
+    const [[{ cnt }]] = await pool.query('SELECT COUNT(*) AS cnt FROM roles');
+    if (Number(cnt) === 0) {
+      const adminPerms = JSON.stringify(buildAllPermissions(true));
+      const cashierPerms = JSON.stringify({
+        pos: true, invoices: true, credit_invoices: false,
+        consumption_receipts: true, payment: true,
+        customers: true, products: false, services: false,
+        hangers: true, subscriptions: false,
+        expenses: false, offers: false, users: false, roles: false,
+        settings: false, whatsapp: false, zatca_settings: false, reports: false
+      });
+      await pool.query(
+        `INSERT INTO roles (name, permissions) VALUES (?, ?), (?, ?)`,
+        ['مدير', adminPerms, 'كاشير', cashierPerms]
+      );
+    }
+
+    // Assign existing users to matching default roles
+    const [[adminRole]] = await pool.query(`SELECT id FROM roles WHERE name='مدير' LIMIT 1`);
+    const [[cashierRole]] = await pool.query(`SELECT id FROM roles WHERE name='كاشير' LIMIT 1`);
+    if (adminRole) {
+      await pool.query(
+        `UPDATE users SET role_id=? WHERE role='admin' AND role_id IS NULL`,
+        [adminRole.id]
+      );
+    }
+    if (cashierRole) {
+      await pool.query(
+        `UPDATE users SET role_id=? WHERE role='cashier' AND role_id IS NULL`,
+        [cashierRole.id]
+      );
+    }
+  } catch (e) {
+    console.error('migrateRolesSystem:', e);
+  }
+}
+
+async function getAllRoles() {
+  const [rows] = await pool.query('SELECT id, name, permissions FROM roles ORDER BY id ASC');
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    permissions: typeof r.permissions === 'string' ? JSON.parse(r.permissions) : r.permissions
+  }));
+}
+
+async function createRole(name, permissions) {
+  const [result] = await pool.query(
+    'INSERT INTO roles (name, permissions) VALUES (?, ?)',
+    [name, JSON.stringify(permissions)]
+  );
+  return result.insertId;
+}
+
+async function updateRole(id, name, permissions) {
+  await pool.query(
+    'UPDATE roles SET name=?, permissions=? WHERE id=?',
+    [name, JSON.stringify(permissions), id]
+  );
+}
+
+async function deleteRole(id) {
+  const [[{ cnt }]] = await pool.query(
+    'SELECT COUNT(*) AS cnt FROM users WHERE role_id=?', [id]
+  );
+  if (Number(cnt) > 0) {
+    const err = new Error('لا يمكن حذف الدور لأنه مرتبط بمستخدمين');
+    err.code = 'ROLE_IN_USE';
+    throw err;
+  }
+  await pool.query('DELETE FROM roles WHERE id=?', [id]);
+}
+
+async function getPermissionsForUser(userId) {
+  const [[user]] = await pool.query(
+    'SELECT role, permissions FROM users WHERE id=?', [userId]
+  );
+  if (!user) return buildAllPermissions(false);
+  if (user.role === 'admin') return buildAllPermissions(true);
+  if (!user.permissions) return buildAllPermissions(false);
+  const perms = typeof user.permissions === 'string'
+    ? JSON.parse(user.permissions) : user.permissions;
+  const result = buildAllPermissions(false);
+  Object.assign(result, perms);
+  return result;
+}
+
+async function getUsersList() {
+  const [rows] = await pool.query(
+    `SELECT id, username, full_name, role, permissions
+     FROM users WHERE is_active = 1 ORDER BY id ASC`
+  );
+  return rows.map(u => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.full_name,
+    role: u.role,
+    permissions: u.permissions
+      ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions)
+      : null
+  }));
+}
+
+async function saveUserPermissions(userId, permissions) {
+  await pool.query(
+    'UPDATE users SET permissions=? WHERE id=?',
+    [JSON.stringify(permissions), userId]
+  );
 }
 
 async function migrateOrdersZatcaColumns() {
@@ -1256,7 +1416,7 @@ async function seedLaundryServices() {
 
 async function findUser(username, passwordPlain) {
   const [rows] = await pool.query(
-    'SELECT id, username, full_name, role, password FROM users WHERE username = ? AND is_active = 1',
+    'SELECT id, username, full_name, role, role_id, password FROM users WHERE username = ? AND is_active = 1',
     [username]
   );
   if (rows.length === 0) return null;
@@ -1265,52 +1425,78 @@ async function findUser(username, passwordPlain) {
   if (stored.startsWith('$2')) {
     const ok = await bcryptCompare(passwordPlain, stored);
     if (!ok) return null;
-    return { id: row.id, username: row.username, full_name: row.full_name, role: row.role };
+    return { id: row.id, username: row.username, full_name: row.full_name, role: row.role, role_id: row.role_id };
   }
   if (stored === passwordPlain) {
     const hashed = await hashPassword(passwordPlain);
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashed, row.id]);
-    return { id: row.id, username: row.username, full_name: row.full_name, role: row.role };
+    return { id: row.id, username: row.username, full_name: row.full_name, role: row.role, role_id: row.role_id };
   }
   return null;
 }
 
 async function getAllUsers() {
   const [rows] = await pool.query(
-    'SELECT id, username, password, full_name, role, is_active, created_at FROM users ORDER BY id ASC'
+    `SELECT u.id, u.username, u.password, u.password_plain, u.full_name, u.role, u.role_id,
+            r.name AS role_name, u.is_active, u.created_at
+     FROM users u LEFT JOIN roles r ON r.id = u.role_id ORDER BY u.id ASC`
   );
   return rows;
 }
 
-async function createUser(username, password, fullName, role) {
+async function createUser(username, password, fullName, role, roleId) {
   const hashed = await hashPassword(password);
   const [result] = await pool.query(
-    'INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-    [username, hashed, fullName, role]
+    'INSERT INTO users (username, password, password_plain, full_name, role, role_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [username, hashed, password, fullName, role, roleId || null]
   );
   return result.insertId;
 }
 
-async function updateUser(id, username, password, fullName, role) {
+async function updateUser(id, username, password, fullName, role, roleId) {
   if (password) {
     const hashed = await hashPassword(password);
     await pool.query(
-      'UPDATE users SET username=?, password=?, full_name=?, role=? WHERE id=?',
-      [username, hashed, fullName, role, id]
+      'UPDATE users SET username=?, password=?, password_plain=?, full_name=?, role=?, role_id=? WHERE id=?',
+      [username, hashed, password, fullName, role, roleId || null, id]
     );
   } else {
     await pool.query(
-      'UPDATE users SET username=?, full_name=?, role=? WHERE id=?',
-      [username, fullName, role, id]
+      'UPDATE users SET username=?, full_name=?, role=?, role_id=? WHERE id=?',
+      [username, fullName, role, roleId || null, id]
     );
   }
 }
 
 async function toggleUserStatus(id, isActive) {
+  if (!isActive) {
+    const [[user]] = await pool.query('SELECT role FROM users WHERE id=?', [id]);
+    if (user && user.role === 'admin') {
+      const [[{ cnt }]] = await pool.query(
+        'SELECT COUNT(*) AS cnt FROM users WHERE role=? AND is_active=1', ['admin']
+      );
+      if (cnt <= 1) {
+        const err = new Error('لا يمكن إيقاف آخر مدير في النظام');
+        err.code = 'LAST_ADMIN';
+        throw err;
+      }
+    }
+  }
   await pool.query('UPDATE users SET is_active=? WHERE id=?', [isActive, id]);
 }
 
 async function deleteUser(id) {
+  const [[user]] = await pool.query('SELECT role FROM users WHERE id=?', [id]);
+  if (user && user.role === 'admin') {
+    const [[{ cnt }]] = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM users WHERE role=? AND is_active=1', ['admin']
+    );
+    if (cnt <= 1) {
+      const err = new Error('لا يمكن حذف آخر مدير في النظام');
+      err.code = 'LAST_ADMIN';
+      throw err;
+    }
+  }
   await pool.query('DELETE FROM users WHERE id=?', [id]);
 }
 
@@ -1440,7 +1626,7 @@ async function createCustomer(data) {
   const [result] = await pool.query(
     `INSERT INTO customers (subscription_number, customer_name, phone, tax_number, national_id, address, city, email, customer_type, notes, is_active)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [null, customerName, phone, taxNumber || null, nationalId || null, address, city, email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1]
+    [null, customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1]
   );
   return { id: result.insertId, subscriptionNumber: null };
 }
@@ -1470,7 +1656,7 @@ async function updateCustomer(data) {
   }
   await pool.query(
     `UPDATE customers SET customer_name=?, phone=?, tax_number=?, national_id=?, address=?, city=?, email=?, customer_type=?, notes=?, is_active=? WHERE id=?`,
-    [customerName, phone, taxNumber || null, nationalId || null, address, city, email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1, cid]
+    [customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1, cid]
   );
 }
 
@@ -3155,6 +3341,7 @@ async function getAppSettings() {
             zatca_enabled,
             whatsapp_send_on_print, whatsapp_send_on_clean, whatsapp_send_on_deliver,
             whatsapp_send_on_subscription, whatsapp_send_on_pay, whatsapp_invoice_message,
+            loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point, loyalty_expiry_date,
             updated_at
      FROM app_settings WHERE id = 1`
   );
@@ -3229,6 +3416,10 @@ async function getAppSettings() {
     whatsappSendOnSubscription: row.whatsapp_send_on_subscription === 1,
     whatsappSendOnPay: row.whatsapp_send_on_pay === 1,
     whatsappInvoiceMessage: row.whatsapp_invoice_message || '',
+    loyaltyEnabled: row.loyalty_enabled === 1,
+    loyaltyPointsPerSar: Number(row.loyalty_points_per_sar) || 1,
+    loyaltySarPerPoint: Number(row.loyalty_sar_per_point) || 0.05,
+    loyaltyExpiryDate: row.loyalty_expiry_date || null,
     updatedAt: row.updated_at
   };
 }
@@ -3307,6 +3498,23 @@ async function saveAppSettings(data) {
   const whatsappSendOnPay          = data.whatsappSendOnPay          ? 1 : 0;
   const whatsappInvoiceMessage     = s(data.whatsappInvoiceMessage, 1000) || null;
 
+  // قراءة إعدادات النقاط الحالية للحفاظ عليها إذا لم تُرسَل في الـ payload
+  const [[existingRow]] = await pool.query(
+    'SELECT loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point, loyalty_expiry_date FROM app_settings WHERE id = 1'
+  );
+  const loyaltyEnabled = data.loyaltyEnabled != null
+    ? (data.loyaltyEnabled ? 1 : 0)
+    : (existingRow ? existingRow.loyalty_enabled : 0);
+  const loyaltyPointsPerSar = data.loyaltyPointsPerSar != null
+    ? (() => { let v = Number(data.loyaltyPointsPerSar); return (Number.isFinite(v) && v > 0) ? v : 1; })()
+    : (existingRow ? Number(existingRow.loyalty_points_per_sar) || 1 : 1);
+  const loyaltySarPerPoint = data.loyaltySarPerPoint != null
+    ? (() => { let v = Number(data.loyaltySarPerPoint); return (Number.isFinite(v) && v > 0) ? v : 0.05; })()
+    : (existingRow ? Number(existingRow.loyalty_sar_per_point) || 0.05 : 0.05);
+  const loyaltyExpiryDate = data.loyaltyExpiryDate !== undefined
+    ? ((data.loyaltyExpiryDate && /^\d{4}-\d{2}-\d{2}$/.test(data.loyaltyExpiryDate)) ? data.loyaltyExpiryDate : null)
+    : (existingRow ? (existingRow.loyalty_expiry_date || null) : null);
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -3321,7 +3529,8 @@ async function saveAppSettings(data) {
         report_email_enabled = ?, report_email_from = ?, report_email_app_password_enc = ?, report_email_send_time = ?,
         zatca_enabled = ?,
         whatsapp_send_on_print = ?, whatsapp_send_on_clean = ?, whatsapp_send_on_deliver = ?,
-        whatsapp_send_on_subscription = ?, whatsapp_send_on_pay = ?, whatsapp_invoice_message = ?
+        whatsapp_send_on_subscription = ?, whatsapp_send_on_pay = ?, whatsapp_invoice_message = ?,
+        loyalty_enabled = ?, loyalty_points_per_sar = ?, loyalty_sar_per_point = ?, loyalty_expiry_date = ?
        WHERE id = 1`,
       [
         laundryNameAr || null,
@@ -3363,7 +3572,11 @@ async function saveAppSettings(data) {
         whatsappSendOnDeliver,
         whatsappSendOnSubscription,
         whatsappSendOnPay,
-        whatsappInvoiceMessage
+        whatsappInvoiceMessage,
+        loyaltyEnabled,
+        loyaltyPointsPerSar,
+        loyaltySarPerPoint,
+        loyaltyExpiryDate
       ]
     );
 
@@ -4174,7 +4387,8 @@ async function getSubscriptionTransactions(subscriptionId) {
 
 async function createOrder({ orderNumber, customerId, items, subtotal, discountAmount, discountLabel, extraAmount = 0,
   vatRate, vatAmount, totalAmount, paymentMethod, paidCash = 0, paidCard = 0,
-  starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt }) {
+  starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt,
+  loyaltyPointsToRedeem = 0 }) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -4387,6 +4601,75 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
       );
     }
 
+    // ── Loyalty Points: Earn & Redeem ──────────────────────────────────────
+    let loyaltyEarned   = 0;
+    let loyaltyRedeemed = 0;
+    let loyaltyDiscAmt  = 0;
+
+    if (customerId && !isConsumptionOnly) {
+      try {
+        const [[loySettings]] = await conn.query(
+          'SELECT loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point FROM app_settings WHERE id = 1'
+        );
+        if (loySettings && loySettings.loyalty_enabled) {
+          const pps = Number(loySettings.loyalty_points_per_sar) || 1;
+          const spp = Number(loySettings.loyalty_sar_per_point) || 0.05;
+
+          // ── Redeem ──
+          const toRedeem = Math.max(0, Math.floor(Number(loyaltyPointsToRedeem) || 0));
+          if (toRedeem > 0) {
+            const [[custRow]] = await conn.query(
+              'SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE',
+              [Number(customerId)]
+            );
+            const currentBalance = custRow ? Number(custRow.loyalty_points) : 0;
+            const actualRedeem = Math.min(toRedeem, currentBalance);
+            if (actualRedeem > 0) {
+              loyaltyDiscAmt  = Math.round(actualRedeem * spp * 100) / 100;
+              loyaltyRedeemed = actualRedeem;
+              const newBalance = currentBalance - actualRedeem;
+              await conn.query('UPDATE customers SET loyalty_points = ? WHERE id = ?', [newBalance, Number(customerId)]);
+              await conn.query(
+                `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note, created_by)
+                 VALUES (?, ?, 'redeem', ?, ?, ?, ?)`,
+                [Number(customerId), orderId, -actualRedeem, newBalance,
+                  `استرداد ${actualRedeem} نقطة — فاتورة رقم ${invoiceSeq || orderId}`, createdBy || null]
+              );
+              await conn.query(
+                'UPDATE orders SET loyalty_discount_amount = ?, loyalty_points_redeemed = ? WHERE id = ?',
+                [loyaltyDiscAmt, actualRedeem, orderId]
+              );
+            }
+          }
+
+          // ── Earn (على إجمالي المبلغ المدفوع، فقط للفواتير المدفوعة فوراً — الآجل يُضاف عند السداد) ──
+          if (pm !== 'credit') {
+            loyaltyEarned = Math.floor(numTotal * pps);
+            if (loyaltyEarned > 0) {
+              const [[custAfter]] = await conn.query(
+                'SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE',
+                [Number(customerId)]
+              );
+              const balAfterRedeem = custAfter ? Number(custAfter.loyalty_points) : 0;
+              const newBalanceEarn = balAfterRedeem + loyaltyEarned;
+              await conn.query('UPDATE customers SET loyalty_points = ? WHERE id = ?', [newBalanceEarn, Number(customerId)]);
+              await conn.query('UPDATE orders SET loyalty_points_earned = ? WHERE id = ?', [loyaltyEarned, orderId]);
+              await conn.query(
+                `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note, created_by)
+                 VALUES (?, ?, 'earn', ?, ?, ?, ?)`,
+                [Number(customerId), orderId, loyaltyEarned, newBalanceEarn,
+                  `كسب ${loyaltyEarned} نقطة — فاتورة رقم ${invoiceSeq || orderId}`, createdBy || null]
+              );
+            }
+          }
+          // تنبيه: الفواتير الآجلة (credit) تُضاف نقاطها عند السداد في payDeferredOrder
+        }
+      } catch (loyErr) {
+        console.error('loyalty points error in createOrder:', loyErr);
+      }
+    }
+    // ── End Loyalty ───────────────────────────────────────────────────────
+
     await conn.commit();
     return {
       id: orderId,
@@ -4398,7 +4681,9 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
       consumptionReceiptId,
       consumptionReceiptSeq,
       consumptionAmount,
-      invoiceAmount
+      invoiceAmount,
+      loyaltyEarned,
+      loyaltyRedeemed
     };
   } catch (err) {
     await conn.rollback();
@@ -4525,7 +4810,9 @@ async function getOrderById(id) {
            o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
            o.is_refund, o.refunded_at, o.refund_reason, o.refunded_by,
-           c.customer_name, c.phone, c.tax_number AS customer_vat, c.address AS customer_address, c.city AS customer_city
+           o.loyalty_points_earned, o.loyalty_points_redeemed, o.loyalty_discount_amount,
+           c.customer_name, c.phone, c.tax_number AS customer_vat, c.address AS customer_address, c.city AS customer_city,
+           c.loyalty_points AS customer_loyalty_points
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
     LEFT JOIN hangers h ON h.id = o.hanger_id
@@ -4933,9 +5220,14 @@ async function payDeferredOrder({ orderId, paymentMethod, paidCash = 0, paidCard
   let dbPaidCash = 0;
   let dbPaidCard = 0;
 
+  const [[ord]] = await pool.query(
+    'SELECT total_amount, customer_id, subtotal, discount_amount, vat_rate, price_display_mode, invoice_seq, loyalty_points_earned FROM orders WHERE id = ?',
+    [id]
+  );
+  if (!ord) throw new Error('الفاتورة غير موجودة');
+  const total = Number(ord.total_amount || 0);
+
   if (pm === 'mixed') {
-    const [[ord]] = await pool.query('SELECT total_amount FROM orders WHERE id = ?', [id]);
-    const total = Number((ord && ord.total_amount) || 0);
     dbPaidCash = Math.max(0, Math.min(Number(paidCash || 0), total));
     dbPaidCard = Math.max(0, total - dbPaidCash);
     dbPaidCash = Math.round(dbPaidCash * 100) / 100;
@@ -4954,6 +5246,36 @@ async function payDeferredOrder({ orderId, paymentMethod, paidCash = 0, paidCard
     WHERE id = ? AND payment_status = 'pending'
   `, [pm, dbPaidCash, dbPaidCard, id]);
   if (result.affectedRows === 0) throw new Error('الفاتورة غير موجودة أو تم سدادها مسبقاً');
+
+  // ── إضافة نقاط الولاء عند سداد الفاتورة الآجلة ──
+  const customerId = Number(ord.customer_id);
+  const alreadyEarned = Number(ord.loyalty_points_earned || 0);
+  if (customerId && alreadyEarned === 0) {
+    try {
+      const [[loySettings]] = await pool.query(
+        'SELECT loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point FROM app_settings WHERE id = 1'
+      );
+      if (loySettings && loySettings.loyalty_enabled) {
+        const pps = Number(loySettings.loyalty_points_per_sar) || 1;
+        const loyaltyEarned = Math.floor(Number(ord.total_amount) * pps);
+        if (loyaltyEarned > 0) {
+          const [[custRow]] = await pool.query('SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE', [customerId]);
+          const currentBal = custRow ? Number(custRow.loyalty_points) : 0;
+          const newBal = currentBal + loyaltyEarned;
+          await pool.query('UPDATE customers SET loyalty_points = ? WHERE id = ?', [newBal, customerId]);
+          await pool.query('UPDATE orders SET loyalty_points_earned = ? WHERE id = ?', [loyaltyEarned, id]);
+          await pool.query(
+            `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note, created_by)
+             VALUES (?, ?, 'earn', ?, ?, ?, NULL)`,
+            [customerId, id, loyaltyEarned, newBal,
+              `كسب ${loyaltyEarned} نقطة عند سداد فاتورة رقم ${ord.invoice_seq || id}`]
+          );
+        }
+      }
+    } catch (loyErr) {
+      console.error('loyalty points error in payDeferredOrder:', loyErr);
+    }
+  }
 }
 
 async function markOrderCleaned({ orderId }) {
@@ -5207,6 +5529,46 @@ async function recordInvoicePayment({ orderId, paymentAmount, paymentMethod,
 
     await conn.commit();
 
+    // ── إضافة نقاط الولاء عند اكتمال سداد الفاتورة الآجلة ──
+    let loyaltyEarned = 0;
+    let newLoyaltyBalance = 0;
+    if (newPaymentStatus === 'paid') {
+      try {
+        const [[fullOrder]] = await pool.query(
+          `SELECT customer_id, total_amount, invoice_seq, loyalty_points_earned
+           FROM orders WHERE id = ?`, [id]
+        );
+        const customerId = Number(fullOrder && fullOrder.customer_id);
+        const alreadyEarned = Number(fullOrder && fullOrder.loyalty_points_earned || 0);
+        if (customerId && alreadyEarned === 0) {
+          const [[loySettings]] = await pool.query(
+            'SELECT loyalty_enabled, loyalty_points_per_sar FROM app_settings WHERE id = 1'
+          );
+          if (loySettings && loySettings.loyalty_enabled) {
+            const pps = Number(loySettings.loyalty_points_per_sar) || 1;
+            loyaltyEarned = Math.floor(Number(fullOrder.total_amount) * pps);
+            if (loyaltyEarned > 0) {
+              const [[custRow]] = await pool.query(
+                'SELECT loyalty_points FROM customers WHERE id = ?', [customerId]
+              );
+              const currentBal = custRow ? Number(custRow.loyalty_points) : 0;
+              newLoyaltyBalance = currentBal + loyaltyEarned;
+              await pool.query('UPDATE customers SET loyalty_points = ? WHERE id = ?', [newLoyaltyBalance, customerId]);
+              await pool.query('UPDATE orders SET loyalty_points_earned = ? WHERE id = ?', [loyaltyEarned, id]);
+              await pool.query(
+                `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note, created_by)
+                 VALUES (?, ?, 'earn', ?, ?, ?, NULL)`,
+                [customerId, id, loyaltyEarned, newLoyaltyBalance,
+                  `كسب ${loyaltyEarned} نقطة عند سداد فاتورة رقم ${fullOrder.invoice_seq || id}`]
+              );
+            }
+          }
+        }
+      } catch (loyErr) {
+        console.error('loyalty points error in recordInvoicePayment:', loyErr);
+      }
+    }
+
     // Get the inserted payment
     const [[payment]] = await pool.query(`
       SELECT id, payment_amount, payment_method, cash_amount, card_amount, payment_date, created_by, notes
@@ -5217,6 +5579,8 @@ async function recordInvoicePayment({ orderId, paymentAmount, paymentMethod,
     return {
       success: true,
       payment,
+      loyaltyEarned,
+      newLoyaltyBalance,
       invoice: {
         paid_amount: newPaidAmount,
         remaining_amount: newRemainingAmount,
@@ -5797,6 +6161,45 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       }
     }
 
+    // ── عكس نقاط الولاء عند إنشاء إشعار دائن ──────────────────────────────
+    let loyaltyReversal = null;
+    try {
+      const [[origOrder]] = await conn.query(
+        'SELECT customer_id, loyalty_points_earned, loyalty_points_redeemed, invoice_seq FROM orders WHERE id = ?',
+        [originalOrderId]
+      );
+      if (origOrder && origOrder.customer_id) {
+        const cid = Number(origOrder.customer_id);
+        const earned   = Number(origOrder.loyalty_points_earned   || 0);
+        const redeemed = Number(origOrder.loyalty_points_redeemed || 0);
+        const netReverse = redeemed - earned; // موجب = يرجع نقاط، سالب = يطرح نقاط
+
+        const [[custRow]] = await conn.query('SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE', [cid]);
+        if (custRow) {
+          const oldBalance = Number(custRow.loyalty_points);
+          const newBalance = Math.max(0, oldBalance + netReverse);
+          if (netReverse !== 0) {
+            await conn.query('UPDATE customers SET loyalty_points = ? WHERE id = ?', [newBalance, cid]);
+            const note = `عكس نقاط — إشعار دائن ${cnNumber} (فاتورة رقم ${origOrder.invoice_seq || originalOrderId})`;
+            await conn.query(
+              `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note, created_by)
+               VALUES (?, ?, 'adjust', ?, ?, ?, ?)`,
+              [cid, originalOrderId, netReverse, newBalance, note, createdBy || 'system']
+            );
+          }
+          loyaltyReversal = {
+            earned,
+            redeemed,
+            netReverse,
+            newBalance: netReverse !== 0 ? newBalance : oldBalance,
+          };
+        }
+      }
+    } catch (loyErr) {
+      console.error('loyalty reversal error on credit note:', loyErr);
+    }
+    // ── End Loyalty Reversal ──────────────────────────────────────────────
+
     await conn.commit();
     return {
       success: true,
@@ -5805,7 +6208,8 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       creditNoteSeq: cnSeq,
       originalInvoiceSeq: orderRow.invoice_seq,
       originalOrderNumber: orderRow.order_number,
-      subscriptionRefund
+      subscriptionRefund,
+      loyaltyReversal
     };
   } catch (e) {
     await conn.rollback();
@@ -6310,9 +6714,150 @@ async function fixSubscriptionLedgerNotesEncoding() {
   } catch (_) {}
 }
 
+// ── Loyalty Points System ──────────────────────────────────────────────────────
+
+const MAX_LOYALTY_REDEEM_PCT = 90; // الحد الأقصى للخصم بالنقاط: 90% من الإجمالي قبل الضريبة
+
+async function migrateUsersPasswordPlain() {
+  try {
+    const [cols] = await pool.query(`SHOW COLUMNS FROM users LIKE 'password_plain'`);
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE users ADD COLUMN password_plain VARCHAR(255) DEFAULT NULL AFTER password`);
+    }
+  } catch (e) {
+    console.error('migrateUsersPasswordPlain:', e);
+  }
+}
+
+async function migrateLoyalty() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS loyalty_transactions (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      customer_id   INT NOT NULL,
+      order_id      INT NULL,
+      type          ENUM('earn','redeem','expire','adjust') NOT NULL,
+      points        INT NOT NULL,
+      balance_after INT NOT NULL,
+      note          TEXT NULL,
+      created_by    VARCHAR(100) NULL,
+      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+      FOREIGN KEY (order_id)    REFERENCES orders(id)    ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `).catch(() => {});
+  await pool.query('ALTER TABLE customers ADD COLUMN loyalty_points INT NOT NULL DEFAULT 0').catch(() => {});
+  await pool.query('ALTER TABLE app_settings ADD COLUMN loyalty_enabled TINYINT(1) NOT NULL DEFAULT 0').catch(() => {});
+  await pool.query('ALTER TABLE app_settings ADD COLUMN loyalty_points_per_sar DECIMAL(10,4) NOT NULL DEFAULT 1.0000').catch(() => {});
+  await pool.query('ALTER TABLE app_settings ADD COLUMN loyalty_sar_per_point DECIMAL(10,4) NOT NULL DEFAULT 0.0500').catch(() => {});
+  await pool.query('ALTER TABLE app_settings ADD COLUMN loyalty_expiry_months INT NOT NULL DEFAULT 12').catch(() => {});
+  await pool.query('ALTER TABLE app_settings ADD COLUMN loyalty_expiry_date VARCHAR(20) DEFAULT NULL').catch(() => {});
+  await pool.query('ALTER TABLE orders ADD COLUMN loyalty_points_earned INT NOT NULL DEFAULT 0').catch(() => {});
+  await pool.query('ALTER TABLE orders ADD COLUMN loyalty_points_redeemed INT NOT NULL DEFAULT 0').catch(() => {});
+  await pool.query('ALTER TABLE orders ADD COLUMN loyalty_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0').catch(() => {});
+}
+
+async function getLoyaltySettings() {
+  const [[row]] = await pool.query(
+    'SELECT loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point, loyalty_expiry_date FROM app_settings WHERE id = 1'
+  );
+  if (!row) return { loyaltyEnabled: false, loyaltyPointsPerSar: 1, loyaltySarPerPoint: 0.05, loyaltyExpiryDate: null };
+  return {
+    loyaltyEnabled: row.loyalty_enabled === 1,
+    loyaltyPointsPerSar: Number(row.loyalty_points_per_sar) || 1,
+    loyaltySarPerPoint: Number(row.loyalty_sar_per_point) || 0.05,
+    loyaltyExpiryDate: row.loyalty_expiry_date || null
+  };
+}
+
+async function saveLoyaltySettings({ loyaltyEnabled, loyaltyPointsPerSar, loyaltySarPerPoint, loyaltyExpiryDate }) {
+  const enabled = loyaltyEnabled ? 1 : 0;
+  let pps = Number(loyaltyPointsPerSar);
+  if (!Number.isFinite(pps) || pps <= 0) pps = 1;
+  let spp = Number(loyaltySarPerPoint);
+  if (!Number.isFinite(spp) || spp <= 0) spp = 0.05;
+  // التحقق من صحة التاريخ (YYYY-MM-DD)
+  const expDate = (loyaltyExpiryDate && /^\d{4}-\d{2}-\d{2}$/.test(loyaltyExpiryDate))
+    ? loyaltyExpiryDate : null;
+  await pool.query(
+    'UPDATE app_settings SET loyalty_enabled=?, loyalty_points_per_sar=?, loyalty_sar_per_point=?, loyalty_expiry_date=? WHERE id=1',
+    [enabled, pps, spp, expDate]
+  );
+}
+
+async function getCustomerLoyaltyBalance(customerId) {
+  const [[row]] = await pool.query('SELECT loyalty_points FROM customers WHERE id = ?', [customerId]);
+  return row ? Number(row.loyalty_points) : 0;
+}
+
+async function getLoyaltyTransactions({ customerId, page = 1, pageSize = 50 }) {
+  const offset = (page - 1) * pageSize;
+  const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM loyalty_transactions WHERE customer_id = ?', [customerId]);
+  const [rows] = await pool.query(
+    'SELECT * FROM loyalty_transactions WHERE customer_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+    [customerId, pageSize, offset]
+  );
+  return { transactions: rows, total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1 };
+}
+
+async function expireLoyaltyPoints() {
+  try {
+    const [[settings]] = await pool.query(
+      'SELECT loyalty_enabled, loyalty_expiry_date FROM app_settings WHERE id = 1'
+    );
+    if (!settings || !settings.loyalty_enabled) return;
+    const expiryDate = settings.loyalty_expiry_date;
+    if (!expiryDate) return; // فارغ = لا تنتهي صلاحية النقاط
+
+    // التحقق: هل وصلنا أو تجاوزنا تاريخ الانتهاء؟
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    if (today < expiryDate) return; // لم يحن موعد الانتهاء بعد
+
+    // جلب جميع العملاء الذين لديهم نقاط > 0 ولم تُنتهَ نقاطهم بسبب هذا التاريخ بعد
+    const [customers] = await pool.query(`
+      SELECT c.id AS customer_id, c.loyalty_points
+      FROM customers c
+      WHERE c.loyalty_points > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM loyalty_transactions lt
+          WHERE lt.customer_id = c.id
+            AND lt.type = 'expire'
+            AND lt.note LIKE ?
+        )
+    `, [`%انتهاء صلاحية بتاريخ ${expiryDate}%`]);
+
+    for (const row of customers) {
+      const cid = row.customer_id;
+      const toExpire = Number(row.loyalty_points);
+      if (toExpire <= 0) continue;
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const [[custRow]] = await conn.query('SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE', [cid]);
+        if (!custRow) { await conn.rollback(); continue; }
+        await conn.query('UPDATE customers SET loyalty_points = 0 WHERE id = ?', [cid]);
+        await conn.query(
+          `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note)
+           VALUES (?, NULL, 'expire', ?, 0, ?)`,
+          [cid, -toExpire, `انتهاء صلاحية بتاريخ ${expiryDate}`]
+        );
+        await conn.commit();
+      } catch (e) {
+        await conn.rollback();
+        console.error('expireLoyaltyPoints error for customer', cid, e);
+      } finally {
+        conn.release();
+      }
+    }
+  } catch (e) {
+    console.error('expireLoyaltyPoints top-level error:', e);
+  }
+}
+
 module.exports = {
   initialize, findUser, query,
   getAllUsers, createUser, updateUser, toggleUserStatus, deleteUser,
+  getAllRoles, createRole, updateRole, deleteRole, getPermissionsForUser,
+  getUsersList, saveUserPermissions,
   getAllCustomers, createCustomer, updateCustomer, toggleCustomerStatus, deleteCustomer,
   getAllExpenses, getExpensesSummary, createExpense, updateExpense, deleteExpense,
   getAllLaundryServices, createLaundryService, updateLaundryService, deleteLaundryService,
@@ -6362,7 +6907,45 @@ module.exports = {
   getWhatsappQuota,
   incrementWhatsappUsed,
   setWhatsappQuota,
+  // Loyalty Points functions
+  getLoyaltySettings, saveLoyaltySettings, getCustomerLoyaltyBalance, getLoyaltyTransactions,
+  // System Restore
+  systemRestore,
 };
+
+// ── System Restore ───────────────────────────────────────────────────────────
+
+async function systemRestore({ invoices, customers, services, expenses, garments } = {}) {
+  const invoiceTables  = ['credit_note_items','credit_notes','refunds','subscription_invoices','order_items','invoice_payments','orders'];
+  const customerTables = ['loyalty_transactions','consumption_receipts','subscription_ledger','subscription_periods','customer_subscriptions','customers'];
+  const serviceTables  = ['product_price_lines','products','offers','prepaid_packages','laundry_services'];
+  const expenseTables  = ['expenses'];
+  const garmentTables  = ['hangers'];
+
+  const selected = [];
+  if (invoices)  invoiceTables.forEach(t  => selected.push(t));
+  if (customers) customerTables.forEach(t => selected.push(t));
+  if (services)  serviceTables.forEach(t  => selected.push(t));
+  if (expenses)  expenseTables.forEach(t  => selected.push(t));
+  if (garments)  garmentTables.forEach(t  => selected.push(t));
+
+  if (selected.length === 0) return { success: true, deleted: [] };
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.query('SET FOREIGN_KEY_CHECKS=0');
+    for (const tbl of selected) {
+      await conn.query(`TRUNCATE TABLE \`${tbl}\``);
+    }
+    await conn.query('SET FOREIGN_KEY_CHECKS=1');
+    return { success: true, deleted: selected };
+  } catch (e) {
+    await conn.query('SET FOREIGN_KEY_CHECKS=1').catch(() => {});
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
 
 // ── WhatsApp Quota ────────────────────────────────────────────────────────────
 
@@ -6475,8 +7058,8 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   }
 
   const dateOrdersWhere = dateWhere.replace(/\bcreated_at\b/g, 'o.created_at');
-  const invoicesWhere   = `WHERE 1=1${dateOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription')`;
-  const pmWhere         = `WHERE 1=1${dateOrdersWhere}`;
+  const invoicesWhere   = `WHERE 1=1${dateOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription') AND o.order_type NOT IN ('subscription_new','subscription_renewal')`;
+  const pmWhere         = `WHERE 1=1${dateOrdersWhere} AND NOT EXISTS (SELECT 1 FROM credit_notes cn_chk WHERE cn_chk.original_order_id = o.id)`;
   const invoicesParams  = [...params];
   const pmParams        = [...params];
   const expWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'expense_date')}`;
@@ -6564,7 +7147,7 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   `, subParams);
 
   const [subscriptions] = await pool.query(`
-    SELECT c.phone, c.subscription_number, cs.subscription_ref, sp.prepaid_price_paid AS amount, sl.entry_type, sl.created_at
+    SELECT c.phone, c.subscription_number, cs.subscription_ref, cs.id AS subscription_id, sp.order_id, sp.prepaid_price_paid AS amount, sl.entry_type, sl.created_at
     FROM subscription_ledger sl
     INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
     INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
@@ -6653,7 +7236,7 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
   const userSubWhere = userId ? ' AND sl.created_by = ?' : '';
 
   const dateOrdersWhere = dateWhere.replace(/\bcreated_at\b/g, 'o.created_at');
-  const invoicesWhere   = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription')`;
+  const invoicesWhere   = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription') AND o.order_type NOT IN ('subscription_new','subscription_renewal')`;
   const pmWhere         = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere}`;
   const invoicesParams  = [...params];
   const pmParams        = [...params];
@@ -6746,7 +7329,7 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
   `, subParams);
 
   const [subscriptions] = await pool.query(`
-    SELECT c.phone, c.subscription_number, cs.subscription_ref, sp.prepaid_price_paid AS amount, sl.entry_type, sl.created_at
+    SELECT c.phone, c.subscription_number, cs.subscription_ref, cs.id AS subscription_id, sp.order_id, sp.prepaid_price_paid AS amount, sl.entry_type, sl.created_at
     FROM subscription_ledger sl
     INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
     INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id

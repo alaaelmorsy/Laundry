@@ -149,78 +149,88 @@
         <div class="inv-paper" id="invoicePaper">
 
           <!-- Logo -->
-          <div class="inv-logo-wrap" id="invLogoWrap" style="display:none">
-            <img id="invLogo" class="inv-logo" alt="شعار المغسلة" />
+          <!-- Shop header -->
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="invLogoWrap" style="display:none">
+              <img id="invLogo" class="inv-logo" alt="شعار المغسلة" />
+            </div>
+            <div class="inv-shop-name" id="invShopName"></div>
+            <div class="inv-shop-sub" id="invShopAddress"></div>
+            <div class="inv-shop-contact-row">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span class="inv-shop-sub" id="invShopPhone"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="invVatRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+              <span class="inv-shop-sub" id="invVatNumber" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="invEmailRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <span class="inv-shop-sub" id="invShopEmail"></span>
+            </div>
+            <div id="invCustomFields" style="display:none"></div>
           </div>
 
-          <!-- Shop header -->
-          <div class="inv-shop-name" id="invShopName"></div>
-          <div class="inv-shop-sub" id="invShopAddress"></div>
-          <div class="inv-shop-sub" id="invShopPhone"></div>
-          <div class="inv-shop-sub" id="invVatNumber" dir="ltr"></div>
-<div class="inv-shop-sub" id="invShopEmail"></div>
-            <div id="invCustomFields" style="display:none"></div>
-
-            <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-divider-thick inv-sep"></div>
 
           <!-- Invoice meta -->
           <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
-          <div class="inv-meta-row">
-            <span class="inv-meta-label">رقم الفاتورة</span>
-            <span class="inv-meta-val" id="invOrderNum" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row">
-            <span class="inv-meta-label">التاريخ</span>
-            <span class="inv-meta-val" id="invDate" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row">
-            <span class="inv-meta-label">طريقة الدفع</span>
-            <span class="inv-meta-val" id="invPayment"></span>
-          </div>
-          <div class="inv-meta-row" id="invPaidAtRow" style="display:none">
-            <span class="inv-meta-label">تاريخ السداد</span>
-            <span class="inv-meta-val" id="invPaidAt" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="invCleanedAtRow" style="display:none">
-            <span class="inv-meta-label">تاريخ التنظيف</span>
-            <span class="inv-meta-val" id="invCleanedAt" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="invDeliveredAtRow" style="display:none">
-            <span class="inv-meta-label">تاريخ التسليم</span>
-            <span class="inv-meta-val" id="invDeliveredAt" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="invCRRow" style="display:none">
-            <span class="inv-meta-label">السجل التجاري</span>
-            <span class="inv-meta-val" id="invCR" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="invCreatedByRow" style="display:none">
-            <span class="inv-meta-label">الكاشير</span>
-            <span class="inv-meta-val" id="invCreatedBy"></span>
+          <div class="cr-info-grid">
+            <div class="cr-info-cell">
+              <span class="cr-info-label">رقم الفاتورة</span>
+              <span class="cr-info-val" id="invOrderNum" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">التاريخ</span>
+              <span class="cr-info-val" id="invDate" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">طريقة الدفع</span>
+              <span class="cr-info-val" id="invPayment"></span>
+            </div>
+            <div class="cr-info-cell" id="invCustNameRow" style="display:none">
+              <span class="cr-info-label">الاسم</span>
+              <span class="cr-info-val" id="invCustName"></span>
+            </div>
+            <div class="cr-info-cell" id="invCustPhoneRow" style="display:none">
+              <span class="cr-info-label">الجوال</span>
+              <span class="cr-info-val" id="invCustPhone" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invSubRefRow" style="display:none">
+              <span class="cr-info-label">رقم الاشتراك</span>
+              <span class="cr-info-val" id="invSubRef" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invSubBalRow" style="display:none">
+              <span class="cr-info-label">الرصيد المتبقي</span>
+              <span class="cr-info-val" id="invSubBalance" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invPaidAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ السداد</span>
+              <span class="cr-info-val" id="invPaidAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invCleanedAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التنظيف</span>
+              <span class="cr-info-val" id="invCleanedAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invDeliveredAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التسليم</span>
+              <span class="cr-info-val" id="invDeliveredAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invCRRow" style="display:none">
+              <span class="cr-info-label">السجل التجاري</span>
+              <span class="cr-info-val" id="invCR" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invCreatedByRow" style="display:none">
+              <span class="cr-info-label">الكاشير</span>
+              <span class="cr-info-val" id="invCreatedBy"></span>
+            </div>
           </div>
 
-          <!-- Customer info -->
-          <div id="invCustomerSection" style="display:none">
-            <div class="inv-divider-thick inv-sep"></div>
-            <div class="inv-meta-row" id="invCustNameRow" style="display:none">
-              <span class="inv-meta-label">الاسم</span>
-              <span class="inv-meta-val" id="invCustName"></span>
-            </div>
-            <div class="inv-meta-row" id="invCustPhoneRow" style="display:none">
-              <span class="inv-meta-label">الجوال</span>
-              <span class="inv-meta-val" id="invCustPhone" dir="ltr"></span>
-            </div>
-            <div class="inv-meta-row" id="invSubRefRow" style="display:none">
-              <span class="inv-meta-label">رقم الاشتراك</span>
-              <span class="inv-meta-val" id="invSubRef" dir="ltr"></span>
-            </div>
-            <div class="inv-meta-row" id="invSubBalRow" style="display:none">
-              <span class="inv-meta-label">الرصيد المتبقي</span>
-              <span class="inv-meta-val" id="invSubBalance" dir="ltr"></span>
-            </div>
-          </div>
+          <!-- Customer section placeholder (kept for JS compatibility) -->
+          <div id="invCustomerSection" style="display:none"></div>
 
           <!-- Items table -->
-          <table class="inv-table">
+          <table class="inv-table" style="margin-top:4px">
             <thead>
               <tr>
                 <th class="inv-th-name">النوع</th>

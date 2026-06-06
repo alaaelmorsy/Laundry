@@ -17,6 +17,7 @@ function signUserToken(user) {
       id: user.id,
       username: user.username,
       role: user.role,
+      role_id: user.role_id || null,
       full_name: user.full_name
     },
     getJwtSecret(),

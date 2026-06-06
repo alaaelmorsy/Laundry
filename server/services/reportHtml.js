@@ -1517,8 +1517,8 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
   .a4-mixed-row span{color:#000;font-size:0.88em}
   .a4-mixed-row b{color:#000;font-size:0.9em}
 .a4-notes-box{width:100%;background:#fff;padding:2.5mm 0 0 0;font-size:8.5pt;font-weight:700;color:#000;line-height:1.7;direction:rtl;text-align:center}
-.a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block}
-.a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8}
+.a4-notes-title{font-size:9pt;font-weight:900;color:#000;border-bottom:1.5px solid #000;padding-bottom:1mm;margin-bottom:2mm;display:block;text-align:center}
+.a4-notes-content{font-size:8pt;font-weight:700;color:#000;white-space:pre-wrap;line-height:1.8;text-align:center}
 @media print{
   @page{size:A4 portrait;margin:0}
   html,body{background:#fff!important}
@@ -1573,19 +1573,19 @@ html,body{background:#fff;font-family:'Cairo',sans-serif;direction:rtl;max-width
       <div class="a4-meta-val">${paymentMethod}</div>
     </div>
   </section>
-  <section class="a4-bill-to">
+  <section class="a4-bill-to" style="${!(order.paid_at || order.cleaning_date || order.delivery_date || order.starch || order.bluing) ? 'grid-template-columns:1fr' : ''}">
     <div class="a4-card">
       <div class="a4-kv"><span>الاسم / Name</span><b>${escHtmlPdf(custName)}</b></div>
       <div class="a4-kv"><span>الجوال / Mobile</span><b dir="ltr">${escHtmlPdf(custPhone)}</b></div>
       ${subRows}
     </div>
-    <div class="a4-card">
+    ${(order.paid_at || order.cleaning_date || order.delivery_date || order.starch || order.bluing) ? `<div class="a4-card">
       ${order.paid_at ? `<div class="a4-kv"><span>تاريخ السداد / Paid</span><b dir="ltr">${formatDateSimple(order.paid_at)}</b></div>` : ''}
       ${order.cleaning_date ? `<div class="a4-kv"><span>تاريخ التنظيف / Cleaned</span><b dir="ltr">${formatDateSimple(order.cleaning_date)}</b></div>` : ''}
       ${order.delivery_date ? `<div class="a4-kv"><span>تاريخ التسليم / Delivered</span><b dir="ltr">${formatDateSimple(order.delivery_date)}</b></div>` : ''}
       ${order.starch ? `<div class="a4-kv"><span>نشا / Starch</span><b>${escHtmlPdf(order.starch)}</b></div>` : ''}
       ${order.bluing ? `<div class="a4-kv"><span>النيلة / Bluing</span><b>${escHtmlPdf(order.bluing)}</b></div>` : ''}
-    </div>
+    </div>` : ''}
   </section>
   <table class="a4-items">
     <thead>

@@ -27,6 +27,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const modalEyeOffIcon = document.getElementById('modalEyeOffIcon');
 
   let allUsers = [];
+  let passwordVisible = false;
 
   I18N.apply();
 
@@ -41,10 +42,10 @@ window.addEventListener('DOMContentLoaded', () => {
   btnBack.addEventListener('click', () => window.api.navigateBack());
 
   toggleModalPassword.addEventListener('click', () => {
-    const hidden = inputPassword.type === 'password';
-    inputPassword.type = hidden ? 'text' : 'password';
-    modalEyeIcon.style.display = hidden ? 'none' : 'block';
-    modalEyeOffIcon.style.display = hidden ? 'block' : 'none';
+    passwordVisible = !passwordVisible;
+    inputPassword.type = passwordVisible ? 'text' : 'password';
+    modalEyeIcon.style.display = passwordVisible ? 'none' : '';
+    modalEyeOffIcon.style.display = passwordVisible ? '' : 'none';
     inputPassword.focus();
   });
 
@@ -102,7 +103,7 @@ window.addEventListener('DOMContentLoaded', () => {
         <td>${escHtml(u.username)}</td>
         <td>
           <span class="badge-role ${u.role === 'admin' ? 'badge-admin' : 'badge-cashier'}">
-            ${u.role === 'admin' ? I18N.t('users-role-admin') : I18N.t('users-role-cashier')}
+            ${u.role === 'admin' ? I18N.t('users-role-admin') : (u.role_name || I18N.t('users-role-cashier'))}
           </span>
         </td>
         <td>
@@ -168,12 +169,13 @@ window.addEventListener('DOMContentLoaded', () => {
     editUserId.value = user ? user.id : '';
     inputFullName.value = user ? (user.full_name || '') : '';
     inputUsername.value = user ? user.username : '';
-    inputPassword.value = '';
+    inputPassword.value = user ? (user.password_plain || '') : '';
     inputRole.value = user ? user.role : 'cashier';
     modalTitle.textContent = user ? I18N.t('users-modal-edit-title') : I18N.t('users-modal-add-title');
     passwordLabel.textContent = I18N.t('users-label-password');
+    passwordVisible = false;
     inputPassword.type = 'password';
-    modalEyeIcon.style.display = 'block';
+    modalEyeIcon.style.display = '';
     modalEyeOffIcon.style.display = 'none';
     hideModalError();
     modalOverlay.style.display = 'flex';

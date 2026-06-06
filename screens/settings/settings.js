@@ -4,10 +4,14 @@ window.addEventListener('DOMContentLoaded', () => {
   const tabTax = document.getElementById('tabTax');
   const tabPrinter = document.getElementById('tabPrinter');
   const tabReportEmail = document.getElementById('tabReportEmail');
+  const tabLoyalty = document.getElementById('tabLoyalty');
+  const tabSystemRestore = document.getElementById('tabSystemRestore');
   const panelLaundry = document.getElementById('panelLaundry');
   const panelTax = document.getElementById('panelTax');
   const panelPrinter = document.getElementById('panelPrinter');
   const panelReportEmail = document.getElementById('panelReportEmail');
+  const panelLoyalty = document.getElementById('panelLoyalty');
+  const panelSystemRestore = document.getElementById('panelSystemRestore');
   const btnSaveLaundry = document.getElementById('btnSaveLaundry');
   const btnSaveTax = document.getElementById('btnSaveTax');
   const btnSavePrinter = document.getElementById('btnSavePrinter');
@@ -188,7 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function setPanel(name) {
-    [tabLaundry, tabTax, tabPrinter, tabReportEmail].forEach((t) => {
+    [tabLaundry, tabTax, tabPrinter, tabReportEmail, tabLoyalty, tabSystemRestore].forEach((t) => {
       if (!t) return;
       t.classList.toggle('active', t.dataset.panel === name);
     });
@@ -196,6 +200,8 @@ window.addEventListener('DOMContentLoaded', () => {
     panelTax.classList.toggle('active', name === 'tax');
     panelPrinter.classList.toggle('active', name === 'printer');
     if (panelReportEmail) panelReportEmail.classList.toggle('active', name === 'reportEmail');
+    if (panelLoyalty) panelLoyalty.classList.toggle('active', name === 'loyalty');
+    if (panelSystemRestore) panelSystemRestore.classList.toggle('active', name === 'systemRestore');
   }
 
   function fmtDateTimeLocal(v) {
@@ -455,6 +461,8 @@ window.addEventListener('DOMContentLoaded', () => {
   tabTax.addEventListener('click', () => setPanel('tax'));
   tabPrinter.addEventListener('click', () => setPanel('printer'));
   if (tabReportEmail) tabReportEmail.addEventListener('click', () => setPanel('reportEmail'));
+  if (tabLoyalty) tabLoyalty.addEventListener('click', () => setPanel('loyalty'));
+  if (tabSystemRestore) tabSystemRestore.addEventListener('click', () => setPanel('systemRestore'));
 
   btnBack.addEventListener('click', () => window.api.navigateBack());
 
@@ -559,12 +567,154 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ═══ Loyalty Settings ═══
+  const loyaltyEnabledCb      = document.getElementById('loyaltyEnabled');
+  const loyaltyEnabledLabel   = document.getElementById('loyaltyEnabledLabel');
+  const loyaltyRiyalsPerPoint = document.getElementById('loyaltyRiyalsPerPoint');
+  const loyaltySarPerPoint    = document.getElementById('loyaltySarPerPoint');
+  const loyaltyExpiryDate     = document.getElementById('loyaltyExpiryDate');
+  const btnSaveLoyalty        = document.getElementById('btnSaveLoyalty');
+
+  if (loyaltyExpiryDate) {
+    loyaltyExpiryDate.addEventListener('click', function() {
+      try { this.showPicker(); } catch (_) {}
+    });
+  }
+
+  function updateLoyaltyLabel() {
+    if (!loyaltyEnabledLabel) return;
+    loyaltyEnabledLabel.textContent = (loyaltyEnabledCb && loyaltyEnabledCb.checked) ? 'مفعّل' : 'معطّل';
+  }
+
+  if (loyaltyEnabledCb) {
+    loyaltyEnabledCb.addEventListener('change', () => {
+      updateLoyaltyLabel();
+    });
+  }
+
+  async function loadLoyaltySettings() {
+    try {
+      const res = await window.api.getLoyaltySettings();
+      if (!res || !res.success) return;
+      const s = res.settings;
+      if (loyaltyEnabledCb) loyaltyEnabledCb.checked = s.loyaltyEnabled === true;
+      if (loyaltyRiyalsPerPoint) {
+        // الواجهة: "كل X ريال = 1 نقطة" = 1 / loyaltyPointsPerSar
+        const rpp = s.loyaltyPointsPerSar > 0 ? (1 / s.loyaltyPointsPerSar) : 10;
+        loyaltyRiyalsPerPoint.value = parseFloat(rpp.toFixed(4));
+      }
+      if (loyaltySarPerPoint) loyaltySarPerPoint.value = s.loyaltySarPerPoint || 0.05;
+      if (loyaltyExpiryDate) loyaltyExpiryDate.value = s.loyaltyExpiryDate || '';
+      updateLoyaltyLabel();
+    } catch (e) {
+      console.error('loadLoyaltySettings error:', e);
+    }
+  }
+
+  if (btnSaveLoyalty) {
+    btnSaveLoyalty.addEventListener('click', async () => {
+      btnSaveLoyalty.disabled = true;
+      try {
+        const rpp = parseFloat(loyaltyRiyalsPerPoint && loyaltyRiyalsPerPoint.value) || 10;
+        const pps = rpp > 0 ? 1 / rpp : 0.1; // تحويل "كل X ريال = 1 نقطة" إلى points_per_sar
+        const spp = parseFloat(loyaltySarPerPoint && loyaltySarPerPoint.value) || 0.05;
+        const expDate = (loyaltyExpiryDate && loyaltyExpiryDate.value) ? loyaltyExpiryDate.value : null;
+        const res = await window.api.saveLoyaltySettings({
+          loyaltyEnabled: loyaltyEnabledCb ? loyaltyEnabledCb.checked : false,
+          loyaltyPointsPerSar: pps,
+          loyaltySarPerPoint: spp,
+          loyaltyExpiryDate: expDate
+        });
+        if (!res || !res.success) {
+          showToast(res?.message || 'خطأ في حفظ إعدادات النقاط', 'error');
+          return;
+        }
+        showToast('تم حفظ إعدادات نقاط الولاء', 'success');
+      } catch (e) {
+        showToast(e.message || 'خطأ في حفظ إعدادات النقاط', 'error');
+      } finally {
+        btnSaveLoyalty.disabled = false;
+      }
+    });
+  }
+
+  loadLoyaltySettings();
+
   // إغلاق القائمة عند الضغط خارجها
   document.addEventListener('click', (e) => {
     if (!paymentTrigger.contains(e.target) && !paymentMenu.contains(e.target)) {
       closePaymentMenu();
     }
   });
+
+  // ═══ System Restore Modal ═══
+  const systemRestoreModal       = document.getElementById('systemRestoreModal');
+  const systemRestoreModalBackdrop = document.getElementById('systemRestoreModalBackdrop');
+  const btnOpenSystemRestoreModal  = document.getElementById('btnOpenSystemRestoreModal');
+  const btnCloseSystemRestoreModal = document.getElementById('btnCloseSystemRestoreModal');
+  const btnCancelSystemRestore     = document.getElementById('btnCancelSystemRestore');
+  const btnConfirmSystemRestore    = document.getElementById('btnConfirmSystemRestore');
+  const rcInvoices  = document.getElementById('rcInvoices');
+  const rcCustomers = document.getElementById('rcCustomers');
+  const rcServices  = document.getElementById('rcServices');
+  const rcExpenses  = document.getElementById('rcExpenses');
+  const rcGarments  = document.getElementById('rcGarments');
+  const rcCheckboxes = [rcInvoices, rcCustomers, rcServices, rcExpenses, rcGarments].filter(Boolean);
+
+  function updateRestoreConfirmBtn() {
+    const anyChecked = rcCheckboxes.some(cb => cb.checked);
+    btnConfirmSystemRestore.disabled = !anyChecked;
+    btnConfirmSystemRestore.style.opacity = anyChecked ? '1' : '.5';
+    btnConfirmSystemRestore.style.cursor  = anyChecked ? 'pointer' : 'not-allowed';
+  }
+
+  function openSystemRestoreModal() {
+    rcCheckboxes.forEach(cb => { cb.checked = false; });
+    updateRestoreConfirmBtn();
+    systemRestoreModal.style.display = 'flex';
+  }
+
+  function closeSystemRestoreModal() {
+    systemRestoreModal.style.display = 'none';
+  }
+
+  rcCheckboxes.forEach(cb => cb.addEventListener('change', updateRestoreConfirmBtn));
+
+  if (btnOpenSystemRestoreModal)    btnOpenSystemRestoreModal.addEventListener('click', openSystemRestoreModal);
+  if (btnCloseSystemRestoreModal)   btnCloseSystemRestoreModal.addEventListener('click', closeSystemRestoreModal);
+  if (btnCancelSystemRestore)       btnCancelSystemRestore.addEventListener('click', closeSystemRestoreModal);
+  if (systemRestoreModalBackdrop)   systemRestoreModalBackdrop.addEventListener('click', closeSystemRestoreModal);
+
+  if (btnConfirmSystemRestore) {
+    btnConfirmSystemRestore.addEventListener('click', async () => {
+      if (btnConfirmSystemRestore.disabled) return;
+      btnConfirmSystemRestore.disabled = true;
+      btnConfirmSystemRestore.style.opacity = '.5';
+      const origText = btnConfirmSystemRestore.innerHTML;
+      btnConfirmSystemRestore.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> جاري الحذف...';
+      try {
+        const res = await window.api.systemRestore({
+          invoices:  rcInvoices  ? rcInvoices.checked  : false,
+          customers: rcCustomers ? rcCustomers.checked : false,
+          services:  rcServices  ? rcServices.checked  : false,
+          expenses:  rcExpenses  ? rcExpenses.checked  : false,
+          garments:  rcGarments  ? rcGarments.checked  : false,
+        });
+        closeSystemRestoreModal();
+        if (!res || !res.success) {
+          showToast(res?.message || 'حدث خطأ أثناء الاستعادة', 'error');
+        } else {
+          showToast(`تم الحذف بنجاح (${(res.deleted || []).length} جدول)`, 'success');
+        }
+      } catch (e) {
+        closeSystemRestoreModal();
+        showToast(e.message || 'حدث خطأ أثناء الاستعادة', 'error');
+      } finally {
+        btnConfirmSystemRestore.innerHTML = origText;
+        updateRestoreConfirmBtn();
+      }
+    });
+  }
 
   I18N.apply();
   loadSettings();

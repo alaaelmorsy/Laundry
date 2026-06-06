@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title data-i18n="consumption-receipts-title">إيصالات الاستهلاك - نظام المغسلة</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
-  <link rel="stylesheet" href="consumption-receipts.css" />
+  <link rel="stylesheet" href="consumption-receipts.css?v=4" />
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
 </head>
 <body>
@@ -104,6 +104,9 @@
     </main>
   </div>
 
+  <!-- print zone خارج المودال للتوافق مع متصفحات الجوال -->
+  <div id="consumptionPrintZone" style="display:none"></div>
+
   <div id="receiptViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
     <div class="inv-dialog">
       <div class="inv-dialog-footer no-print">
@@ -129,19 +132,54 @@
       </div>
       <div class="inv-dialog-body">
         <div class="inv-paper" id="crPaper">
-          <div class="inv-logo-wrap" id="crLogoWrap" style="display:none">
-            <img id="crLogo" class="inv-logo" alt="" />
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="crLogoWrap" style="display:none">
+              <img id="crLogo" class="inv-logo" alt="" />
+            </div>
+            <div class="inv-shop-name" id="crShopName"></div>
+            <div class="inv-shop-sub" id="crShopAddress"></div>
+            <div class="inv-shop-contact-row">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span class="inv-shop-sub" id="crShopPhone"></span>
+            </div>
           </div>
-          <div class="inv-shop-name" id="crShopName"></div>
-          <div class="inv-shop-sub" id="crShopAddress"></div>
-          <div class="inv-shop-sub" id="crShopPhone"></div>
           <div class="inv-divider-thick inv-sep"></div>
           <div class="inv-meta-row" style="justify-content:center">
             <span class="inv-meta-label cr-receipt-title" data-i18n="consumption-receipt">إيصال استهلاك</span>
           </div>
-          <div class="inv-meta-row">
-            <span class="inv-meta-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
-            <span class="inv-meta-val" id="crReceiptNum" dir="ltr"></span>
+          <div class="cr-info-grid">
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="consumption-receipt-number">رقم الإيصال</span>
+              <span class="cr-info-val" id="crReceiptNum" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="invoices-col-date">التاريخ</span>
+              <span class="cr-info-val" id="crDate" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="invoices-col-customer">العميل</span>
+              <span class="cr-info-val" id="crCustomer"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="consumption-col-phone">الجوال</span>
+              <span class="cr-info-val" id="crPhone" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="consumption-col-sub">رقم الاشتراك</span>
+              <span class="cr-info-val" id="crSubRef" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label" data-i18n="consumption-col-package">الباقة</span>
+              <span class="cr-info-val" id="crPackage"></span>
+            </div>
+            <div class="cr-info-cell" id="crCleanedAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التنظيف</span>
+              <span class="cr-info-val" id="crCleanedAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="crDeliveredAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التسليم</span>
+              <span class="cr-info-val" id="crDeliveredAt" dir="ltr"></span>
+            </div>
           </div>
           <div class="inv-meta-row" id="crRefundNumRow" style="display:none">
             <span class="inv-meta-label">رقم المرتجع</span>
@@ -151,24 +189,6 @@
             <span class="inv-meta-label">سبب الإرجاع</span>
             <span class="inv-meta-val" id="crRefundReason"></span>
           </div>
-          <div class="inv-meta-row">
-            <span class="inv-meta-label" data-i18n="invoices-col-date">التاريخ</span>
-            <span class="inv-meta-val" id="crDate" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="crCleanedAtRow" style="display:none">
-            <span class="inv-meta-label">تاريخ التنظيف</span>
-            <span class="inv-meta-val" id="crCleanedAt" dir="ltr"></span>
-          </div>
-          <div class="inv-meta-row" id="crDeliveredAtRow" style="display:none">
-            <span class="inv-meta-label">تاريخ التسليم</span>
-            <span class="inv-meta-val" id="crDeliveredAt" dir="ltr"></span>
-          </div>
-          <div class="inv-divider-thick inv-sep"></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="invoices-col-customer">العميل</span><span class="inv-meta-val" id="crCustomer"></span></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-phone">الجوال</span><span class="inv-meta-val" id="crPhone" dir="ltr"></span></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-sub">رقم الاشتراك</span><span class="inv-meta-val" id="crSubRef" dir="ltr"></span></div>
-          <div class="inv-meta-row"><span class="inv-meta-label" data-i18n="consumption-col-package">الباقة</span><span class="inv-meta-val" id="crPackage"></span></div>
-          <div class="inv-divider-thick inv-sep"></div>
           <table class="inv-table">
             <thead>
               <tr>
