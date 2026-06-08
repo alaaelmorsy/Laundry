@@ -482,11 +482,11 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (s.commercialRegister && invCRRow && invCR) {
-      invCR.textContent = s.commercialRegister;
-      invCRRow.style.display = '';
-    } else if (invCRRow) {
-      invCRRow.style.display = 'none';
+    if (s.commercialRegister && invCR) {
+      invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
+      invCR.style.display = '';
+    } else if (invCR) {
+      invCR.style.display = 'none';
     }
 
     if (s.logoDataUrl && invLogoWrap && invLogo) {
@@ -1072,8 +1072,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const cnCRRow = el('cnCRRow');
     const cnCR = el('cnCR');
-    if (s.commercialRegister && cnCRRow && cnCR) { cnCR.textContent = s.commercialRegister; cnCRRow.style.display = ''; }
-    else if (cnCRRow) cnCRRow.style.display = 'none';
+    if (s.commercialRegister && cnCR) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCR.style.display = ''; }
+    else if (cnCR) cnCR.style.display = 'none';
 
     const cnCreatedByRow = el('cnCreatedByRow');
     const cnCreatedBy = el('cnCreatedBy');

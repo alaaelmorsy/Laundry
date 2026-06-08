@@ -639,6 +639,10 @@ window.addEventListener('DOMContentLoaded', () => {
     if (el('invShopPhone'))   el('invShopPhone').textContent   = s.phone ? I18N.t('all-invoices-phone') + ': ' + s.phone : '';
     if (el('invVatNumber'))   el('invVatNumber').textContent   = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
     if (el('invShopEmail'))   el('invShopEmail').textContent   = s.email || '';
+    if (el('invCR')) {
+      if (s.commercialRegister) { el('invCR').textContent = 'السجل التجاري: ' + s.commercialRegister; el('invCR').style.display = ''; }
+      else el('invCR').style.display = 'none';
+    }
 
     /* Custom fields */
     const invCfAir = el('invCustomFields');
@@ -908,8 +912,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const cnCRRow = el('cnCRRow');
     const cnCR = el('cnCR');
-    if (s.commercialRegister && cnCRRow && cnCR) { cnCR.textContent = s.commercialRegister; cnCRRow.style.display = ''; }
-    else if (cnCRRow) cnCRRow.style.display = 'none';
+    if (s.commercialRegister && cnCR) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCR.style.display = ''; }
+    else if (cnCR) cnCR.style.display = 'none';
 
     const cnCreatedByRow = el('cnCreatedByRow');
     const cnCreatedBy = el('cnCreatedBy');

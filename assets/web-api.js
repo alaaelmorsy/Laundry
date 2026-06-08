@@ -82,12 +82,50 @@
   }
 
   window.api = {
+    checkLicense: async () => {
+      try {
+        const r = await jsonFetch('/api/license/check');
+        return r.json();
+      } catch (_) {
+        return { licensed: false };
+      }
+    },
+
     login: async (credentials) => {
       const r = await jsonFetch('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials || {})
       });
       return r.json();
+    },
+
+    registerAccount: async (data) => {
+      const r = await jsonFetch('/api/accounts/register', {
+        method: 'POST',
+        body: JSON.stringify(data || {})
+      });
+      return r.json();
+    },
+
+    getTrialStatus: async () => {
+      try {
+        const r = await fetch('/api/accounts/trial-status', { credentials: 'include' });
+        return r.json();
+      } catch { return { hasAccount: false, active: false, daysLeft: 0 }; }
+    },
+
+    getDayResetHour: async () => {
+      try {
+        const r = await fetch('/api/app/day-reset-hour', { credentials: 'include' });
+        return r.json();
+      } catch { return { success: false, dayResetHour: null }; }
+    },
+
+    getSupportInfo: async () => {
+      try {
+        const r = await fetch('/api/app/support-info', { credentials: 'include' });
+        return r.json();
+      } catch { return { hasExpiry: false }; }
     },
 
     openMain: () => {

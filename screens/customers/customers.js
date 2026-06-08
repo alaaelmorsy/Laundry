@@ -132,7 +132,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   async function loadCustomers() {
     customersTableBody.innerHTML = `
       <tr>
-        <td colspan="8" class="loading-cell">
+        <td colspan="9" class="loading-cell">
           <div class="spinner"></div>
           <span>${I18N.t('customers-loading')}</span>
         </td>
@@ -260,7 +260,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     customersTableBody.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', () => deleteCustomer(Number(btn.dataset.id), btn.dataset.name));
+      btn.addEventListener('click', () => {
+        deleteCustomer(Number(btn.dataset.id), btn.dataset.name).catch(err => {
+          console.error('deleteCustomer error:', err);
+          showToast('حدث خطأ غير متوقع أثناء الحذف', 'error');
+        });
+      });
     });
   }
 
@@ -408,11 +413,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     btnModalSave.disabled = false;
   }
 
-  async function deleteCustomer(id, name) {
-    confirmMsg.textContent       = I18N.t('customers-confirm-msg').replace('{name}', name);
-    confirmOverlay.style.display = 'flex';
-
+  function showConfirmDialog(name) {
     return new Promise((resolve) => {
+      confirmMsg.textContent       = I18N.t('customers-confirm-msg').replace('{name}', name);
+      confirmOverlay.style.display = 'flex';
+
       function onOk()     { cleanup(); confirmOverlay.style.display = 'none'; resolve(true);  }
       function onCancel() { cleanup(); confirmOverlay.style.display = 'none'; resolve(false); }
       function cleanup()  {
@@ -421,21 +426,24 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       btnConfirmOk.addEventListener('click', onOk);
       btnConfirmCancel.addEventListener('click', onCancel);
-    }).then(async (confirmed) => {
-      if (!confirmed) return;
-      try {
-        const result = await window.api.deleteCustomer({ id });
-        if (result.success) {
-          showToast(I18N.t('customers-success-delete'), 'success');
-          if (currentCustomers.length === 1 && currentPage > 1) currentPage--;
-          await loadCustomers();
-        } else {
-          showToast(result.message || I18N.t('customers-err-delete'), 'error');
-        }
-      } catch (err) {
-        showToast(I18N.t('customers-err-db'), 'error');
-      }
     });
+  }
+
+  async function deleteCustomer(id, name) {
+    const confirmed = await showConfirmDialog(name);
+    if (!confirmed) return;
+    try {
+      const result = await window.api.deleteCustomer({ id });
+      if (result.success) {
+        showToast(I18N.t('customers-success-delete'), 'success');
+        if (currentCustomers.length === 1 && currentPage > 1) currentPage--;
+        await loadCustomers();
+      } else {
+        showToast(result.message || I18N.t('customers-err-delete'), 'error');
+      }
+    } catch (err) {
+      showToast(I18N.t('customers-err-db'), 'error');
+    }
   }
 
   async function toggleStatus(id, currentActive) {

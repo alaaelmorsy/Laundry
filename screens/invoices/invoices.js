@@ -757,10 +757,6 @@
     if (!grid) return;
     const cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
     cells.forEach(c => { c.style.gridColumn = ''; });
-    const visible = cells.filter(c => c.style.display !== 'none');
-    if (visible.length % 2 !== 0) {
-      visible[visible.length - 1].style.gridColumn = '1 / -1';
-    }
   }
 
   function renderInvoiceModal(order, items, seqNum, subscription) {

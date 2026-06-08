@@ -285,6 +285,7 @@ window.addEventListener('DOMContentLoaded', () => {
       { label: I18N.t('summary-sales-after-disc'),   d: summary.salesAfterDisc, cls: '' },
       { label: I18N.t('summary-credit-notes-short'), d: summary.creditNotes, cls: '' },
       { label: I18N.t('summary-total-net'), d: summary.totalNet, cls: 'row-total' },
+      ...(summary.partialPayments && summary.partialPayments.afterTax > 0 ? [{ label: I18N.t('summary-partial-payments'), d: summary.partialPayments, cls: '' }] : []),
       { label: I18N.t('summary-subscriptions'),      d: summary.subscriptions,   cls: '' },
       { label: I18N.t('summary-expenses'),            d: summary.expenses,        cls: '' },
       { label: I18N.t('summary-net-short'),              d: summary.net,             cls: 'row-net' },
@@ -460,11 +461,11 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (s.commercialRegister && invCRRow && invCR) {
-      invCR.textContent = s.commercialRegister;
-      invCRRow.style.display = '';
-    } else if (invCRRow) {
-      invCRRow.style.display = 'none';
+    if (s.commercialRegister && invCR) {
+      invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
+      invCR.style.display = '';
+    } else if (invCR) {
+      invCR.style.display = 'none';
     }
 
     if (s.logoDataUrl && invLogoWrap && invLogo) {
@@ -1054,8 +1055,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const cnCRRow = el('cnCRRow');
     const cnCR = el('cnCR');
-    if (s.commercialRegister && cnCRRow && cnCR) { cnCR.textContent = s.commercialRegister; cnCRRow.style.display = ''; }
-    else if (cnCRRow) cnCRRow.style.display = 'none';
+    if (s.commercialRegister && cnCR) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCR.style.display = ''; }
+    else if (cnCR) cnCR.style.display = 'none';
 
     const cnCreatedByRow = el('cnCreatedByRow');
     const cnCreatedBy = el('cnCreatedBy');

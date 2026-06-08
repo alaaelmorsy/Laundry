@@ -113,6 +113,108 @@ async function initialize() {
   await expireLoyaltyPoints();
   await migrateUsersPasswordPlain();
   await migrateRolesSystem();
+  await migrateAppSettingsTrialMode();
+  await createAccountsTable();
+  await createLicenseTable();
+}
+
+async function createLicenseTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS license (
+      id TINYINT NOT NULL DEFAULT 1,
+      serial VARCHAR(512) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      CONSTRAINT chk_single_row CHECK (id = 1)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
+async function isSerialLicensed(serials) {
+  if (!Array.isArray(serials) || serials.length === 0) return false;
+  const valid = serials.filter(s => typeof s === 'string' && s.trim().length > 0);
+  if (valid.length === 0) return false;
+  const [rows] = await pool.query(
+    `SELECT id FROM license WHERE UPPER(TRIM(serial)) IN (${valid.map(() => '?').join(',')}) LIMIT 1`,
+    valid.map(s => s.trim().toUpperCase())
+  );
+  return rows.length > 0;
+}
+
+// ── Accounts (Trial / Subscription) ─────────────────────────────────────────
+
+async function createAccountsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      phone VARCHAR(20) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      status ENUM('Trial','Active','Expired') NOT NULL DEFAULT 'Trial',
+      created_at DATETIME NOT NULL,
+      trial_end_date DATETIME NOT NULL,
+      subscription_start_date DATETIME NULL,
+      subscription_end_date DATETIME NULL,
+      plan_name VARCHAR(100) NULL,
+      last_login DATETIME NULL,
+      ip_address VARCHAR(45) NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // migration: add ip_address if missing
+  try {
+    await pool.query(`ALTER TABLE accounts ADD COLUMN ip_address VARCHAR(45) NULL`);
+  } catch (_) {}
+}
+
+async function registerAccount({ name, phone, password, ip }) {
+  const [[existing]] = await pool.query('SELECT id FROM accounts WHERE phone=?', [phone]);
+  if (existing) {
+    const err = new Error('رقم الجوال مسجل مسبقاً');
+    err.code = 'PHONE_EXISTS';
+    throw err;
+  }
+  if (ip) {
+    const [[ipExists]] = await pool.query('SELECT id FROM accounts WHERE ip_address=?', [ip]);
+    if (ipExists) {
+      const err = new Error('تم تسجيل حساب تجريبي مسبقاً من هذا الجهاز');
+      err.code = 'IP_EXISTS';
+      throw err;
+    }
+  }
+  const hashed = await hashPassword(password);
+  const now = new Date();
+  const trialEnd = new Date(now);
+  trialEnd.setDate(trialEnd.getDate() + 7);
+  await pool.query(
+    `INSERT INTO accounts (name, phone, password, status, created_at, trial_end_date, ip_address)
+     VALUES (?, ?, ?, 'Trial', ?, ?, ?)`,
+    [name, phone, hashed, toSqlDateTime(now), toSqlDateTime(trialEnd), ip || null]
+  );
+}
+
+async function checkTrialAccess(ip) {
+  // حساب مدفوع (Active) → مسموح من أي جهاز
+  const [[active]] = await pool.query(
+    `SELECT id FROM accounts WHERE status = 'Active' LIMIT 1`
+  );
+  if (active) return { allowed: true };
+
+  // تجربة → يجب أن يكون الـ IP مسجلاً وغير منتهٍ
+  if (!ip) return { allowed: false, needsRegistration: true };
+  const [[trial]] = await pool.query(
+    `SELECT id FROM accounts WHERE status = 'Trial' AND ip_address = ? AND trial_end_date >= NOW() LIMIT 1`,
+    [ip]
+  );
+  if (trial) return { allowed: true };
+
+  // تحقق هل هذا الـ IP سجّل من قبل لكن انتهت مدته
+  const [[expired]] = await pool.query(
+    `SELECT id FROM accounts WHERE ip_address = ? LIMIT 1`,
+    [ip]
+  );
+  return expired
+    ? { allowed: false, needsRegistration: false }  // منتهي
+    : { allowed: false, needsRegistration: true };   // لم يسجل بعد
 }
 
 // ── Roles & Permissions ─────────────────────────────────────────────────────
@@ -836,6 +938,22 @@ async function migrateAppSettingsShowBarcodeInInvoice() {
     }
   } catch (e) {
     console.error('migrateAppSettingsShowBarcodeInInvoice:', e);
+  }
+}
+
+async function migrateAppSettingsTrialMode() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'app_settings' AND column_name = 'trial_mode_enabled'`
+    );
+    if (!cols.length) {
+      await pool.query(
+        `ALTER TABLE app_settings ADD COLUMN trial_mode_enabled TINYINT(1) NOT NULL DEFAULT 0`
+      );
+    }
+  } catch (e) {
+    console.error('migrateAppSettingsTrialMode:', e);
   }
 }
 
@@ -3294,6 +3412,15 @@ async function migrateAppSettings() {
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN whatsapp_invoice_message TEXT DEFAULT NULL AFTER whatsapp_send_on_pay"
   ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN support_expiry_date DATE DEFAULT NULL"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN day_reset_hour TINYINT UNSIGNED DEFAULT NULL COMMENT '0-23, null=midnight'"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN day_reset_time VARCHAR(5) DEFAULT NULL COMMENT 'HH:MM format'"
+  ).catch(() => {});
   const [[cnt]] = await pool.query('SELECT COUNT(*) AS c FROM app_settings WHERE id = 1');
   if (Number(cnt.c) === 0) {
     await pool.query(
@@ -3342,6 +3469,10 @@ async function getAppSettings() {
             whatsapp_send_on_print, whatsapp_send_on_clean, whatsapp_send_on_deliver,
             whatsapp_send_on_subscription, whatsapp_send_on_pay, whatsapp_invoice_message,
             loyalty_enabled, loyalty_points_per_sar, loyalty_sar_per_point, loyalty_expiry_date,
+            trial_mode_enabled,
+            support_expiry_date,
+            day_reset_hour,
+            day_reset_time,
             updated_at
      FROM app_settings WHERE id = 1`
   );
@@ -3420,6 +3551,10 @@ async function getAppSettings() {
     loyaltyPointsPerSar: Number(row.loyalty_points_per_sar) || 1,
     loyaltySarPerPoint: Number(row.loyalty_sar_per_point) || 0.05,
     loyaltyExpiryDate: row.loyalty_expiry_date || null,
+    trialModeEnabled: row.trial_mode_enabled === 1,
+    supportExpiryDate: row.support_expiry_date || null,
+    dayResetHour: row.day_reset_hour != null ? Number(row.day_reset_hour) : null,
+    dayResetTime: row.day_reset_time || null,
     updatedAt: row.updated_at
   };
 }
@@ -3530,7 +3665,8 @@ async function saveAppSettings(data) {
         zatca_enabled = ?,
         whatsapp_send_on_print = ?, whatsapp_send_on_clean = ?, whatsapp_send_on_deliver = ?,
         whatsapp_send_on_subscription = ?, whatsapp_send_on_pay = ?, whatsapp_invoice_message = ?,
-        loyalty_enabled = ?, loyalty_points_per_sar = ?, loyalty_sar_per_point = ?, loyalty_expiry_date = ?
+        loyalty_enabled = ?, loyalty_points_per_sar = ?, loyalty_sar_per_point = ?, loyalty_expiry_date = ?,
+        day_reset_hour = ?, day_reset_time = ?
        WHERE id = 1`,
       [
         laundryNameAr || null,
@@ -3576,7 +3712,9 @@ async function saveAppSettings(data) {
         loyaltyEnabled,
         loyaltyPointsPerSar,
         loyaltySarPerPoint,
-        loyaltyExpiryDate
+        loyaltyExpiryDate,
+        (() => { const h = parseInt(data.dayResetHour, 10); return (Number.isFinite(h) && h >= 0 && h <= 23) ? h : null; })(),
+        (() => { const t = String(data.dayResetTime || '').trim(); return /^\d{2}:\d{2}$/.test(t) ? t : null; })()
       ]
     );
 
@@ -5517,14 +5655,33 @@ async function recordInvoicePayment({ orderId, paymentAmount, paymentMethod,
       `, [newPaidAmount, newRemainingAmount, newPaymentStatus, effectivePm,
           totCash, totCard, fullyPaidAt, id]);
     } else {
+      // تحديث paid_cash و paid_card من مجموع كل invoice_payments للدفع الجزئي
+      const [[agg2]] = await conn.query(`
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN payment_method = 'cash'  THEN payment_amount
+            WHEN payment_method = 'mixed' THEN cash_amount
+            ELSE 0
+          END), 0) AS tot_cash,
+          COALESCE(SUM(CASE
+            WHEN payment_method = 'card'  THEN payment_amount
+            WHEN payment_method = 'mixed' THEN card_amount
+            ELSE 0
+          END), 0) AS tot_card
+        FROM invoice_payments WHERE order_id = ?
+      `, [id]);
+      const partialCash = Math.round(Number(agg2.tot_cash) * 100) / 100;
+      const partialCard = Math.round(Number(agg2.tot_card) * 100) / 100;
       await conn.query(`
         UPDATE orders
         SET paid_amount = ?,
             remaining_amount = ?,
             payment_status = ?,
+            paid_cash = ?,
+            paid_card = ?,
             paid_at = CASE WHEN ? = 'paid' AND paid_at IS NULL THEN NOW() ELSE paid_at END
         WHERE id = ?
-      `, [newPaidAmount, newRemainingAmount, newPaymentStatus, newPaymentStatus, id]);
+      `, [newPaidAmount, newRemainingAmount, newPaymentStatus, partialCash, partialCard, newPaymentStatus, id]);
     }
 
     await conn.commit();
@@ -6125,39 +6282,51 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
       }
     }
 
-    // فاتورة اشتراك جديد أو تجديد: إلغاء فترة الاشتراك واسترجاع الرصيد
+    // فاتورة اشتراك جديد أو تجديد: خصم رصيد الباقة الممنوح من رصيد الاشتراك
+    // (نخصم credit_value_granted — قيمة الباقة المضافة عند الشراء — وليس مبلغ الفاتورة)
     let subscriptionPeriodCancelled = false;
     if (isSubInvoice && orderRow.subscription_period_id) {
       try {
         const [[periodRow]] = await conn.query(
-          `SELECT sp.id, sp.credit_remaining, sp.customer_subscription_id FROM subscription_periods sp WHERE sp.id = ? FOR UPDATE`,
+          `SELECT sp.id, sp.credit_remaining, sp.credit_value_granted, sp.customer_subscription_id FROM subscription_periods sp WHERE sp.id = ? FOR UPDATE`,
           [orderRow.subscription_period_id]
         );
         if (periodRow) {
+          const currentBalance = Number(periodRow.credit_remaining) || 0;
+          const packageCredit = Number(periodRow.credit_value_granted) || 0;
+          const refundAmt = Math.min(packageCredit, currentBalance);
+          const newBalance = Math.round((currentBalance - refundAmt) * 100) / 100;
+          const willClose = newBalance <= 0;
+
           await conn.query(
-            `UPDATE subscription_periods SET status = 'closed', credit_remaining = 0 WHERE id = ?`,
-            [orderRow.subscription_period_id]
+            `UPDATE subscription_periods SET ${willClose ? "status = 'closed', " : ''}credit_remaining = ? WHERE id = ?`,
+            [newBalance, orderRow.subscription_period_id]
           );
+
           const pkgName = orderRow.notes || '';
-          const cancelNote = `إلغاء اشتراك${pkgName ? ' (' + pkgName + ')' : ''} بموجب إشعار دائن ${cnNumber}`;
+          const refundNote = willClose
+            ? `إلغاء اشتراك${pkgName ? ' (' + pkgName + ')' : ''} بموجب إشعار دائن ${cnNumber}`
+            : `استرجاع باقة${pkgName ? ' (' + pkgName + ')' : ''} بموجب إشعار دائن ${cnNumber}`;
+
           await conn.query(
             `INSERT INTO subscription_ledger
                (subscription_period_id, entry_type, amount, balance_after, ref_type, ref_id, notes, created_by)
-             VALUES (?, 'refund', ?, 0, 'credit_note', ?, ?, ?)`,
+             VALUES (?, 'refund', ?, ?, 'credit_note', ?, ?, ?)`,
             [orderRow.subscription_period_id,
-             Number(periodRow.credit_remaining) || 0, cnId, cancelNote, createdBy || 'system']
+             refundAmt, newBalance, cnId, refundNote, createdBy || 'system']
           );
-          subscriptionPeriodCancelled = true;
+
+          subscriptionPeriodCancelled = willClose;
           subscriptionRefund = subscriptionRefund || {
-            amount: Number(periodRow.credit_remaining) || 0,
-            newBalance: 0,
+            amount: refundAmt,
+            newBalance,
             periodId: orderRow.subscription_period_id,
             originalInvoiceSeq: orderRow.invoice_seq,
-            note: cancelNote
+            note: refundNote
           };
         }
       } catch (cancelErr) {
-        console.error('subscription period cancel on credit note error:', cancelErr);
+        console.error('subscription period refund on credit note error:', cancelErr);
       }
     }
 
@@ -6911,6 +7080,10 @@ module.exports = {
   getLoyaltySettings, saveLoyaltySettings, getCustomerLoyaltyBalance, getLoyaltyTransactions,
   // System Restore
   systemRestore,
+  // Accounts (Trial / Subscription)
+  registerAccount, checkTrialAccess,
+  // License
+  isSerialLicensed,
 };
 
 // ── System Restore ───────────────────────────────────────────────────────────
@@ -7068,6 +7241,9 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const cnParams        = [...params];
   const subWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'sl.created_at')}`;
   const subParams       = [...params];
+  const ipDateWhere     = dateWhere.replace(/created_at/g, 'ip.payment_date');
+  const partialWhere    = `WHERE 1=1${ipDateWhere} AND o.payment_status IN ('partial', 'pending')`;
+  const partialParams   = [...params];
 
   const [[ordersSummary]] = await pool.query(`
     SELECT
@@ -7099,17 +7275,37 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   `, cnParams);
 
   const [paymentMethods] = await pool.query(`
-    SELECT
-      COALESCE(o.payment_method, 'cash')          AS method,
-      COUNT(*)                                     AS count,
-      COALESCE(SUM(o.total_amount), 0)             AS total_after_tax,
-      COALESCE(SUM(o.total_amount - o.vat_amount), 0) AS total_before_tax,
-      COALESCE(SUM(o.vat_amount), 0)               AS total_tax
-    FROM orders o
-    ${pmWhere}
-    GROUP BY COALESCE(o.payment_method, 'cash')
+    SELECT method, COUNT(*) AS count,
+      COALESCE(SUM(total_after_tax), 0)  AS total_after_tax,
+      COALESCE(SUM(total_before_tax), 0) AS total_before_tax,
+      COALESCE(SUM(total_tax), 0)        AS total_tax
+    FROM (
+      SELECT COALESCE(o.payment_method,'cash') AS method, 1 AS count,
+        CASE WHEN COALESCE(o.payment_method,'cash') IN ('credit','deferred')
+             THEN o.remaining_amount ELSE o.total_amount END AS total_after_tax,
+        CASE WHEN COALESCE(o.payment_method,'cash') IN ('credit','deferred')
+             THEN o.remaining_amount - o.remaining_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+             ELSE o.total_amount - o.vat_amount END AS total_before_tax,
+        CASE WHEN COALESCE(o.payment_method,'cash') IN ('credit','deferred')
+             THEN o.remaining_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+             ELSE o.vat_amount END AS total_tax
+      FROM orders o ${pmWhere} AND COALESCE(o.payment_method,'cash') != 'mixed'
+      UNION ALL
+      SELECT 'cash', 1,
+        o.paid_cash,
+        o.paid_cash - o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
+        o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_cash > 0
+      UNION ALL
+      SELECT 'card', 1,
+        o.paid_card,
+        o.paid_card - o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
+        o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_card > 0
+    ) AS pm_rows
+    GROUP BY method
     ORDER BY total_after_tax DESC
-  `, pmParams);
+  `, [...pmParams, ...pmParams, ...pmParams]);
 
   const [invoices] = await pool.query(`
     SELECT o.id, o.invoice_seq, o.order_number, o.subtotal, o.discount_amount,
@@ -7156,6 +7352,41 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
     ORDER BY sl.created_at DESC
   `, subParams);
 
+  const [partialByMethod] = await pool.query(`
+    SELECT method, COUNT(*) AS count,
+      COALESCE(SUM(total_after_tax), 0) AS total_after_tax,
+      COALESCE(SUM(total_tax), 0)       AS total_tax
+    FROM (
+      SELECT ip.payment_method AS method, 1 AS count,
+        ip.payment_amount AS total_after_tax,
+        ip.payment_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)) AS total_tax
+      FROM invoice_payments ip INNER JOIN orders o ON o.id = ip.order_id
+      ${partialWhere} AND ip.payment_method != 'mixed'
+      UNION ALL
+      SELECT 'cash', 1,
+        ip.cash_amount,
+        ip.cash_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM invoice_payments ip INNER JOIN orders o ON o.id = ip.order_id
+      ${partialWhere} AND ip.payment_method = 'mixed' AND ip.cash_amount > 0
+      UNION ALL
+      SELECT 'card', 1,
+        ip.card_amount,
+        ip.card_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM invoice_payments ip INNER JOIN orders o ON o.id = ip.order_id
+      ${partialWhere} AND ip.payment_method = 'mixed' AND ip.card_amount > 0
+    ) AS pb_rows
+    GROUP BY method
+  `, [...partialParams, ...partialParams, ...partialParams]);
+
+  const [[partialTotalRow]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(ip.payment_amount), 0) AS partial_total,
+      COALESCE(SUM(ip.payment_amount * IFNULL(o.vat_rate,0) / (100 + IFNULL(o.vat_rate,0))), 0) AS partial_tax
+    FROM invoice_payments ip
+    INNER JOIN orders o ON o.id = ip.order_id
+    ${partialWhere}
+  `, partialParams);
+
   const salesBeforeTax  = Number(ordersSummary.sales_before_tax);
   const salesTax        = Number(ordersSummary.sales_tax);
   const salesAfterTax   = Number(ordersSummary.sales_after_tax);
@@ -7166,6 +7397,9 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const cnBeforeTax     = Number(cnSummary.cn_before_tax);
   const cnTax           = Number(cnSummary.cn_tax);
   const cnAfterTax      = Number(cnSummary.cn_after_tax);
+  const partialAfterTax  = Number(partialTotalRow.partial_total);
+  const partialTax       = Number(partialTotalRow.partial_tax);
+  const partialBeforeTax = Math.round((partialAfterTax - partialTax) * 100) / 100;
 
   const salesNetBeforeTax = salesBeforeTax - discountTotal;
   const salesNetTax       = salesTax;
@@ -7179,28 +7413,49 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const subBeforeTax = subAfterTax / 1.15;
   const subTax       = subAfterTax - subBeforeTax;
 
-  const netBeforeTax = totalNetBeforeTax + subBeforeTax - expBeforeTax;
-  const netTax       = totalNetTax + subTax - expTax;
-  const netAfterTax  = totalNetAfterTax + subAfterTax - expAfterTax;
+  const netBeforeTax = totalNetBeforeTax + subBeforeTax - expBeforeTax + partialBeforeTax;
+  const netTax       = totalNetTax + subTax - expTax + partialTax;
+  const netAfterTax  = totalNetAfterTax + subAfterTax - expAfterTax + partialAfterTax;
+
+  // دمج الدفعات الجزئية مع طرق الدفع
+  const pmMap = new Map(paymentMethods.map(r => [r.method, {
+    method: r.method, count: Number(r.count),
+    totalAfterTax: Number(r.total_after_tax),
+    totalBeforeTax: Number(r.total_before_tax),
+    totalTax: Number(r.total_tax),
+  }]));
+  for (const pp of partialByMethod) {
+    const m = pp.method || 'cash';
+    if (pmMap.has(m)) {
+      const ex = pmMap.get(m);
+      ex.count += Number(pp.count);
+      ex.totalAfterTax  = Math.round((ex.totalAfterTax  + Number(pp.total_after_tax)) * 100) / 100;
+      ex.totalTax       = Math.round((ex.totalTax       + Number(pp.total_tax || 0)) * 100) / 100;
+      ex.totalBeforeTax = Math.round((ex.totalBeforeTax + Number(pp.total_after_tax) - Number(pp.total_tax || 0)) * 100) / 100;
+    } else {
+      pmMap.set(m, {
+        method: m, count: Number(pp.count),
+        totalAfterTax:  Number(pp.total_after_tax),
+        totalBeforeTax: Math.round((Number(pp.total_after_tax) - Number(pp.total_tax || 0)) * 100) / 100,
+        totalTax:       Number(pp.total_tax || 0),
+      });
+    }
+  }
+  const mergedPaymentMethods = Array.from(pmMap.values()).sort((a, b) => b.totalAfterTax - a.totalAfterTax);
 
   return {
     summary: {
-      sales:           { beforeTax: salesBeforeTax,  tax: salesTax,  afterTax: salesAfterTax },
-      discounts:       { beforeTax: discountTotal,   tax: 0,         afterTax: discountTotal },
+      sales:           { beforeTax: salesBeforeTax,    tax: salesTax,    afterTax: salesAfterTax },
+      discounts:       { beforeTax: discountTotal,     tax: 0,           afterTax: discountTotal },
       salesAfterDisc:  { beforeTax: salesNetBeforeTax, tax: salesNetTax, afterTax: salesNetAfterTax },
-      creditNotes:     { beforeTax: cnBeforeTax,     tax: cnTax,     afterTax: cnAfterTax },
+      creditNotes:     { beforeTax: cnBeforeTax,       tax: cnTax,       afterTax: cnAfterTax },
       totalNet:        { beforeTax: totalNetBeforeTax, tax: totalNetTax, afterTax: totalNetAfterTax },
-      subscriptions:   { beforeTax: subBeforeTax,  tax: subTax,    afterTax: subAfterTax },
-      expenses:        { beforeTax: expBeforeTax,    tax: expTax,    afterTax: expAfterTax },
-      net:             { beforeTax: netBeforeTax,    tax: netTax,    afterTax: netAfterTax },
+      partialPayments: { beforeTax: partialBeforeTax,  tax: partialTax,  afterTax: partialAfterTax },
+      subscriptions:   { beforeTax: subBeforeTax,      tax: subTax,      afterTax: subAfterTax },
+      expenses:        { beforeTax: expBeforeTax,      tax: expTax,      afterTax: expAfterTax },
+      net:             { beforeTax: netBeforeTax,      tax: netTax,      afterTax: netAfterTax },
     },
-    paymentMethods: paymentMethods.map((r) => ({
-      method:         r.method,
-      count:          Number(r.count),
-      totalAfterTax:  Number(r.total_after_tax),
-      totalBeforeTax: Number(r.total_before_tax),
-      totalTax:       Number(r.total_tax),
-    })),
+    paymentMethods: mergedPaymentMethods,
     invoices,
     expenses,
     creditNotes,

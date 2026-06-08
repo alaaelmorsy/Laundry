@@ -144,7 +144,9 @@ async function invoke(method, payload, _user) {
         whatsappSendOnDeliver:      data.whatsappSendOnDeliver,
         whatsappSendOnSubscription: data.whatsappSendOnSubscription,
         whatsappSendOnPay:          data.whatsappSendOnPay,
-        whatsappInvoiceMessage:     data.whatsappInvoiceMessage
+        whatsappInvoiceMessage:     data.whatsappInvoiceMessage,
+        dayResetHour:               data.dayResetHour,
+        dayResetTime:               data.dayResetTime
       };
       if (data.removeLogo === true) {
         savePayload.clearLogo = true;
@@ -372,13 +374,17 @@ async function invoke(method, payload, _user) {
       } catch (err) {
         const msg = String(err.message || err);
         let friendly = 'حدث خطأ أثناء الحذف';
-        if (msg.includes('foreign key constraint fails')) {
+        if (msg.includes('foreign key constraint fails') || msg.includes('foreign key constraint')) {
           if (msg.includes('customer_subscriptions')) {
-            friendly = 'لا يمكن حذف العميل لأنه مرتبط باشتراك';
+            friendly = 'لا يمكن حذف العميل لأنه مرتبط باشتراك نشط';
+          } else if (msg.includes('consumption_receipts')) {
+            friendly = 'لا يمكن حذف العميل لأنه يملك ايصالات استهلاك';
+          } else if (msg.includes('subscription_invoices')) {
+            friendly = 'لا يمكن حذف العميل لأنه يملك فواتير اشتراك';
           } else if (msg.includes('orders')) {
             friendly = 'لا يمكن حذف العميل لأنه مرتبط بفواتير';
           } else {
-            friendly = 'لا يمكن حذف العميل لأنه مرتبط ببيانات أخرى';
+            friendly = 'لا يمكن حذف العميل لأنه مرتبط ببيانات في النظام';
           }
         }
         return { success: false, message: friendly };

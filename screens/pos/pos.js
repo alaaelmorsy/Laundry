@@ -2109,6 +2109,8 @@
     if (data.starch)      a4mText('a4mStarch',      data.starch);
     a4mShow('a4mRowBluing',      !!data.bluing);
     if (data.bluing)      a4mText('a4mBluing',      data.bluing);
+    a4mShow('a4mRowCashier',     !!data.cashierName);
+    if (data.cashierName) a4mText('a4mCashierName', data.cashierName);
     (function() {
       var section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
       if (!section) return;
@@ -2286,6 +2288,21 @@
     }
   }
 
+  function fillCrModalShopExtra(s) {
+    var vatEl    = document.getElementById('crModalVatNumber');
+    var vatRow   = document.getElementById('crModalVatRow');
+    var crEl     = document.getElementById('crModalCR');
+    var crRow    = document.getElementById('crModalCRRow');
+    var emailEl  = document.getElementById('crModalShopEmail');
+    var emailRow = document.getElementById('crModalEmailRow');
+    if (vatEl)    vatEl.textContent  = s.vatNumber          ? 'الرقم الضريبي: ' + s.vatNumber          : '';
+    if (vatRow)   vatRow.style.display  = s.vatNumber          ? '' : 'none';
+    if (crEl)     crEl.textContent   = s.commercialRegister ? 'السجل التجاري: ' + s.commercialRegister : '';
+    if (crRow)    crRow.style.display   = s.commercialRegister ? '' : 'none';
+    if (emailEl)  emailEl.textContent = s.email             ? s.email                                   : '';
+    if (emailRow) emailRow.style.display = s.email          ? '' : 'none';
+  }
+
   /* ========== FILL & SHOW INVOICE MODAL ========== */
   function formatInvoiceDate(dateStr) {
     var d = dateStr ? new Date(dateStr) : new Date();
@@ -2409,6 +2426,7 @@
       crLogo.src = s.logoDataUrl;
       if (crLogoWrap) crLogoWrap.style.display = '';
     } else if (crLogoWrap) crLogoWrap.style.display = 'none';
+    fillCrModalShopExtra(s);
 
     // Ensure modal is in "consumption" mode (hide refund-only UI).
     if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
@@ -2635,6 +2653,7 @@
     } else if (crLogoWrap) {
       crLogoWrap.style.display = 'none';
     }
+    fillCrModalShopExtra(s);
 
     // Title
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
@@ -2751,7 +2770,7 @@
     els.invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     if (s.commercialRegister) {
-      els.invCR.textContent = s.commercialRegister;
+      els.invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
       els.invCRRow.style.display = '';
     } else {
       els.invCRRow.style.display = 'none';
@@ -2975,6 +2994,19 @@
       if (els.btnPrintHangerTicket) els.btnPrintHangerTicket.style.display = 'none';
     }
 
+    /* ── Cashier ── */
+    var invCashierRow  = document.getElementById('invCashierRow');
+    var invCashierName = document.getElementById('invCashierName');
+    if (invCashierRow && invCashierName) {
+      var cashier = (window.__currentUser && (window.__currentUser.full_name || window.__currentUser.username)) || '';
+      if (cashier) {
+        invCashierName.textContent = cashier;
+        invCashierRow.style.display = '';
+      } else {
+        invCashierRow.style.display = 'none';
+      }
+    }
+
     /* ── Deferred dates (paid / cleaned / delivered) ── */
     var dd = deferredDates || {};
     if (dd.paidAt) {
@@ -2998,13 +3030,15 @@
 
     /* ── Invoice notes (per-order) ── */
     var invInvoiceNotes = document.getElementById('invInvoiceNotes');
-    if (invInvoiceNotes) {
+    if (invInvoiceNotes) invInvoiceNotes.style.display = 'none';
+    var invNotesGridRow = document.getElementById('invNotesGridRow');
+    var invNotesGridContent = document.getElementById('invNotesGridContent');
+    if (invNotesGridRow) {
       if (invoiceNotes) {
-        var invInvoiceNotesContent = document.getElementById('invInvoiceNotesContent');
-        if (invInvoiceNotesContent) invInvoiceNotesContent.textContent = invoiceNotes;
-        invInvoiceNotes.style.display = '';
+        if (invNotesGridContent) invNotesGridContent.textContent = invoiceNotes;
+        invNotesGridRow.style.display = '';
       } else {
-        invInvoiceNotes.style.display = 'none';
+        invNotesGridRow.style.display = 'none';
       }
     }
 
@@ -3054,8 +3088,6 @@
       if (!grid) return;
       var cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
       cells.forEach(function(c) { c.style.gridColumn = ''; });
-      var visible = cells.filter(function(c) { return c.style.display !== 'none'; });
-      if (visible.length % 2 !== 0) visible[visible.length - 1].style.gridColumn = '1 / -1';
     })();
 
     /* ── ZATCA QR — use stored zatcaQr from createOrder result when available ── */
@@ -3164,6 +3196,7 @@
       loyaltyRedeemed:  totals.loyaltyRedeemed || 0,
       loyaltyDiscount:  totals.loyaltyDiscount || 0,
       loyaltyBalance:   state.customerLoyaltyBalance - (totals.loyaltyRedeemed || 0) + (totals.loyaltyEarned || 0),
+      cashierName:      (window.__currentUser && (window.__currentUser.full_name || window.__currentUser.username)) || '',
       autoPrint: false
     };
 
@@ -4055,7 +4088,7 @@
     els.invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     if (s.commercialRegister) {
-      els.invCR.textContent = s.commercialRegister;
+      els.invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
       els.invCRRow.style.display = '';
     } else {
       els.invCRRow.style.display = 'none';
@@ -4073,11 +4106,17 @@
       }
     } else {
       els.invCustomerSection.style.display = 'none';
+      els.invCustNameRow.style.display = 'none';
+      els.invCustPhoneRow.style.display = 'none';
     }
 
-    // عرض الرصيد المتبقي بعد الاسترجاع
+    // إخفاء رقم الاشتراك دائماً في إشعار الدائن
+    els.invSubRefRow.style.display = 'none';
+
+    // عرض الرصيد المتبقي بعد الاسترجاع — يظهر فقط إذا تبقى رصيد فعلي
+    // (في حالة إلغاء الاشتراك بالكامل يكون newBalance=0 ولا داعي لعرضه)
     var subRefund = cnRes && cnRes.subscriptionRefund;
-    if (subRefund && Number(subRefund.amount) > 0) {
+    if (subRefund && Number(subRefund.amount) > 0 && Number(subRefund.newBalance) > 0) {
       els.invCustomerSection.style.display = '';
       els.invSubBalance.innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(subRefund.newBalance);
       els.invSubBalRow.style.display = '';
@@ -4091,8 +4130,6 @@
       if (!grid) return;
       var cells = Array.from(grid.querySelectorAll('.cr-info-cell'));
       cells.forEach(function(c) { c.style.gridColumn = ''; });
-      var visible = cells.filter(function(c) { return c.style.display !== 'none'; });
-      if (visible.length % 2 !== 0) visible[visible.length - 1].style.gridColumn = '1 / -1';
     })();
 
     var sarHtml = '<span class="sar">&#xE900;</span>';
@@ -4223,13 +4260,15 @@
     }
 
     var invInvoiceNotes = document.getElementById('invInvoiceNotes');
-    if (invInvoiceNotes) {
+    if (invInvoiceNotes) invInvoiceNotes.style.display = 'none';
+    var invNotesGridRow = document.getElementById('invNotesGridRow');
+    var invNotesGridContent = document.getElementById('invNotesGridContent');
+    if (invNotesGridRow) {
       if (inv.notes) {
-        var invInvoiceNotesContent = document.getElementById('invInvoiceNotesContent');
-        if (invInvoiceNotesContent) invInvoiceNotesContent.textContent = inv.notes;
-        invInvoiceNotes.style.display = '';
+        if (invNotesGridContent) invNotesGridContent.textContent = inv.notes;
+        invNotesGridRow.style.display = '';
       } else {
-        invInvoiceNotes.style.display = 'none';
+        invNotesGridRow.style.display = 'none';
       }
     }
 
@@ -4393,8 +4432,16 @@
     }
 
     els.btnClearCart.addEventListener('click', () => {
-      if (!confirm(t('pos-confirm-clear'))) return;
-      clearCart();
+      const modal = document.getElementById('clearCartModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('clearCartConfirmBtn').onclick = () => { modal.style.display = 'none'; clearCart(); };
+        document.getElementById('clearCartCancelBtn').onclick = () => { modal.style.display = 'none'; };
+        modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+      } else {
+        if (!confirm(t('pos-confirm-clear'))) return;
+        clearCart();
+      }
     });
 
     if (els.btnProcessInvoice) {
@@ -5565,6 +5612,7 @@
     const crLogo = document.getElementById('crModalLogo');
     if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
     else if (crLogoWrap) crLogoWrap.style.display = 'none';
+    fillCrModalShopExtra(s);
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
     if (titleEl) titleEl.textContent = 'إيصال استهلاك';
@@ -5609,8 +5657,6 @@
       if (!g) return;
       var cs = Array.from(g.querySelectorAll('.cr-info-cell'));
       cs.forEach(function(c) { c.style.gridColumn = ''; });
-      var vis = cs.filter(function(c) { return c.style.display !== 'none'; });
-      if (vis.length % 2 !== 0) vis[vis.length - 1].style.gridColumn = '1 / -1';
     })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';
@@ -5643,6 +5689,7 @@
     const crLogo = document.getElementById('crModalLogo');
     if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
     else if (crLogoWrap) crLogoWrap.style.display = 'none';
+    fillCrModalShopExtra(s);
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
     if (titleEl) titleEl.textContent = 'إيصال استهلاك';
@@ -5687,8 +5734,6 @@
       if (!g) return;
       var cs = Array.from(g.querySelectorAll('.cr-info-cell'));
       cs.forEach(function(c) { c.style.gridColumn = ''; });
-      var vis = cs.filter(function(c) { return c.style.display !== 'none'; });
-      if (vis.length % 2 !== 0) vis[vis.length - 1].style.gridColumn = '1 / -1';
     })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';

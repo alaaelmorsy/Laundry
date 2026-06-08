@@ -91,11 +91,156 @@ async function start() {
 
   app.use(express.static(ROOT, { index: false }));
 
+  app.get('/api/accounts/trial-status', async (req, res) => {
+    try {
+      const settings = await db.getAppSettings();
+      if (!settings.trialModeEnabled) {
+        return res.json({ trialModeEnabled: false });
+      }
+      // تحقق من IP الزائر الحالي فقط
+      const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                 || req.ip
+                 || req.connection?.remoteAddress
+                 || null;
+      const ip = rawIp ? rawIp.replace(/^::ffff:/, '') : null;
+
+      if (!ip) {
+        return res.json({ trialModeEnabled: true, hasAccount: false, active: false, daysLeft: 0 });
+      }
+
+      const [[row]] = await db.pool.query(`
+        SELECT status, trial_end_date,
+               GREATEST(0, DATEDIFF(trial_end_date, NOW())) AS days_left
+        FROM accounts
+        WHERE ip_address = ?
+        LIMIT 1
+      `, [ip]);
+
+      if (!row) {
+        // هذا الجهاز لم يسجل بعد — اعرض زر التسجيل
+        return res.json({ trialModeEnabled: true, hasAccount: false, active: false, daysLeft: 0 });
+      }
+
+      const active = row.status === 'Active' || (row.status === 'Trial' && Number(row.days_left) >= 0 && new Date(row.trial_end_date) >= new Date());
+      return res.json({
+        trialModeEnabled: true,
+        hasAccount: true,
+        active,
+        status: row.status,
+        daysLeft: Number(row.days_left)
+      });
+    } catch (err) {
+      console.error('trial-status', err);
+      return res.json({ trialModeEnabled: false });
+    }
+  });
+
+  app.get('/api/license/check', async (_req, res) => {
+    try {
+      const si = require('systeminformation');
+      const [disk, net, board] = await Promise.all([
+        si.diskLayout(),
+        si.networkInterfaces(),
+        si.baseboard()
+      ]);
+
+      const diskSerial  = (disk[0]?.serialNum  || '').trim();
+      const macAddress  = (Array.isArray(net) ? net.find(n => !n.virtual && n.mac && n.mac !== '00:00:00:00:00:00') : null)?.mac?.trim() || '';
+      const boardSerial = (board?.serial || '').trim();
+
+      const serials = [diskSerial, macAddress, boardSerial].filter(Boolean);
+      const licensed = await db.isSerialLicensed(serials);
+      return res.json({ licensed });
+    } catch (err) {
+      console.error('[license/check]', err);
+      return res.json({ licensed: false });
+    }
+  });
+
+  app.get('/api/app/day-reset-hour', async (_req, res) => {
+    try {
+      const settings = await db.getAppSettings();
+      return res.json({ success: true, dayResetHour: settings.dayResetHour, dayResetTime: settings.dayResetTime });
+    } catch (err) {
+      console.error('day-reset-hour', err);
+      return res.json({ success: false, dayResetHour: null });
+    }
+  });
+
+  app.get('/api/app/support-info', async (_req, res) => {
+    try {
+      const settings = await db.getAppSettings();
+      const expiry = settings.supportExpiryDate;
+      if (!expiry) return res.json({ hasExpiry: false });
+      const expiryDate = new Date(expiry);
+      expiryDate.setHours(23, 59, 59, 999);
+      const now = new Date();
+      const msLeft = expiryDate - now;
+      const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+      return res.json({
+        hasExpiry: true,
+        date: expiry,
+        daysLeft,
+        expired: daysLeft < 0
+      });
+    } catch (err) {
+      console.error('support-info', err);
+      return res.json({ hasExpiry: false });
+    }
+  });
+
+  app.post('/api/accounts/register', loginLimiter, async (req, res) => {
+    try {
+      const { name, phone, password } = req.body || {};
+      if (!name || !phone || !password) {
+        return res.json({ success: false, message: 'جميع الحقول مطلوبة' });
+      }
+      if (String(phone).replace(/\D/g, '').length < 9) {
+        return res.json({ success: false, message: 'رقم الجوال غير صحيح' });
+      }
+      const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                 || req.ip
+                 || req.connection?.remoteAddress
+                 || null;
+      const ip = rawIp ? rawIp.replace(/^::ffff:/, '') : null;
+      await db.registerAccount({ name: String(name).trim(), phone: String(phone).trim(), password, ip });
+      return res.json({ success: true });
+    } catch (err) {
+      if (err.code === 'PHONE_EXISTS') {
+        return res.json({ success: false, message: 'رقم الجوال مسجل مسبقاً' });
+      }
+      if (err.code === 'IP_EXISTS') {
+        return res.json({ success: false, message: 'تم تسجيل حساب تجريبي مسبقاً من هذا الجهاز' });
+      }
+      console.error('register-account', err);
+      return res.json({ success: false, message: 'حدث خطأ، حاول مرة أخرى' });
+    }
+  });
+
   app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
       const { username, password } = req.body || {};
       if (!username || !password) {
         return res.json({ success: false, message: 'أدخل اسم المستخدم وكلمة المرور' });
+      }
+      const settings = await db.getAppSettings();
+      if (settings.trialModeEnabled) {
+        const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                   || req.ip
+                   || req.connection?.remoteAddress
+                   || null;
+        const ip = rawIp ? rawIp.replace(/^::ffff:/, '') : null;
+        const access = await db.checkTrialAccess(ip);
+        if (!access.allowed) {
+          return res.json({
+            success: false,
+            trialExpired: !access.needsRegistration,
+            needsRegistration: access.needsRegistration,
+            message: access.needsRegistration
+              ? 'يجب التسجيل أولاً للحصول على نسخة تجريبية لهذا الجهاز'
+              : 'انتهت فترة التجربة المجانية'
+          });
+        }
       }
       const user = await db.findUser(String(username).trim(), password);
       if (!user) {

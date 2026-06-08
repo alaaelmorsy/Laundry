@@ -812,8 +812,8 @@
       }
     }
 
-    if (s.commercialRegister) { els.invCR.textContent = s.commercialRegister; els.invCRRow.style.display = ''; }
-    else els.invCRRow.style.display = 'none';
+    if (s.commercialRegister) { els.invCR.textContent = 'السجل التجاري: ' + s.commercialRegister; els.invCR.style.display = ''; }
+    else els.invCR.style.display = 'none';
 
     if (s.logoDataUrl) { els.invLogo.src = s.logoDataUrl; els.invLogoWrap.style.display = ''; }
     else els.invLogoWrap.style.display = 'none';
@@ -1057,8 +1057,8 @@
       }
     }
 
-    if (s.commercialRegister) { els.cnCR.textContent = s.commercialRegister; els.cnCRRow.style.display = ''; }
-    else els.cnCRRow.style.display = 'none';
+    if (s.commercialRegister) { els.cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; els.cnCR.style.display = ''; }
+    else els.cnCR.style.display = 'none';
 
     if (s.logoDataUrl) { els.cnLogo.src = s.logoDataUrl; els.cnLogoWrap.style.display = ''; }
     else els.cnLogoWrap.style.display = 'none';

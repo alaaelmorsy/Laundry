@@ -759,6 +759,28 @@
   </div>
 </div>
 
+<!-- ===== CLEAR CART CONFIRM MODAL ===== -->
+<div id="clearCartModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:360px">
+    <div class="modal-body" style="text-align:center; padding:28px 24px 20px">
+      <div class="confirm-modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+      </div>
+      <h3 class="confirm-modal-title" data-i18n="pos-confirm-clear-title">مسح السلة</h3>
+      <p class="confirm-modal-msg" data-i18n="pos-confirm-clear">هل تريد مسح السلة بالكامل؟</p>
+    </div>
+    <div class="modal-footer" style="justify-content:center; gap:10px">
+      <button id="clearCartConfirmBtn" class="btn-modal-save btn-modal-danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        <span data-i18n="pos-confirm-clear-yes">نعم، امسح</span>
+      </button>
+      <button id="clearCartCancelBtn" class="btn-modal-cancel" data-i18n="pos-confirm-clear-no">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== ADD CUSTOMER MODAL ===== -->
 <div id="addCustomerModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
   <div class="modal-box modal-wide">
@@ -1066,9 +1088,21 @@
           </div>
           <div class="inv-shop-name" id="crModalShopName"></div>
           <div class="inv-shop-sub" id="crModalShopAddress"></div>
-          <div class="inv-shop-contact-row">
+          <div class="inv-shop-contact-row" id="crModalPhoneRow">
             <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             <span class="inv-shop-sub" id="crModalShopPhone"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="crModalVatRow" style="display:none">
+            <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+            <span class="inv-shop-sub" id="crModalVatNumber" dir="ltr"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="crModalCRRow" style="display:none">
+            <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <span class="inv-shop-sub" id="crModalCR" dir="ltr"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="crModalEmailRow" style="display:none">
+            <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <span class="inv-shop-sub" id="crModalShopEmail"></span>
           </div>
         </div>
         <div class="inv-divider-thick inv-sep"></div>
@@ -1233,6 +1267,10 @@
             <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
             <span class="inv-shop-sub" id="invVatNumber" dir="ltr"></span>
           </div>
+          <div class="inv-shop-contact-row" id="invCRRow" style="display:none">
+            <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <span class="inv-shop-sub" id="invCR" dir="ltr"></span>
+          </div>
           <div class="inv-shop-contact-row" id="invEmailRow">
             <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             <span class="inv-shop-sub" id="invShopEmail"></span>
@@ -1263,13 +1301,17 @@
             <span class="cr-info-label">التاريخ</span>
             <span class="cr-info-val" id="invDate" dir="ltr"></span>
           </div>
-          <div class="cr-info-cell">
+          <div class="cr-info-cell" id="invPaymentCell">
             <span class="cr-info-label">طريقة الدفع</span>
             <span class="cr-info-val" id="invPayment"></span>
           </div>
           <div class="cr-info-cell" id="invHangerRow" style="display:none">
             <span class="cr-info-label">رقم الشماعة</span>
             <span class="cr-info-val" id="invHangerNum"></span>
+          </div>
+          <div class="cr-info-cell" id="invCashierRow" style="display:none">
+            <span class="cr-info-label">الكاشير</span>
+            <span class="cr-info-val" id="invCashierName"></span>
           </div>
           <div class="cr-info-cell" id="invCustNameRow" style="display:none">
             <span class="cr-info-label">الاسم</span>
@@ -1303,9 +1345,9 @@
             <span class="cr-info-label">تاريخ التسليم</span>
             <span class="cr-info-val" id="invDeliveredAt" dir="ltr"></span>
           </div>
-          <div class="cr-info-cell" id="invCRRow" style="display:none">
-            <span class="cr-info-label">السجل التجاري</span>
-            <span class="cr-info-val" id="invCR" dir="ltr"></span>
+          <div class="cr-info-cell" id="invNotesGridRow" style="display:none">
+            <span class="cr-info-label">ملاحظات</span>
+            <span class="cr-info-val" id="invNotesGridContent"></span>
           </div>
         </div>
 
@@ -1474,6 +1516,7 @@
             <div class="a4m-kv" id="a4mRowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="a4mDeliveredAt" dir="ltr"></b></div>
             <div class="a4m-kv" id="a4mRowStarch" style="display:none"><span>نشا / Starch</span><b id="a4mStarch"></b></div>
             <div class="a4m-kv" id="a4mRowBluing" style="display:none"><span>النيلة / Bluing</span><b id="a4mBluing"></b></div>
+            <div class="a4m-kv" id="a4mRowCashier" style="display:none"><span>الكاشير / Cashier</span><b id="a4mCashierName"></b></div>
           </div>
         </section>
 

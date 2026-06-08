@@ -813,6 +813,16 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
           <span class="tab-lbl">نقاط الولاء</span>
         </button>
 
+        <button type="button" class="side-tab" data-panel="closing" id="tabClosing">
+          <span class="tab-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </span>
+          <span class="tab-lbl">ساعة الإقفال</span>
+        </button>
+
         <button type="button" class="side-tab" data-panel="systemRestore" id="tabSystemRestore">
           <span class="tab-ico">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1491,6 +1501,57 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
       </div>
 
       <!-- ════ PANEL: SYSTEM RESTORE ════ -->
+      <!-- ════ PANEL: CLOSING HOUR ════ -->
+      <div class="panel" id="panelClosing" role="tabpanel">
+        <div class="card">
+          <div class="card-hdr">
+            <div class="c-ico" style="background:linear-gradient(135deg,#0369a1,#0ea5e9)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div>
+              <div class="c-tit">ساعة الإقفال اليومي</div>
+              <div class="c-sub">يبدأ التقرير اليومي من هذا الوقت ولمدة 24 ساعة</div>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+              <label style="font-size:13px;color:var(--tx2);white-space:nowrap">وقت الإقفال</label>
+              <input type="time" id="closingTime" style="
+                height:42px;padding:0 14px;border-radius:10px;
+                border:1.5px solid var(--bdr);background:var(--bg);
+                color:var(--tx1);font-size:15px;font-weight:700;cursor:pointer;
+                direction:ltr;min-width:130px
+              "/>
+              <button type="button" id="btnClearClosing" style="
+                height:36px;padding:0 14px;border-radius:8px;
+                border:1.5px solid var(--bdr);background:transparent;
+                color:var(--tx3);font-size:12px;font-weight:700;cursor:pointer
+              ">مسح</button>
+            </div>
+
+            <!-- preview -->
+            <div id="closingPreview" style="
+              display:none;
+              background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;
+              padding:14px 18px;margin-bottom:20px;
+              font-size:13px;color:#0369a1;line-height:1.8
+            "></div>
+
+            <button type="button" id="btnSaveClosing" class="btn-primary" style="min-width:140px;padding:11px 28px;font-size:14px;border-radius:10px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              حفظ
+            </button>
+
+          </div>
+        </div>
+      </div>
+
       <div class="panel" id="panelSystemRestore" role="tabpanel">
         <div class="card">
           <div class="card-hdr">

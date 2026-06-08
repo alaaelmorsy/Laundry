@@ -5,12 +5,14 @@ window.addEventListener('DOMContentLoaded', () => {
   const tabPrinter = document.getElementById('tabPrinter');
   const tabReportEmail = document.getElementById('tabReportEmail');
   const tabLoyalty = document.getElementById('tabLoyalty');
+  const tabClosing = document.getElementById('tabClosing');
   const tabSystemRestore = document.getElementById('tabSystemRestore');
   const panelLaundry = document.getElementById('panelLaundry');
   const panelTax = document.getElementById('panelTax');
   const panelPrinter = document.getElementById('panelPrinter');
   const panelReportEmail = document.getElementById('panelReportEmail');
   const panelLoyalty = document.getElementById('panelLoyalty');
+  const panelClosing = document.getElementById('panelClosing');
   const panelSystemRestore = document.getElementById('panelSystemRestore');
   const btnSaveLaundry = document.getElementById('btnSaveLaundry');
   const btnSaveTax = document.getElementById('btnSaveTax');
@@ -192,7 +194,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function setPanel(name) {
-    [tabLaundry, tabTax, tabPrinter, tabReportEmail, tabLoyalty, tabSystemRestore].forEach((t) => {
+    [tabLaundry, tabTax, tabPrinter, tabReportEmail, tabLoyalty, tabClosing, tabSystemRestore].forEach((t) => {
       if (!t) return;
       t.classList.toggle('active', t.dataset.panel === name);
     });
@@ -201,6 +203,7 @@ window.addEventListener('DOMContentLoaded', () => {
     panelPrinter.classList.toggle('active', name === 'printer');
     if (panelReportEmail) panelReportEmail.classList.toggle('active', name === 'reportEmail');
     if (panelLoyalty) panelLoyalty.classList.toggle('active', name === 'loyalty');
+    if (panelClosing) panelClosing.classList.toggle('active', name === 'closing');
     if (panelSystemRestore) panelSystemRestore.classList.toggle('active', name === 'systemRestore');
   }
 
@@ -462,6 +465,7 @@ window.addEventListener('DOMContentLoaded', () => {
   tabPrinter.addEventListener('click', () => setPanel('printer'));
   if (tabReportEmail) tabReportEmail.addEventListener('click', () => setPanel('reportEmail'));
   if (tabLoyalty) tabLoyalty.addEventListener('click', () => setPanel('loyalty'));
+  if (tabClosing) tabClosing.addEventListener('click', () => setPanel('closing'));
   if (tabSystemRestore) tabSystemRestore.addEventListener('click', () => setPanel('systemRestore'));
 
   btnBack.addEventListener('click', () => window.api.navigateBack());
@@ -639,6 +643,85 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   loadLoyaltySettings();
+
+  // ═══ Closing Time Settings ═══
+  const closingTime    = document.getElementById('closingTime');
+  const btnClearClosing = document.getElementById('btnClearClosing');
+  const closingPreview = document.getElementById('closingPreview');
+  const btnSaveClosing = document.getElementById('btnSaveClosing');
+
+  function timeLabel(t) {
+    if (!t) return '—';
+    const [hh, mm] = t.split(':').map(Number);
+    const ampm = hh < 12 ? 'ص' : 'م';
+    const h12  = hh % 12 || 12;
+    return `${String(h12).padStart(2,'0')}:${String(mm).padStart(2,'0')} ${ampm}`;
+  }
+
+  function updateClosingPreview() {
+    if (!closingPreview || !closingTime) return;
+    const val = closingTime.value; // "HH:MM"
+    if (!val) { closingPreview.style.display = 'none'; return; }
+    const [rh, rm] = val.split(':').map(Number);
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const resetMins = rh * 60 + rm;
+    let periodStart, periodEnd;
+    if (nowMins >= resetMins) {
+      periodStart = new Date(now); periodStart.setHours(rh, rm, 0, 0);
+      periodEnd   = new Date(periodStart); periodEnd.setDate(periodEnd.getDate() + 1);
+    } else {
+      periodStart = new Date(now); periodStart.setDate(periodStart.getDate() - 1); periodStart.setHours(rh, rm, 0, 0);
+      periodEnd   = new Date(now); periodEnd.setHours(rh, rm, 0, 0);
+    }
+    const fmt = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${timeLabel(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)}`;
+    closingPreview.style.display = 'block';
+    closingPreview.innerHTML = `
+      <strong>📅 فترة التقرير اليومي الحالية:</strong><br/>
+      من: ${fmt(periodStart)}<br/>
+      إلى: ${fmt(periodEnd)}
+    `;
+  }
+
+  async function loadClosingSettings() {
+    try {
+      const res = await window.api.getAppSettings();
+      if (!res || !res.success) return;
+      const t = res.settings.dayResetTime;
+      if (closingTime) {
+        closingTime.value = t || '';
+        updateClosingPreview();
+      }
+    } catch (e) { console.error('loadClosingSettings', e); }
+  }
+
+  if (closingTime) closingTime.addEventListener('change', updateClosingPreview);
+  if (btnClearClosing) btnClearClosing.addEventListener('click', () => {
+    if (closingTime) closingTime.value = '';
+    if (closingPreview) closingPreview.style.display = 'none';
+  });
+
+  if (btnSaveClosing) {
+    btnSaveClosing.addEventListener('click', async () => {
+      btnSaveClosing.disabled = true;
+      try {
+        const t = closingTime && closingTime.value ? closingTime.value : null;
+        const h = t ? parseInt(t.split(':')[0], 10) : null;
+        const res = await window.api.saveAppSettings({ dayResetHour: h, dayResetTime: t });
+        if (!res || !res.success) {
+          showToast(res?.message || 'خطأ في الحفظ', 'error');
+          return;
+        }
+        showToast('تم حفظ وقت الإقفال', 'success');
+      } catch (e) {
+        showToast(e.message || 'خطأ في الحفظ', 'error');
+      } finally {
+        btnSaveClosing.disabled = false;
+      }
+    });
+  }
+
+  loadClosingSettings();
 
   // إغلاق القائمة عند الضغط خارجها
   document.addEventListener('click', (e) => {

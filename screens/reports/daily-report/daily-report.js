@@ -15,17 +15,46 @@ window.addEventListener('DOMContentLoaded', async () => {
     location.href = '/screens/reports/reports.html';
   });
 
-  const today = new Date();
   const pad = (x) => String(x).padStart(2, '0');
-  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-  const todayDisplay = `${pad(today.getDate())}/${pad(today.getMonth() + 1)}/${today.getFullYear()}`;
-  const nowH = pad(today.getHours() % 12 || 12), nowM = pad(today.getMinutes());
-  const nowAMPM = today.getHours() < 12 ? 'am' : 'pm';
-  const nowTime = `${nowH}:${nowM} ${nowAMPM}`;
+  const toDatetimeLocal = (d) =>
+    `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const fmtDisplay = (d) => `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours()%12||12)}:${pad(d.getMinutes())} ${d.getHours()<12?'ص':'م'}`;
 
-  const filters = { dateFrom: todayStr, dateTo: todayStr };
+  // جلب وقت الإقفال
+  let dayResetTime = null;
+  try {
+    const drRes = await window.api.getDayResetHour();
+    if (drRes && drRes.success) {
+      dayResetTime = drRes.dayResetTime || null; // "HH:MM"
+      if (!dayResetTime && drRes.dayResetHour != null) {
+        dayResetTime = `${String(drRes.dayResetHour).padStart(2,'0')}:00`;
+      }
+    }
+  } catch (_) {}
 
-  periodBadge.textContent = `${I18N.t('period-report-period')}: ${todayDisplay} — ${todayDisplay} | ${nowTime}`;
+  let filters, periodFrom, periodTo;
+  const now = new Date();
+
+  if (dayResetTime) {
+    const [rh, rm] = dayResetTime.split(':').map(Number);
+    const nowMins   = now.getHours() * 60 + now.getMinutes();
+    const resetMins = rh * 60 + rm;
+    if (nowMins >= resetMins) {
+      periodFrom = new Date(now); periodFrom.setHours(rh, rm, 0, 0);
+      periodTo   = new Date(periodFrom); periodTo.setDate(periodTo.getDate() + 1);
+    } else {
+      periodFrom = new Date(now); periodFrom.setDate(periodFrom.getDate() - 1); periodFrom.setHours(rh, rm, 0, 0);
+      periodTo   = new Date(now); periodTo.setHours(rh, rm, 0, 0);
+    }
+    filters = { dateFrom: toDatetimeLocal(periodFrom), dateTo: toDatetimeLocal(periodTo) };
+  } else {
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    filters = { dateFrom: todayStr, dateTo: todayStr };
+    periodFrom = new Date(now); periodFrom.setHours(0,0,0,0);
+    periodTo   = new Date(now); periodTo.setHours(23,59,59,999);
+  }
+
+  periodBadge.textContent = `${I18N.t('period-report-period')}: ${fmtDisplay(periodFrom)} — ${fmtDisplay(periodTo)}`;
 
   let reportData = null;
   let _reportAppSettings = null;
@@ -34,6 +63,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   function sarHtml(amountStr) { return `<span class="sar">&#xE900;</span> ${amountStr}`; }
   function sarFmtA(n) { return sarHtml(fmtLtr(n)); }
   function escHtml(str) { return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  const escapeHtml = escHtml;
   function formatInvoiceDate(dateStr) {
     if (!dateStr) {
       const now = new Date();
@@ -269,6 +299,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       { label: I18N.t('summary-sales-after-disc'),   d: summary.salesAfterDisc, cls: '' },
       { label: I18N.t('summary-credit-notes-short'), d: summary.creditNotes, cls: '' },
       { label: I18N.t('summary-total-net'), d: summary.totalNet, cls: 'row-total' },
+      ...(summary.partialPayments && summary.partialPayments.afterTax > 0 ? [{ label: I18N.t('summary-partial-payments'), d: summary.partialPayments, cls: '' }] : []),
       { label: I18N.t('summary-subscriptions'),      d: summary.subscriptions,   cls: '' },
       { label: I18N.t('summary-expenses'),            d: summary.expenses,        cls: '' },
       { label: I18N.t('summary-net-short'),              d: summary.net,             cls: 'row-net' },
@@ -445,7 +476,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (s.commercialRegister && invCRRow && invCR) {
-      invCR.textContent = s.commercialRegister;
+      invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
       invCRRow.style.display = '';
     } else if (invCRRow) {
       invCRRow.style.display = 'none';
@@ -834,7 +865,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (!res.success) { showToast(res.message || I18N.t('all-invoices-err-load'), 'error'); loadingState.style.display = 'none'; return; }
       reportData = res;
 
-      document.getElementById('printMeta').textContent = `${I18N.t('period-report-period')}: ${todayDisplay}`;
+      document.getElementById('printMeta').textContent = `${I18N.t('period-report-period')}: ${fmtDisplay(periodFrom)} — ${fmtDisplay(periodTo)}`;
 
       document.getElementById('summaryTableBody').innerHTML = buildSummaryTable(res.summary);
       buildPaymentMethods(res.paymentMethods);
@@ -880,9 +911,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   function rebuildReportContent() {
     if (!reportData) return;
-    periodBadge.textContent = `${I18N.t('period-report-period')}: ${todayDisplay} — ${todayDisplay} | ${nowTime}`;
+    periodBadge.textContent = `${I18N.t('period-report-period')}: ${fmtDisplay(periodFrom)} — ${fmtDisplay(periodTo)}`;
     const printMeta = document.getElementById('printMeta');
-    if (printMeta) printMeta.textContent = `${I18N.t('period-report-period')}: ${todayDisplay}`;
+    if (printMeta) printMeta.textContent = `${I18N.t('period-report-period')}: ${fmtDisplay(periodFrom)} — ${fmtDisplay(periodTo)}`;
     document.getElementById('summaryTableBody').innerHTML = buildSummaryTable(reportData.summary);
     buildPaymentMethods(reportData.paymentMethods);
     document.getElementById('expensesTableBody').innerHTML = buildExpensesTable(reportData.expenses);
@@ -1013,8 +1044,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     const cnCRRow = el('cnCRRow');
     const cnCR = el('cnCR');
-    if (s.commercialRegister && cnCRRow && cnCR) { cnCR.textContent = s.commercialRegister; cnCRRow.style.display = ''; }
-    else if (cnCRRow) cnCRRow.style.display = 'none';
+    if (s.commercialRegister && cnCR) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCR.style.display = ''; }
+    else if (cnCR) cnCR.style.display = 'none';
 
     const cnCreatedByRow = el('cnCreatedByRow');
     const cnCreatedBy = el('cnCreatedBy');
@@ -1222,6 +1253,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   /* Invoice modal bindings */
   const btnInvClose = document.getElementById('btnInvClose');
   const btnInvPrint = document.getElementById('btnInvPrint');
+  const btnInvPdf = document.getElementById('btnInvPdf');
   const invoiceViewModal = document.getElementById('invoiceViewModal');
   if (btnInvClose) btnInvClose.addEventListener('click', closeInvoiceModal);
   if (invoiceViewModal) invoiceViewModal.addEventListener('click', (e) => { if (e.target === invoiceViewModal) closeInvoiceModal(); });
@@ -1259,6 +1291,35 @@ window.addEventListener('DOMContentLoaded', async () => {
       setTimeout(handleAfterPrint, 2500);
     }
     printNextCopy();
+  });
+
+  if (btnInvPdf) btnInvPdf.addEventListener('click', async () => {
+    const originalHTML = btnInvPdf.innerHTML;
+    try {
+      btnInvPdf.disabled = true;
+      btnInvPdf.innerHTML = `<span>${I18N.t('exporting') || 'جاري التصدير...'}</span>`;
+      const paperType = (_reportAppSettings && _reportAppSettings.invoicePaperType) || 'thermal';
+      const paperEl = paperType === 'a4'
+        ? document.getElementById('invoicePaperA4m')
+        : document.getElementById('invoicePaper');
+      if (!paperEl) {
+        showToast('لم يتم العثور على محتوى الفاتورة', 'error');
+        return;
+      }
+      const invoiceHTML = paperEl.outerHTML;
+      const orderNum = document.getElementById('invOrderNum') ? document.getElementById('invOrderNum').textContent : '';
+      const result = await window.api.exportInvoicePdfFromHtml({ html: invoiceHTML, paperType, orderNum });
+      if (result && result.success) {
+        showToast(I18N.t('toast-pdf-success') || 'تم التصدير بنجاح', 'success');
+      } else {
+        showToast((result && result.message) || 'خطأ في التصدير', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ في التصدير', 'error');
+    } finally {
+      btnInvPdf.disabled = false;
+      btnInvPdf.innerHTML = originalHTML;
+    }
   });
 
   /* ── Print translation: rebuild dynamic content in Arabic ── */
