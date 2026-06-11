@@ -621,6 +621,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const sres = await window.api.getAppSettings().catch(() => null);
       _appSettings = (sres && sres.success && sres.settings) ? sres.settings : {};
     }
+    document.body.classList.toggle('invtype-a4', _appSettings.invoicePaperType === 'a4');
     try {
       const res = await window.api.getOrderById({ id });
       if (!res || !res.success || !res.order) { showToast(I18N.t('all-invoices-err-load-invoice'), 'error'); return; }
@@ -636,12 +637,25 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (el('invShopName'))    el('invShopName').textContent    = shopName;
     if (el('invShopAddress')) el('invShopAddress').textContent = addressParts.join('، ') || s.locationAr || '';
-    if (el('invShopPhone'))   el('invShopPhone').textContent   = s.phone ? I18N.t('all-invoices-phone') + ': ' + s.phone : '';
-    if (el('invVatNumber'))   el('invVatNumber').textContent   = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
-    if (el('invShopEmail'))   el('invShopEmail').textContent   = s.email || '';
-    if (el('invCR')) {
-      if (s.commercialRegister) { el('invCR').textContent = 'السجل التجاري: ' + s.commercialRegister; el('invCR').style.display = ''; }
-      else el('invCR').style.display = 'none';
+    // Phone
+    if (el('invShopPhone') && el('invShopPhoneRow')) {
+      if (s.phone) { el('invShopPhone').textContent = s.phone; el('invShopPhoneRow').style.display = ''; }
+      else el('invShopPhoneRow').style.display = 'none';
+    }
+    // VAT
+    if (el('invVatNumber') && el('invVatHeaderRow')) {
+      if (s.vatNumber) { el('invVatNumber').textContent = 'الرقم الضريبي: ' + s.vatNumber; el('invVatHeaderRow').style.display = ''; }
+      else el('invVatHeaderRow').style.display = 'none';
+    }
+    // Commercial Register
+    if (el('invCR') && el('invCRRow')) {
+      if (s.commercialRegister) { el('invCR').textContent = 'السجل التجاري: ' + s.commercialRegister; el('invCRRow').style.display = ''; }
+      else el('invCRRow').style.display = 'none';
+    }
+    // Email
+    if (el('invShopEmail') && el('invEmailRow')) {
+      if (s.email) { el('invShopEmail').textContent = s.email; el('invEmailRow').style.display = ''; }
+      else el('invEmailRow').style.display = 'none';
     }
 
     /* Custom fields */
@@ -672,7 +686,25 @@ window.addEventListener('DOMContentLoaded', () => {
     const displaySeq = order.invoice_seq || order.order_number || order.id;
     if (el('invOrderNum')) el('invOrderNum').textContent = displaySeq ? String(displaySeq) : '—';
     if (el('invDate'))     el('invDate').textContent     = formatInvoiceDate(order.created_at);
-    if (el('invPayment'))  el('invPayment').textContent  = payLabel(order.payment_method);
+    
+    const invPaymentEl = el('invPayment');
+    if (invPaymentEl) {
+      if (order.payment_method === 'subscription') {
+        if (invPaymentEl.parentElement) invPaymentEl.parentElement.style.display = 'none';
+      } else {
+        if (invPaymentEl.parentElement) invPaymentEl.parentElement.style.display = '';
+        invPaymentEl.textContent = payLabel(order.payment_method);
+      }
+    }
+
+    // Cashier
+    const invCashierRow  = el('invCashierRow');
+    const invCashierName = el('invCashierName');
+    if (invCashierRow && invCashierName) {
+      const cashier = order.cashier_name || order.created_by || '';
+      if (cashier) { invCashierName.textContent = cashier; invCashierRow.style.display = ''; }
+      else invCashierRow.style.display = 'none';
+    }
 
     const invPaidAtRow = el('invPaidAtRow');
     const invPaidAt    = el('invPaidAt');
@@ -769,27 +801,62 @@ window.addEventListener('DOMContentLoaded', () => {
     const invRemainingRow  = el('invRemainingRow');
     const invRemainingAmount = el('invRemainingAmount');
 
-    if (isInclusive && vatRate > 0) {
-      if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal * 100 / (100 + vatRate));
-    } else {
-      if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal);
+    const invMainTitle = el('invMainTitle');
+    const invOrderNumLabel = el('invOrderNumLabel');
+    const invBalBeforeRow = el('invBalBeforeRow');
+    const invBalBefore    = el('invBalBefore');
+    const invBalAfterRow  = el('invBalAfterRow');
+    const invBalAfter     = el('invBalAfter');
+
+    if (invMainTitle) {
+      if (order.payment_method === 'subscription') {
+        invMainTitle.textContent = 'إيصال استهلاك';
+        if (invOrderNumLabel) invOrderNumLabel.textContent = 'رقم الإيصال';
+      } else {
+        invMainTitle.textContent = 'فاتورة ضريبية مبسطة';
+        if (invOrderNumLabel) invOrderNumLabel.textContent = 'رقم الفاتورة';
+      }
     }
 
-    if (discount > 0 && invDiscRow && invDiscount) {
-      invDiscount.innerHTML = sarFmtA(discount);
-      invDiscRow.style.display = '';
-    } else if (invDiscRow) { invDiscRow.style.display = 'none'; }
-
-    if (vatRate > 0 && vatAmount > 0) {
-      if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
-      if (invVat)      invVat.innerHTML = sarFmtA(vatAmount);
-      if (invVatRow)   invVatRow.style.display = '';
-      if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
-      if (invTotalLabel)    invTotalLabel.textContent    = I18N.t('invoice-grand-total-tax');
-    } else {
+    if (order.payment_method === 'subscription') {
+      if (invSubtotalLabel && invSubtotalLabel.parentElement) invSubtotalLabel.parentElement.style.display = 'none';
       if (invVatRow) invVatRow.style.display = 'none';
-      if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal');
-      if (invTotalLabel)    invTotalLabel.textContent    = I18N.t('invoice-total');
+      if (invTotalLabel) invTotalLabel.textContent = 'المبلغ المستهلك';
+      if (invDiscRow) invDiscRow.style.display = 'none';
+      if (invBalBeforeRow && invBalAfterRow && subscription) {
+        const balAfter = parseFloat(subscription.credit_remaining) || 0;
+        const balBefore = balAfter + parseFloat(total);
+        if (invBalAfter) invBalAfter.innerHTML = sarFmtA(balAfter);
+        if (invBalBefore) invBalBefore.innerHTML = sarFmtA(balBefore);
+        invBalAfterRow.style.display = '';
+        invBalBeforeRow.style.display = '';
+      }
+    } else {
+      if (invBalBeforeRow) invBalBeforeRow.style.display = 'none';
+      if (invBalAfterRow) invBalAfterRow.style.display = 'none';
+      if (invSubtotalLabel && invSubtotalLabel.parentElement) invSubtotalLabel.parentElement.style.display = '';
+      if (isInclusive && vatRate > 0) {
+        if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal * 100 / (100 + vatRate));
+      } else {
+        if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal);
+      }
+
+      if (discount > 0 && invDiscRow && invDiscount) {
+        invDiscount.innerHTML = sarFmtA(discount);
+        invDiscRow.style.display = '';
+      } else if (invDiscRow) { invDiscRow.style.display = 'none'; }
+
+      if (vatRate > 0 && vatAmount > 0) {
+        if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
+        if (invVat)      invVat.innerHTML = sarFmtA(vatAmount);
+        if (invVatRow)   invVatRow.style.display = '';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
+        if (invTotalLabel)    invTotalLabel.textContent    = I18N.t('invoice-grand-total-tax');
+      } else {
+        if (invVatRow) invVatRow.style.display = 'none';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal');
+        if (invTotalLabel)    invTotalLabel.textContent    = I18N.t('invoice-total');
+      }
     }
 
     if (invTotal) invTotal.innerHTML = sarFmtA(total);
@@ -821,8 +888,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Barcode
     const invBarcodeEl = document.getElementById('invBarcode');
-    if (invBarcodeEl && order.invoice_seq) {
-      try { JsBarcode(invBarcodeEl, String(order.invoice_seq), { format: 'CODE128', width: 3, height: 50, displayValue: true, fontSize: 14, margin: 0, background: 'transparent' }); } catch(e) { invBarcodeEl.innerHTML = ''; }
+    if (invBarcodeEl && displaySeq) {
+      try { JsBarcode(invBarcodeEl, String(displaySeq), { format: 'CODE128', width: 3, height: 50, displayValue: true, fontSize: 14, margin: 0, background: 'transparent' }); } catch(e) { invBarcodeEl.innerHTML = ''; }
     } else if (invBarcodeEl) { invBarcodeEl.innerHTML = ''; }
 
     const invFooterNotes = el('invFooterNotes');
@@ -845,6 +912,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const sres = await window.api.getAppSettings().catch(() => null);
       _appSettings = (sres && sres.success && sres.settings) ? sres.settings : {};
     }
+    document.body.classList.toggle('invtype-a4', _appSettings.invoicePaperType === 'a4');
     try {
       const res = await window.api.getCreditNoteById({ id });
       if (!res || !res.success || !res.creditNote) { showToast(I18N.t('all-invoices-cant-load-cn'), 'error'); return; }
@@ -867,9 +935,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (el('cnShopName'))    el('cnShopName').textContent    = shopName;
     if (el('cnShopAddress')) el('cnShopAddress').textContent = addressParts.join('، ') || s.locationAr || '';
-    if (el('cnShopPhone'))   el('cnShopPhone').textContent   = s.phone ? I18N.t('all-invoices-phone') + ': ' + s.phone : '';
-    if (el('cnVatNumber'))   el('cnVatNumber').textContent   = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
-    if (el('cnShopEmail'))   el('cnShopEmail').textContent   = s.email || '';
+    if (el('cnShopPhone') && el('cnShopPhoneRow')) {
+      if (s.phone) { el('cnShopPhone').textContent = s.phone; el('cnShopPhoneRow').style.display = ''; }
+      else el('cnShopPhoneRow').style.display = 'none';
+    }
+    if (el('cnVatNumber') && el('cnVatHeaderRow')) {
+      if (s.vatNumber) { el('cnVatNumber').textContent = 'الرقم الضريبي: ' + s.vatNumber; el('cnVatHeaderRow').style.display = ''; }
+      else el('cnVatHeaderRow').style.display = 'none';
+    }
+    if (el('cnShopEmail') && el('cnEmailRow')) {
+      if (s.email) { el('cnShopEmail').textContent = s.email; el('cnEmailRow').style.display = ''; }
+      else el('cnEmailRow').style.display = 'none';
+    }
 
     const cnLogoWrap = el('cnLogoWrap');
     const cnLogo = el('cnLogo');
@@ -912,8 +989,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const cnCRRow = el('cnCRRow');
     const cnCR = el('cnCR');
-    if (s.commercialRegister && cnCR) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCR.style.display = ''; }
-    else if (cnCR) cnCR.style.display = 'none';
+    if (s.commercialRegister && cnCR && cnCRRow) { cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; cnCRRow.style.display = ''; }
+    else if (cnCRRow) cnCRRow.style.display = 'none';
 
     const cnCreatedByRow = el('cnCreatedByRow');
     const cnCreatedBy = el('cnCreatedBy');

@@ -297,7 +297,7 @@
       customFields: Array.isArray(s.customFields) ? s.customFields : [],
       paidAmount:       paidAmount,
       remainingAmount:  remainingAmount,
-      createdBy:        order.created_by || '',
+      createdBy:        order.cashier_name || order.created_by || '',
       paymentMethod:    order.payment_method || '',
       paymentStatus:    order.payment_status || '',
       qrPayload: vatRate > 0 ? {
@@ -744,6 +744,9 @@
     if (data.starch) a4mText('a4mStarch', data.starch);
     a4mShow('a4mRowBluing', !!data.bluing);
     if (data.bluing) a4mText('a4mBluing', data.bluing);
+    a4mShow('a4mRowCashier', !!(data.createdBy || data.cashierName));
+    const _hCashier = data.createdBy || data.cashierName || '';
+    if (_hCashier) a4mText('a4mCashierName', _hCashier);
 
     const vatRate   = data.vatRate || 0;
     const priceMode = data.priceDisplayMode || 'exclusive';

@@ -996,6 +996,307 @@ async function exportTypesReport(type, filters = {}) {
   throw new Error('نوع التصدير غير مدعوم');
 }
 
+async function exportZakatReport(type, filters = {}) {
+  const data = await db.getZakatReport(filters);
+  const branding = await loadAppBrandingForReceipts().catch(() => ({}));
+  const f = cairoFonts();
+
+  if (type === 'pdf') {
+    const { orders, creditNotes, expenses, summary } = data;
+    const { dateFrom = '', dateTo = '',
+            showOrders = true, showCreditNotes = true, showExpenses = true } = filters;
+    const nameAr      = branding.laundryNameAr || '';
+    const nameEn      = branding.laundryNameEn || '';
+    const vatNumber   = branding.vatNumber || '';
+    const cr          = branding.commercialRegister || '';
+    const phone       = branding.phone || '';
+    const email       = branding.email || '';
+    const locationAr  = branding.locationAr || '';
+    const locationEn  = branding.locationEn || '';
+    const addNum      = branding.additionalNumber || '';
+    const addrParts   = [branding.buildingNumber, branding.streetNameAr, branding.districtAr, branding.cityAr, branding.postalCode].filter(Boolean);
+    const addrAr      = addrParts.join('، ');
+    const customFields = Array.isArray(branding.customFields) ? branding.customFields : [];
+    const logo        = branding.logoDataUrl || '';
+
+    function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fmt(n) { return Number(n || 0).toFixed(2); }
+    function sarCell(n) { return `${fmt(n)} <span class="sar">&#xE900;</span>`; }
+    function payLabel(s) { return s === 'paid' ? 'مدفوع' : s === 'pending' ? 'آجل' : s === 'partial' ? 'جزئي' : (s || ''); }
+    function fmtDate(d) {
+      if (!d) return '';
+      try {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return String(d);
+        const date = dt.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+        const time = dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+        return `${date} ${time}`;
+      } catch(_) { return String(d); }
+    }
+    function fmtDisplay(d) {
+      if (!d) return '';
+      try {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return String(d);
+        const date = dt.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+        const time = dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+        return `${date} ${time}`;
+      } catch(_) { return String(d); }
+    }
+
+    const ordersRows = orders.map(o => `<tr>
+      <td>${esc(o.invoice_seq || o.order_number || '')}</td>
+      <td dir="ltr">${esc(fmtDate(o.created_at))}</td>
+      <td dir="ltr">${esc(o.customer_phone || '')}</td>
+      <td class="num">${sarCell(o.subtotal)}</td>
+      <td class="num tax">${sarCell(o.vat_amount)}</td>
+      <td class="num">${sarCell(o.total_amount)}</td>
+      <td>${esc(payLabel(o.payment_status))}</td>
+    </tr>`).join('') || `<tr><td colspan="7" class="empty">لا توجد فواتير</td></tr>`;
+
+    const cnRows = creditNotes.map(cn => `<tr>
+      <td>${esc(cn.credit_note_seq ? String(cn.credit_note_seq) : cn.credit_note_number)}</td>
+      <td dir="ltr">${esc(fmtDate(cn.created_at))}</td>
+      <td dir="ltr">${esc(cn.customer_phone || '')}</td>
+      <td class="num">${sarCell(cn.subtotal)}</td>
+      <td class="num tax">${sarCell(cn.vat_amount)}</td>
+      <td class="num">${sarCell(cn.total_amount)}</td>
+    </tr>`).join('') || `<tr><td colspan="6" class="empty">لا توجد إشعارات دائنة</td></tr>`;
+
+    const expRows = expenses.map(e => `<tr>
+      <td dir="ltr">${esc(fmtDate(e.expense_date))}</td>
+      <td>${esc(e.title)}</td>
+      <td>${esc(e.category)}</td>
+      <td class="num">${sarCell(e.amount)}</td>
+      <td class="num tax">${sarCell(e.tax_amount)}</td>
+      <td class="num">${sarCell(e.total_amount)}</td>
+    </tr>`).join('') || `<tr><td colspan="6" class="empty">لا توجد مصروفات</td></tr>`;
+
+    const netNeg = summary.netTotal < 0;
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<style>
+@font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${f.cairoBoldB64}') format('woff2')}
+@font-face{font-family:'SaudiRiyal';src:url('data:font/woff;base64,${f.saudiRiyalB64}') format('woff')}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif;font-size:9pt}
+body{direction:rtl;padding:12mm 10mm;color:#000;background:#fff}
+.zk-header{display:grid;grid-template-columns:1fr 90px 1fr;gap:3mm;align-items:center;margin-bottom:4mm;padding-bottom:3mm;border-bottom:2px solid #059669}
+.zk-header-ar{text-align:right;direction:rtl}
+.zk-header-en{text-align:left;direction:ltr}
+.zk-header-logo{display:flex;justify-content:center;align-items:center}
+.zk-header-logo img{max-height:60px;max-width:80px;object-fit:contain}
+.zk-brand-name{font-size:11pt;font-weight:900;margin-bottom:1mm}
+.zk-brand-sub{font-size:7.5pt;font-weight:700;margin-bottom:.5mm;color:#333}
+.zk-title{text-align:center;font-size:12pt;font-weight:900;margin-bottom:2mm}
+.zk-period{text-align:center;font-size:8pt;color:#555;margin-bottom:4mm}
+.section-title{font-size:10pt;font-weight:700;margin:5mm 0 2mm;border-right:3px solid #059669;padding-right:6px;color:#059669}
+table{width:100%;border-collapse:collapse;margin-bottom:4mm}
+thead tr{background:#e6f7f1}
+th,td{padding:3px 6px;border:1px solid #ccc;text-align:right}
+th{font-size:8pt;color:#059669;text-align:center}
+td{font-size:8pt}
+.num{text-align:center;white-space:nowrap}
+.tax{color:#b45309}
+.empty{text-align:center;color:#999}
+.sar{font-family:'SaudiRiyal';font-size:1em}
+.summary-table th{background:#059669;color:#fff}
+.summary-table tr.orders-row td{background:#f0fdf4}
+.summary-table tr.cn-row td{background:#fff7ed}
+.summary-table tr.exp-row td{background:#fefce8}
+.summary-table tr.net-row td{background:#1e293b;color:#fff;font-size:10pt}
+.summary-table tr.net-row .sar{color:#fff}
+.neg{color:#ef4444 !important}
+</style>
+</head>
+<body>
+<div class="zk-header">
+  <div class="zk-header-ar">
+    ${nameAr ? `<div class="zk-brand-name">${esc(nameAr)}</div>` : ''}
+    ${locationAr ? `<div class="zk-brand-sub">${esc(locationAr)}</div>` : ''}
+    ${addrAr ? `<div class="zk-brand-sub">${esc(addrAr)}${addNum ? ' — ' + esc(addNum) : ''}</div>` : (addNum ? `<div class="zk-brand-sub">${esc(addNum)}</div>` : '')}
+    ${phone ? `<div class="zk-brand-sub">جوال: ${esc(phone)}</div>` : ''}
+    ${vatNumber ? `<div class="zk-brand-sub">الرقم الضريبي: ${esc(vatNumber)}</div>` : ''}
+    ${cr ? `<div class="zk-brand-sub">س.ت: ${esc(cr)}</div>` : ''}
+    ${customFields.filter(f => f.labelAr && f.value).map(f => `<div class="zk-brand-sub">${esc(f.labelAr)}: ${esc(f.value)}</div>`).join('')}
+  </div>
+  <div class="zk-header-logo">
+    ${logo ? `<img src="${logo}" alt="logo" />` : ''}
+  </div>
+  <div class="zk-header-en">
+    ${nameEn ? `<div class="zk-brand-name">${esc(nameEn)}</div>` : ''}
+    ${locationEn ? `<div class="zk-brand-sub">${esc(locationEn)}</div>` : ''}
+    ${email ? `<div class="zk-brand-sub">${esc(email)}</div>` : ''}
+    ${vatNumber ? `<div class="zk-brand-sub">VAT No: ${esc(vatNumber)}</div>` : ''}
+    ${cr ? `<div class="zk-brand-sub">CR No: ${esc(cr)}</div>` : ''}
+    ${customFields.filter(f => f.labelEn && f.value).map(f => `<div class="zk-brand-sub">${esc(f.labelEn)}: ${esc(f.value)}</div>`).join('')}
+  </div>
+</div>
+<div class="zk-title">تقرير هيئة الزكاة والضريبة والجمارك</div>
+<div class="zk-period">الفترة من: ${esc(fmtDisplay(dateFrom))} إلى: ${esc(fmtDisplay(dateTo))}</div>
+
+${showOrders ? `
+<div class="section-title">الفواتير (${orders.length})</div>
+<table>
+<thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>جوال العميل</th><th>قبل الضريبة</th><th>الضريبة</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+<tbody>${ordersRows}</tbody>
+</table>` : ''}
+
+${showCreditNotes ? `
+<div class="section-title">الإشعارات الدائنة (${creditNotes.length})</div>
+<table>
+<thead><tr><th>رقم الإشعار</th><th>التاريخ</th><th>جوال العميل</th><th>قبل الضريبة</th><th>الضريبة</th><th>الإجمالي</th></tr></thead>
+<tbody>${cnRows}</tbody>
+</table>` : ''}
+
+${showExpenses ? `
+<div class="section-title">المصروفات (${expenses.length})</div>
+<table>
+<thead><tr><th>التاريخ</th><th>البيان</th><th>الفئة</th><th>قبل الضريبة</th><th>الضريبة</th><th>الإجمالي</th></tr></thead>
+<tbody>${expRows}</tbody>
+</table>` : ''}
+
+<div class="section-title">الملخص</div>
+<table class="summary-table">
+<thead><tr><th>البيان</th><th>قبل الضريبة</th><th>الضريبة</th><th>الإجمالي شامل الضريبة</th></tr></thead>
+<tbody>
+<tr class="orders-row"><td>الفواتير</td><td class="num">${sarCell(summary.ordersSubtotal)}</td><td class="num tax">${sarCell(summary.ordersVat)}</td><td class="num">${sarCell(summary.ordersTotal)}</td></tr>
+<tr class="cn-row"><td>الإشعارات الدائنة</td><td class="num">${sarCell(summary.creditNotesSubtotal)}</td><td class="num tax">${sarCell(summary.creditNotesVat)}</td><td class="num">${sarCell(summary.creditNotesTotal)}</td></tr>
+<tr class="exp-row"><td>المصروفات</td><td class="num">${sarCell(summary.expensesSubtotal)}</td><td class="num tax">${sarCell(summary.expensesVat)}</td><td class="num">${sarCell(summary.expensesTotal)}</td></tr>
+<tr class="net-row"><td>الصافي</td><td class="num ${summary.netSubtotal<0?'neg':''}">${sarCell(summary.netSubtotal)}</td><td class="num tax ${summary.netVat<0?'neg':''}">${sarCell(summary.netVat)}</td><td class="num ${netNeg?'neg':''}">${sarCell(summary.netTotal)}</td></tr>
+</tbody>
+</table>
+</body></html>`;
+
+    const buffer = await htmlToPdfBuffer(html, { landscape: false });
+    return { buffer, filename: `zakat-report_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  if (type === 'excel') {
+    const { orders, creditNotes, expenses, summary } = data;
+    const { dateFrom = '', dateTo = '' } = filters;
+    const wb = XLSX.utils.book_new();
+
+    const xNameAr  = branding.laundryNameAr || '';
+    const xNameEn  = branding.laundryNameEn || '';
+    const xVat     = branding.vatNumber || '';
+    const xCr      = branding.commercialRegister || '';
+    const xPhone   = branding.phone || '';
+    const xEmail   = branding.email || '';
+    const xLocAr   = branding.locationAr || '';
+    const xLocEn   = branding.locationEn || '';
+    const xAddNum  = branding.additionalNumber || '';
+    const xAddrParts = [branding.buildingNumber, branding.streetNameAr, branding.districtAr, branding.cityAr, branding.postalCode].filter(Boolean);
+    if (xAddNum) xAddrParts.push(xAddNum);
+    const xAddr    = xAddrParts.join('، ');
+    const xCustom  = Array.isArray(branding.customFields) ? branding.customFields : [];
+
+    function fmtDt(d) {
+      if (!d) return '';
+      try {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return String(d);
+        const y  = dt.getFullYear();
+        const mo = String(dt.getMonth() + 1).padStart(2, '0');
+        const dy = String(dt.getDate()).padStart(2, '0');
+        const h  = String(dt.getHours()).padStart(2, '0');
+        const mi = String(dt.getMinutes()).padStart(2, '0');
+        return `${y}-${mo}-${dy} ${h}:${mi}`;
+      } catch(_) { return String(d); }
+    }
+
+    function buildSheetHeader(colCount) {
+      const rows = [];
+      const merges = [];
+      let r = 0;
+      const add = (text) => {
+        rows.push([text]);
+        merges.push({ s: { r, c: 0 }, e: { r, c: colCount - 1 } });
+        r++;
+      };
+      if (xNameAr)  add(xNameAr);
+      if (xNameEn)  add(xNameEn);
+      if (xLocAr)   add(`الموقع: ${xLocAr}`);
+      if (xLocEn)   add(`Location: ${xLocEn}`);
+      if (xAddr)    add(`العنوان: ${xAddr}`);
+      if (xPhone)   add(`جوال: ${xPhone}`);
+      if (xEmail)   add(`Email: ${xEmail}`);
+      if (xVat)     add(`الرقم الضريبي: ${xVat}`);
+      if (xCr)      add(`السجل التجاري: ${xCr}`);
+      xCustom.filter(f => f.value).forEach(f => add(`${f.labelAr || f.labelEn || ''}: ${f.value}`));
+      add('تقرير هيئة الزكاة والضريبة والجمارك');
+      if (dateFrom || dateTo) add(`الفترة من: ${fmtDt(dateFrom)} إلى: ${fmtDt(dateTo)}`);
+      rows.push([]); r++;
+      return { rows, merges, startRow: r };
+    }
+
+
+    // Orders sheet
+    const oHdr = buildSheetHeader(7);
+    const oData = [
+      ['رقم الفاتورة', 'التاريخ', 'جوال العميل', 'قبل الضريبة', 'الضريبة', 'الإجمالي', 'الحالة'],
+      ...orders.map(o => [
+        o.invoice_seq || o.order_number || '',
+        fmtDt(o.created_at),
+        o.customer_phone || '',
+        Number(o.subtotal), Number(o.vat_amount), Number(o.total_amount),
+        o.payment_status === 'paid' ? 'مدفوع' : o.payment_status === 'pending' ? 'آجل' : o.payment_status === 'partial' ? 'جزئي' : (o.payment_status || '')
+      ])
+    ];
+    const oWs = XLSX.utils.aoa_to_sheet([...oHdr.rows, ...oData]);
+    oWs['!merges'] = oHdr.merges;
+    XLSX.utils.book_append_sheet(wb, oWs, 'الفواتير');
+
+    // Credit Notes sheet
+    const cnHdr = buildSheetHeader(6);
+    const cnData = [
+      ['رقم الإشعار', 'التاريخ', 'جوال العميل', 'قبل الضريبة', 'الضريبة', 'الإجمالي'],
+      ...creditNotes.map(cn => [
+        cn.credit_note_seq ? String(cn.credit_note_seq) : cn.credit_note_number,
+        fmtDt(cn.created_at),
+        cn.customer_phone || '',
+        Number(cn.subtotal), Number(cn.vat_amount), Number(cn.total_amount)
+      ])
+    ];
+    const cnWs = XLSX.utils.aoa_to_sheet([...cnHdr.rows, ...cnData]);
+    cnWs['!merges'] = cnHdr.merges;
+    XLSX.utils.book_append_sheet(wb, cnWs, 'الإشعارات الدائنة');
+
+    // Expenses sheet
+    const expHdr = buildSheetHeader(6);
+    const expData = [
+      ['التاريخ', 'البيان', 'الفئة', 'قبل الضريبة', 'الضريبة', 'الإجمالي'],
+      ...expenses.map(e => [
+        fmtDt(e.expense_date),
+        e.title || '', e.category || '',
+        Number(e.amount), Number(e.tax_amount), Number(e.total_amount)
+      ])
+    ];
+    const expWs = XLSX.utils.aoa_to_sheet([...expHdr.rows, ...expData]);
+    expWs['!merges'] = expHdr.merges;
+    XLSX.utils.book_append_sheet(wb, expWs, 'المصروفات');
+
+    // Summary sheet
+    const sumHdr = buildSheetHeader(4);
+    const sumData = [
+      ['البيان', 'قبل الضريبة', 'الضريبة', 'الإجمالي شامل الضريبة'],
+      ['الفواتير', summary.ordersSubtotal, summary.ordersVat, summary.ordersTotal],
+      ['الإشعارات الدائنة', summary.creditNotesSubtotal, summary.creditNotesVat, summary.creditNotesTotal],
+      ['المصروفات', summary.expensesSubtotal, summary.expensesVat, summary.expensesTotal],
+      ['الصافي', summary.netSubtotal, summary.netVat, summary.netTotal]
+    ];
+    const sumWs = XLSX.utils.aoa_to_sheet([...sumHdr.rows, ...sumData]);
+    sumWs['!merges'] = sumHdr.merges;
+    XLSX.utils.book_append_sheet(wb, sumWs, 'الملخص');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `zakat-report_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
 module.exports = {
   exportExpenses,
   exportCustomers,
@@ -1014,6 +1315,7 @@ module.exports = {
   exportAllInvoicesReport,
   exportSubscriptionsReport,
   exportTypesReport,
+  exportZakatReport,
   MAX_PRODUCT_IMAGE_RAW_BYTES,
   cairoFonts
 };

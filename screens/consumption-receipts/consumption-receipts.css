@@ -487,23 +487,23 @@ body {
 #receiptViewModal .cr-receipt-title,
 #receiptViewModal .cr-vat-note,
 #receiptViewModal .cr-warning-banner,
-#consumptionPrintZone .inv-shop-name,
-#consumptionPrintZone .inv-shop-sub,
-#consumptionPrintZone .inv-meta-label,
-#consumptionPrintZone .inv-meta-val,
-#consumptionPrintZone .inv-table th,
-#consumptionPrintZone .inv-table td,
-#consumptionPrintZone .cr-receipt-title,
-#consumptionPrintZone .cr-vat-note,
-#consumptionPrintZone .cr-warning-banner,
+#invPrintZone .inv-shop-name,
+#invPrintZone .inv-shop-sub,
+#invPrintZone .inv-meta-label,
+#invPrintZone .inv-meta-val,
+#invPrintZone .inv-table th,
+#invPrintZone .inv-table td,
+#invPrintZone .cr-receipt-title,
+#invPrintZone .cr-vat-note,
+#invPrintZone .cr-warning-banner,
 #receiptViewModal .cr-info-label,
-#consumptionPrintZone .cr-info-label {
+#invPrintZone .cr-info-label {
   color: #000 !important;
   font-weight: 700 !important;
   font-size: 9px !important;
 }
 #receiptViewModal .cr-info-val,
-#consumptionPrintZone .cr-info-val {
+#invPrintZone .cr-info-val {
   color: #000 !important;
   font-weight: 900 !important;
   font-size: 10px !important;
@@ -514,8 +514,8 @@ body {
 ══════════════════════════════ */
 @media print {
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
-  body > *:not(#consumptionPrintZone) { display: none !important; }
-  #consumptionPrintZone {
+  body > *:not(#invPrintZone) { display: none !important; }
+  body > #invPrintZone, #invPrintZone {
     display: block !important;
     position: static !important;
     background: none !important;
@@ -523,7 +523,7 @@ body {
     overflow: visible !important;
     height: auto !important;
   }
-  #consumptionPrintZone .inv-paper {
+  #invPrintZone .inv-paper {
     box-shadow: none !important;
     border-radius: 0 !important;
     width: 80mm !important;
@@ -534,7 +534,7 @@ body {
     max-height: none !important;
     overflow: visible !important;
   }
-  #consumptionPrintZone .no-print { display: none !important; }
+  #invPrintZone .no-print { display: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

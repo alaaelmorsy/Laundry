@@ -429,6 +429,17 @@ async function start() {
     }
   });
 
+  app.post('/api/export/zakat-report', authMiddleware, async (req, res) => {
+    try {
+      const { type, filters = {} } = req.body || {};
+      const result = await exportsService.exportZakatReport(type, filters);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/api/export/worker-report', authMiddleware, async (req, res) => {
     try {
       const { type, filters = {} } = req.body || {};

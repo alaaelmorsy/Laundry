@@ -398,6 +398,9 @@
     whatsappSendInvoicePdf:         (data) => invoke('whatsappSendInvoicePdf', data),
     whatsappSendInvoicePdfFromHtml: (data) => invoke('whatsappSendInvoicePdfFromHtml', data),
 
+    getZakatReport:          (data) => invoke('getZakatReport', data),
+    exportZakatReport:       (data) => exportBinary('/api/export/zakat-report', data),
+
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {
         method: 'POST',

@@ -214,6 +214,18 @@ window.addEventListener('DOMContentLoaded', () => {
       a4mShow('a4mMixedCardRow', false);
     }
 
+    const paidAmt = Number(data.paidAmount || 0);
+    const remainAmt = Number(data.remainingAmount || 0);
+    if (remainAmt > 0) {
+      a4mHtml('a4mPaidAmount', sarFmt(paidAmt));
+      a4mShow('a4mPaidRow', true);
+      a4mHtml('a4mRemainingAmount', sarFmt(remainAmt));
+      a4mShow('a4mRemainingRow', true);
+    } else {
+      a4mShow('a4mPaidRow', false);
+      a4mShow('a4mRemainingRow', false);
+    }
+
     const a4mNotesEl = document.getElementById('a4mFooterNotes');
     if (a4mNotesEl) {
       if (data.invoiceNotes) {
@@ -229,6 +241,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (data.starch) a4mText('a4mStarch', data.starch);
     a4mShow('a4mRowBluing', !!data.bluing);
     if (data.bluing) a4mText('a4mBluing', data.bluing);
+    a4mShow('a4mRowCashier', !!data.cashierName);
+    if (data.cashierName) a4mText('a4mCashierName', data.cashierName);
 
     if (data.qrPayload) {
       const qrEl = document.getElementById('a4mQR');
@@ -285,7 +299,7 @@ window.addEventListener('DOMContentLoaded', () => {
       { label: I18N.t('summary-sales-after-disc'),   d: summary.salesAfterDisc, cls: '' },
       { label: I18N.t('summary-credit-notes-short'), d: summary.creditNotes, cls: '' },
       { label: I18N.t('summary-total-net'), d: summary.totalNet, cls: 'row-total' },
-      ...(summary.partialPayments && summary.partialPayments.afterTax > 0 ? [{ label: I18N.t('summary-partial-payments'), d: summary.partialPayments, cls: '' }] : []),
+      ...(summary.partialPayments ? [{ label: I18N.t('summary-partial-payments') || 'مدفوعات الفواتير الآجلة', d: summary.partialPayments, cls: '' }] : []),
       { label: I18N.t('summary-subscriptions'),      d: summary.subscriptions,   cls: '' },
       { label: I18N.t('summary-expenses'),            d: summary.expenses,        cls: '' },
       { label: I18N.t('summary-net-short'),              d: summary.net,             cls: 'row-net' },
@@ -345,6 +359,25 @@ window.addEventListener('DOMContentLoaded', () => {
         <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
         <td class="num-cell">${SAR(e.total_amount, false)}</td>
         <td>${e.notes || '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function buildDeferredPaymentsTable(payments) {
+    if (!payments || !payments.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('report-no-deferred-payments') || 'لا توجد مدفوعات آجلة'}</td></tr>`;
+    return payments.map((p) => {
+      const dt = fmtDT(p.created_at);
+      const dtParts = dt.split(', ');
+      const dateStr = dtParts[0] || dt;
+      const timeStr = dtParts[1] || '';
+      return `
+      <tr>
+        <td class="num-cell">${p.invoice_seq || p.order_number || p.order_id}</td>
+        <td>${p.phone || p.customer_name || '—'}</td>
+        <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
+        <td>${payLabel(p.payment_method)}</td>
+        <td class="num-cell">${SAR(p.payment_amount, false)}</td>
+        <td class="no-print"><button class="view-btn" onclick="showInvoiceModal(${p.order_id})">${I18N.t('all-invoices-view')}</button></td>
       </tr>`;
     }).join('');
   }
@@ -441,7 +474,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (invShopAddress) invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || '');
     if (invShopPhone) invShopPhone.textContent = s.phone ? I18N.t('all-invoices-phone') + ': ' + s.phone : '';
     if (invShopEmail) invShopEmail.textContent = s.email || '';
-    if (invVatNumber) invVatNumber.textContent = s.vatNumber ? I18N.t('all-invoices-vat') + ': ' + s.vatNumber : '';
+    if (invVatNumber) invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     /* Custom fields */
     const invCFPr = document.getElementById('invCustomFields');
@@ -497,8 +530,9 @@ window.addEventListener('DOMContentLoaded', () => {
     } else if (invDeliveredAtRow) {
       invDeliveredAtRow.style.display = 'none';
     }
-    if (order.created_by && invCreatedByRow && invCreatedBy) {
-      invCreatedBy.textContent = order.created_by;
+    const _prCashier = order.cashier_name || order.created_by || '';
+    if (_prCashier && invCreatedByRow && invCreatedBy) {
+      invCreatedBy.textContent = _prCashier;
       invCreatedByRow.style.display = '';
     } else if (invCreatedByRow) {
       invCreatedByRow.style.display = 'none';
@@ -737,8 +771,11 @@ window.addEventListener('DOMContentLoaded', () => {
       total:            total,
       paidCash:         isMixed ? pc : 0,
       paidCard:         isMixed ? pd : 0,
+      paidAmount:       parseFloat(order.paid_amount || 0),
+      remainingAmount:  parseFloat(order.remaining_amount || 0),
       starch:           order.starch || '',
       bluing:           order.bluing || '',
+      cashierName:      order.cashier_name || order.created_by || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
       customFields: Array.isArray(s.customFields) ? s.customFields : [],
       qrPayload: vatRate > 0 ? {
@@ -880,6 +917,12 @@ window.addEventListener('DOMContentLoaded', () => {
       const invTotal = res.invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
       document.getElementById('invoicesFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${res.invoices.length} &nbsp;|&nbsp; ${SAR(invTotal)}`;
 
+      const deferredPayments = res.deferredPayments || [];
+      document.getElementById('badgeDeferredPayments').textContent = deferredPayments.length;
+      document.getElementById('deferredPaymentsTableBody').innerHTML = buildDeferredPaymentsTable(deferredPayments);
+      const defTotal = deferredPayments.reduce((s, p) => s + Number(p.payment_amount || 0), 0);
+      document.getElementById('deferredPaymentsFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${deferredPayments.length} &nbsp;|&nbsp; ${SAR(defTotal)}`;
+
       document.getElementById('badgeCreditNotes').textContent = res.creditNotes.length;
       document.getElementById('creditNotesTableBody').innerHTML = buildCreditNotesTable(res.creditNotes);
       const cnTotal = res.creditNotes.reduce((s, c) => s + Number(c.total_amount || 0), 0);
@@ -897,6 +940,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!colSetup) {
         setupCollapsible('toggleExpenses', 'bodyExpenses');
         setupCollapsible('toggleInvoices', 'bodyInvoices');
+        setupCollapsible('toggleDeferredPayments', 'bodyDeferredPayments');
         setupCollapsible('toggleCreditNotes', 'bodyCreditNotes');
         setupCollapsible('toggleSubscriptions', 'bodySubscriptions');
         colSetup = true;
@@ -914,8 +958,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   btnApplyFilter.addEventListener('click', loadReport);
-  filterDateFrom.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadReport(); });
-  filterDateTo.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadReport(); });
 
   function rebuildReportContent() {
     if (!reportData) return;
@@ -927,6 +969,11 @@ window.addEventListener('DOMContentLoaded', () => {
     buildPaymentMethods(reportData.paymentMethods);
     document.getElementById('expensesTableBody').innerHTML = buildExpensesTable(reportData.expenses);
     document.getElementById('invoicesTableBody').innerHTML = buildInvoicesTable(reportData.invoices);
+    const defBody = document.getElementById('deferredPaymentsTableBody');
+    if (defBody) defBody.innerHTML = buildDeferredPaymentsTable(reportData.deferredPayments || []);
+    const defTotal2 = (reportData.deferredPayments || []).reduce((s, p) => s + Number(p.payment_amount || 0), 0);
+    const defFooter = document.getElementById('deferredPaymentsFooter');
+    if (defFooter) defFooter.innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${(reportData.deferredPayments || []).length} &nbsp;|&nbsp; ${SAR(defTotal2)}`;
     const cnBody = document.getElementById('creditNotesTableBody');
     if (cnBody) cnBody.innerHTML = buildCreditNotesTable(reportData.creditNotes);
     const subBody = document.getElementById('subscriptionsTableBody');

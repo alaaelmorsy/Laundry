@@ -20,7 +20,12 @@ window.addEventListener('DOMContentLoaded', () => {
     localApiParamAliases: document.getElementById('localApiParamAliases'),
     localApiPreferredMode: document.getElementById('localApiPreferredMode'),
     localApiEnableTextPlain: document.getElementById('localApiEnableTextPlain'),
+    sendStartDate: document.getElementById('sendStartDate'),
   };
+
+  els.sendStartDate.addEventListener('click', function () {
+    try { this.showPicker(); } catch (_) {}
+  });
 
   let _statusTimer = null;
 
@@ -52,6 +57,7 @@ window.addEventListener('DOMContentLoaded', () => {
     els.localApiParamName.value = localApi.paramName || 'invoiceJO';
     els.localApiPreferredMode.value = localApi.preferredMode || 'form';
     els.localApiEnableTextPlain.checked = localApi.enableTextPlain === true;
+    els.sendStartDate.value = s.sendStartDate || '';
     const aliases = Array.isArray(localApi.paramAliases) ? localApi.paramAliases : [];
     els.localApiParamAliases.value = aliases.length
       ? aliases.join(',')
@@ -84,6 +90,7 @@ window.addEventListener('DOMContentLoaded', () => {
         preferredMode: els.localApiPreferredMode.value,
         enableTextPlain: els.localApiEnableTextPlain.checked,
       },
+      sendStartDate: els.sendStartDate.value || null,
     };
   }
 

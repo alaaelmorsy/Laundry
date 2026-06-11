@@ -1271,6 +1271,7 @@ body{
     ${subBalanceRow}
     ${order.starch ? `<div class="info-row"><span class="info-label">نشا</span><span class="info-val">${escHtmlPdf(order.starch)}</span></div>` : ''}
     ${order.bluing ? `<div class="info-row"><span class="info-label">النيلة</span><span class="info-val">${escHtmlPdf(order.bluing)}</span></div>` : ''}
+    ${(order.cashier_name || order.created_by) ? `<div class="info-row"><span class="info-label">الكاشير</span><span class="info-val">${escHtmlPdf(order.cashier_name || order.created_by)}</span></div>` : ''}
   </div>
   
   <div class="items-section">
@@ -1728,6 +1729,9 @@ function buildReportExcelSheets(data, filters, branding) {
   summarySheetRows.push(['المبيعات بعد الخصم', fmt(summary.salesAfterDisc.beforeTax), fmt(summary.salesAfterDisc.tax), fmt(summary.salesAfterDisc.afterTax)]); r++;
   summarySheetRows.push(['إشعارات الدائن (المرتجعات)', fmt(summary.creditNotes.beforeTax), fmt(summary.creditNotes.tax), fmt(summary.creditNotes.afterTax)]); r++;
   summarySheetRows.push(['*** إجمالي المبيعات بعد الخصم والمرتجعات ***', fmt(summary.totalNet.beforeTax), fmt(summary.totalNet.tax), fmt(summary.totalNet.afterTax)]); r++;
+  if (summary.partialPayments && summary.partialPayments.afterTax > 0) {
+    summarySheetRows.push(['مدفوعات الفواتير الآجلة', fmt(summary.partialPayments.beforeTax), fmt(summary.partialPayments.tax), fmt(summary.partialPayments.afterTax)]); r++;
+  }
   summarySheetRows.push(['الاشتراكات', fmt(summary.subscriptions.beforeTax), fmt(summary.subscriptions.tax), fmt(summary.subscriptions.afterTax)]); r++;
   summarySheetRows.push(['المصروفات', fmt(summary.expenses.beforeTax), fmt(summary.expenses.tax), fmt(summary.expenses.afterTax)]); r++;
   summarySheetRows.push(['=== الصافي ===', fmt(summary.net.beforeTax), fmt(summary.net.tax), fmt(summary.net.afterTax)]); r++;
@@ -2196,6 +2200,9 @@ function buildPdfHtmlForReport(data, filters, cairoRegularB64, cairoBoldB64, sau
     { label: 'المبيعات بعد الخصم', d: summary.salesAfterDisc, cls: '' },
     { label: 'إشعارات الدائن (المرتجعات)', d: summary.creditNotes, cls: '' },
     { label: 'إجمالي المبيعات بعد الخصم بعد المرتجعات', d: summary.totalNet, cls: 'row-total' },
+    ...(summary.partialPayments && summary.partialPayments.afterTax > 0
+      ? [{ label: 'مدفوعات الفواتير الآجلة', d: summary.partialPayments, cls: '' }]
+      : []),
     { label: 'الاشتراكات', d: summary.subscriptions, cls: '' },
     { label: 'المصروفات', d: summary.expenses, cls: '' },
     { label: 'الصافي', d: summary.net, cls: 'row-net' },

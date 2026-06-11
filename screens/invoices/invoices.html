@@ -164,6 +164,10 @@
               <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
               <span class="inv-shop-sub" id="invVatNumber" dir="ltr"></span>
             </div>
+            <div class="inv-shop-contact-row" id="invCRRow" style="display:none">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span class="inv-shop-sub" id="invCR" dir="ltr"></span>
+            </div>
             <div class="inv-shop-contact-row" id="invEmailRow">
               <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               <span class="inv-shop-sub" id="invShopEmail"></span>
@@ -215,10 +219,6 @@
             <div class="cr-info-cell" id="invDeliveredAtRow" style="display:none">
               <span class="cr-info-label">تاريخ التسليم</span>
               <span class="cr-info-val" id="invDeliveredAt" dir="ltr"></span>
-            </div>
-            <div class="cr-info-cell" id="invCRRow" style="display:none">
-              <span class="cr-info-label">السجل التجاري</span>
-              <span class="cr-info-val" id="invCR" dir="ltr"></span>
             </div>
             <div class="cr-info-cell" id="invCreatedByRow" style="display:none">
               <span class="cr-info-label">الكاشير</span>
@@ -367,6 +367,7 @@
             <div class="a4m-card">
               <div class="a4m-kv"><span>الاسم / Name</span><b id="a4mCustName"></b></div>
               <div class="a4m-kv"><span>الجوال / Mobile</span><b id="a4mCustPhone" dir="ltr"></b></div>
+              <div class="a4m-kv" id="a4mCustVatRow" style="display:none"><span>الرقم الضريبي / VAT No.</span><b id="a4mCustVat" dir="ltr"></b></div>
               <div class="a4m-kv" id="a4mRowSubRef" style="display:none"><span>رقم الاشتراك / Sub #</span><b id="a4mSubRef"></b></div>
               <div class="a4m-kv" id="a4mRowSubPackage" style="display:none"><span>الباقة / Package</span><b id="a4mSubPackage"></b></div>
               <div class="a4m-kv" id="a4mRowSubBalance" style="display:none"><span>الرصيد / Balance</span><b id="a4mSubBalance" dir="ltr"></b></div>
@@ -377,6 +378,7 @@
               <div class="a4m-kv" id="a4mRowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="a4mDeliveredAt" dir="ltr"></b></div>
               <div class="a4m-kv" id="a4mRowStarch" style="display:none"><span>نشا / Starch</span><b id="a4mStarch"></b></div>
               <div class="a4m-kv" id="a4mRowBluing" style="display:none"><span>النيلة / Bluing</span><b id="a4mBluing"></b></div>
+              <div class="a4m-kv" id="a4mRowCashier" style="display:none"><span>الكاشير / Cashier</span><b id="a4mCashierName"></b></div>
             </div>
           </section>
 
@@ -413,6 +415,8 @@
                 <div class="a4m-trow a4m-mixed-row" id="a4mMixedCardRow" style="display:none">
                   <span>المدفوع شبكة</span><b id="a4mMixedCard" dir="ltr"></b>
                 </div>
+                <div class="a4m-trow a4m-paid" id="a4mPaidRow" style="display:none"><span>المدفوع / Paid</span><b id="a4mPaidAmount" class="a4m-paid-val" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-remaining" id="a4mRemainingRow" style="display:none"><span>الآجل المتبقي / Remaining</span><b id="a4mRemainingAmount" class="a4m-remaining-val" dir="ltr"></b></div>
               </div>
             </div>
             <div class="a4m-qr-box">

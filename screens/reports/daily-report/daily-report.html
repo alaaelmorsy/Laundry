@@ -165,6 +165,36 @@
           </div>
         </div>
 
+        <!-- Deferred Payments Collapsible -->
+        <div class="report-section collapsible" id="sectionDeferredPayments">
+          <div class="section-header toggle-header" id="toggleDeferredPayments">
+            <div class="section-title-wrap">
+              <span class="toggle-arrow">▼</span>
+              <h2 class="section-title" data-i18n="report-deferred-payments-title">مدفوعات الآجل</h2>
+              <span class="section-badge" id="badgeDeferredPayments">0</span>
+            </div>
+            <div class="section-note" data-i18n="report-deferred-payments-note">المبالغ المحصلة من الفواتير الآجلة (المبلغ المدفوع فقط وليس كامل الفاتورة)</div>
+          </div>
+          <div class="collapsible-body" id="bodyDeferredPayments">
+            <div class="table-container">
+              <table class="report-table detail-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="all-invoices-num">رقم</th>
+                    <th data-i18n="all-invoices-customer">العميل</th>
+                    <th data-i18n="all-invoices-date">التاريخ</th>
+                    <th data-i18n="all-invoices-payment-method">طريقة الدفع</th>
+                    <th data-i18n="all-invoices-total-after-tax">المبلغ المدفوع</th>
+                    <th class="no-print" data-i18n="all-invoices-view">عرض</th>
+                  </tr>
+                </thead>
+                <tbody id="deferredPaymentsTableBody"></tbody>
+              </table>
+            </div>
+            <div class="section-footer" id="deferredPaymentsFooter"></div>
+          </div>
+        </div>
+
         <!-- Credit Notes Collapsible -->
         <div class="report-section collapsible" id="sectionCreditNotes">
           <div class="section-header toggle-header" id="toggleCreditNotes">
@@ -515,6 +545,7 @@
               <div class="a4m-kv" id="a4mRowDeliveredAt" style="display:none"><span>تاريخ التسليم / Delivered</span><b id="a4mDeliveredAt" dir="ltr"></b></div>
               <div class="a4m-kv" id="a4mRowStarch" style="display:none"><span>نشا / Starch</span><b id="a4mStarch"></b></div>
               <div class="a4m-kv" id="a4mRowBluing" style="display:none"><span>النيلة / Bluing</span><b id="a4mBluing"></b></div>
+              <div class="a4m-kv" id="a4mRowCashier" style="display:none"><span>الكاشير / Cashier</span><b id="a4mCashierName"></b></div>
             </div>
           </section>
 
@@ -551,6 +582,8 @@
                 <div class="a4m-trow a4m-mixed-row" id="a4mMixedCardRow" style="display:none">
                   <span>المدفوع شبكة</span><b id="a4mMixedCard" dir="ltr"></b>
                 </div>
+                <div class="a4m-trow a4m-paid" id="a4mPaidRow" style="display:none"><span>المدفوع / Paid</span><b id="a4mPaidAmount" class="a4m-paid-val" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-remaining" id="a4mRemainingRow" style="display:none"><span>الآجل المتبقي / Remaining</span><b id="a4mRemainingAmount" class="a4m-remaining-val" dir="ltr"></b></div>
               </div>
             </div>
             <div class="a4m-qr-box">

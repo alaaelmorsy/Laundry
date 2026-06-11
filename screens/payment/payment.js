@@ -8,7 +8,8 @@
     payments: [],
     selectedMethod: null,
     isProcessing: false,
-    orderId: null
+    orderId: null,
+    appSettings: {}
   };
 
   // DOM Elements
@@ -66,7 +67,13 @@
 
     // Setup event listeners
     setupEventListeners();
-    
+
+    // Load app settings
+    try {
+      const sRes = await window.api.getAppSettings();
+      state.appSettings = (sRes && sRes.settings) ? sRes.settings : (sRes || {});
+    } catch (_) {}
+
     // Load invoice data
     await loadInvoiceData();
   }
@@ -305,10 +312,28 @@
       
       // Show success message
       showToast('success', 'تم تسجيل الدفعة بنجاح');
-      
+
+      // إرسال الفاتورة عبر الواتساب إذا كان الإعداد مفعلاً
+      if (state.appSettings.whatsappSendOnPay && state.invoice && state.invoice.phone) {
+        const invNum = String(state.invoice.invoice_seq || state.invoice.order_number || '');
+        const optionalMsg = state.appSettings.whatsappInvoiceMessage || '';
+        const totalLine = state.invoice.total_amount ? '\n*الإجمالي: ' + Number(state.invoice.total_amount).toFixed(2) + ' SAR*' : '';
+        const autoMsg = 'تم دفع الفاتورة بنجاح ✅\nفاتورة رقم: ' + invNum + totalLine;
+        const boldOptional = optionalMsg
+          ? optionalMsg.split('\n').map(function(l) { var t = l.trim(); return t ? '*' + t + '*' : ''; }).join('\n')
+          : '';
+        const caption = boldOptional ? autoMsg + '\n\n' + boldOptional : autoMsg;
+        window.api.whatsappSendInvoicePdf({
+          orderId: Number(state.orderId),
+          phone: state.invoice.phone,
+          caption,
+          paperType: (state.appSettings.invoicePaperType) || 'thermal'
+        }).catch(() => {});
+      }
+
       // Reload data
       await loadInvoiceData();
-      
+
       // Reset form
       resetForm();
       

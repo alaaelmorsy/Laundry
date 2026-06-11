@@ -182,9 +182,12 @@ window.addEventListener('DOMContentLoaded', () => {
       if (s.cityAr) addrParts.push(s.cityAr);
       if (s.postalCode) addrParts.push(s.postalCode);
       $('subInvShopAddress').textContent = addrParts.length ? addrParts.join('، ') : (s.locationAr || '');
-      $('subInvShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
-      $('subInvVatNumber').textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
-      $('subInvShopEmail').textContent = s.email || '';
+      if (s.phone) { $('subInvShopPhone').textContent = s.phone; $('subInvShopPhoneRow').style.display = ''; }
+      else { $('subInvShopPhoneRow').style.display = 'none'; }
+      if (s.vatNumber) { $('subInvVatNumber').textContent = 'الرقم الضريبي: ' + s.vatNumber; $('subInvVatHeaderRow').style.display = ''; }
+      else { $('subInvVatHeaderRow').style.display = 'none'; }
+      if (s.email) { $('subInvShopEmail').textContent = s.email; $('subInvEmailRow').style.display = ''; }
+      else { $('subInvEmailRow').style.display = 'none'; }
 
       if (s.logoDataUrl) {
         $('subInvLogo').src = s.logoDataUrl;
@@ -210,29 +213,27 @@ window.addEventListener('DOMContentLoaded', () => {
       $('subInvDate').textContent = formatInvDate(order.created_at);
       $('subInvPayment').textContent = paymentLabel(order.payment_method);
 
+      // الكاشير
+      const cashierName = order.cashier_name || order.created_by || '';
+      if (cashierName) { $('subInvCashierName').textContent = cashierName; $('subInvCashierRow').style.display = ''; }
+      else { $('subInvCashierRow').style.display = 'none'; }
+
       // ── بيانات العميل ──
-      if (order.customer_name || order.phone) {
-        $('subInvCustomerSection').style.display = '';
-        if (order.customer_name) { $('subInvCustName').textContent = order.customer_name; $('subInvCustNameRow').style.display = ''; }
-        else { $('subInvCustNameRow').style.display = 'none'; }
-        if (order.phone) { $('subInvCustPhone').textContent = order.phone; $('subInvCustPhoneRow').style.display = ''; }
-        else { $('subInvCustPhoneRow').style.display = 'none'; }
-      } else {
-        $('subInvCustomerSection').style.display = 'none';
-      }
+      if (order.customer_name) { $('subInvCustName').textContent = order.customer_name; $('subInvCustNameRow').style.display = ''; }
+      else { $('subInvCustNameRow').style.display = 'none'; }
+      if (order.phone) { $('subInvCustPhone').textContent = order.phone; $('subInvCustPhoneRow').style.display = ''; }
+      else { $('subInvCustPhoneRow').style.display = 'none'; }
 
       // بيانات الاشتراك
       if (subscription && subscription.subscription_number) {
         $('subInvSubRef').textContent = subscription.subscription_number;
         $('subInvSubRefRow').style.display = '';
-        $('subInvCustomerSection').style.display = '';
       } else { $('subInvSubRefRow').style.display = 'none'; }
       if (subscription && subscription.credit_remaining != null) {
         const bal = parseFloat(subscription.credit_remaining);
         if (!isNaN(bal)) {
           $('subInvSubBalance').innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(bal);
           $('subInvSubBalRow').style.display = '';
-          $('subInvCustomerSection').style.display = '';
         } else { $('subInvSubBalRow').style.display = 'none'; }
       } else { $('subInvSubBalRow').style.display = 'none'; }
 
@@ -2157,12 +2158,14 @@ window.addEventListener('DOMContentLoaded', () => {
   initPackageDropdown('newSub');
   initPackageDropdown('renew');
 
-  // ── منطق أزرار الدفع — اشتراك جديد ──
+  // ── منطق dropdown الدفع — اشتراك جديد ──
+  document.getElementById('newSubPaymentSelect').addEventListener('change', (e) => {
+    currentPaymentMethod = e.target.value;
+    document.getElementById('newSubMixedRow').style.display = currentPaymentMethod === 'mixed' ? '' : 'none';
+  });
   document.getElementById('newSubPaymentBtns').addEventListener('click', (e) => {
     const btn = e.target.closest('.pay-btn');
     if (!btn) return;
-    document.querySelectorAll('#newSubPaymentBtns .pay-btn').forEach(b => b.classList.remove('pay-btn-active'));
-    btn.classList.add('pay-btn-active');
     currentPaymentMethod = btn.dataset.method;
     document.getElementById('newSubMixedRow').style.display = currentPaymentMethod === 'mixed' ? '' : 'none';
   });

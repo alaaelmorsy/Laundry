@@ -172,6 +172,20 @@
     document.getElementById('crShopName').textContent = shopName;
     document.getElementById('crShopAddress').textContent = s.locationAr || s.locationEn || '';
     document.getElementById('crShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
+    
+    const taxEl = document.getElementById('crShopTax');
+    const taxRow = document.getElementById('crShopTaxRow');
+    if (taxEl && taxRow) {
+      if (s.vatNumber) { taxEl.textContent = 'الرقم الضريبي: ' + s.vatNumber; taxRow.style.display = ''; }
+      else taxRow.style.display = 'none';
+    }
+    const crEl = document.getElementById('crShopCr');
+    const crRow = document.getElementById('crShopCrRow');
+    if (crEl && crRow) {
+      if (s.commercialRegister) { crEl.textContent = 'السجل التجاري: ' + s.commercialRegister; crRow.style.display = ''; }
+      else crRow.style.display = 'none';
+    }
+
     const logoWrap = document.getElementById('crLogoWrap');
     const logo = document.getElementById('crLogo');
     if (s.logoDataUrl && logo) {
@@ -324,9 +338,10 @@
 
     // نسخ محتوى الإيصال لـ print zone للتوافق مع متصفحات الجوال
     var paperEl = document.getElementById('crPaper');
-    var printZone = document.getElementById('consumptionPrintZone');
+    var printZone = document.getElementById('invPrintZone');
     if (paperEl && printZone) {
       printZone.innerHTML = paperEl.outerHTML;
+      printZone.style.setProperty('display', 'block', 'important');
     }
 
     var currentCopy = 0;
@@ -344,7 +359,10 @@
         if (currentCopy < copies) {
           setTimeout(printNext, 120);
         } else {
-          if (printZone) printZone.innerHTML = '';
+          if (printZone) {
+            printZone.innerHTML = '';
+            printZone.style.setProperty('display', 'none', 'important');
+          }
         }
       }
       window.addEventListener('afterprint', afterPrint);

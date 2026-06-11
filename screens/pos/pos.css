@@ -2556,6 +2556,7 @@ html, body {
 }
 .toast-top-success { background: linear-gradient(135deg, #22c55e, #15803d); }
 .toast-top-error   { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.toast-top-warning { background: linear-gradient(135deg, #f59e0b, #b45309); }
 
 .toast-top-icon {
   display: flex;
@@ -2981,7 +2982,8 @@ html, body {
 .btn-inv-print { background: #1e40af; color: #fff; }
 .btn-inv-pdf   { background: #dc2626; color: #fff; }
 .btn-inv-new   { background: #16a34a; color: #fff; }
-.btn-inv-close { background: #e2e8f0; color: #374151; }
+.btn-inv-close     { background: #e2e8f0; color: #374151; }
+.btn-inv-whatsapp  { background: #25d366; color: #fff; }
 
 /* ===== A4 Modal Styles ===== */
 .inv-paper-a4m { display: none; }
@@ -3235,10 +3237,15 @@ html, body {
   .no-print { display: none !important; }
   body.invtype-a4 .inv-paper { display: none !important; }
   body.invtype-a4 .inv-paper-a4m {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 280mm !important;
     width: 210mm !important;
     max-width: 210mm !important;
-    padding: 8mm 10mm 20mm !important;
+    padding: 8mm 10mm 15mm !important;
+  }
+  body.invtype-a4 #a4mFooterNotes {
+    margin-top: auto !important;
   }
   body.invtype-a4 .a4m-items tbody td { background: #fff !important; }
   body.invtype-a4 .a4m-items tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
@@ -4797,6 +4804,7 @@ html, body {
 }
 .def-tbl-clean   { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
 .def-tbl-deliver { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
+.def-tbl-disabled { background: #fee2e2 !important; color: #b91c1c !important; border: 1px solid #fecaca !important; }
 
 /* Pagination */
 .def-pagination-bar {

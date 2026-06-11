@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title data-i18n="consumption-receipts-title">إيصالات الاستهلاك - نظام المغسلة</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
-  <link rel="stylesheet" href="consumption-receipts.css?v=4" />
+  <link rel="stylesheet" href="consumption-receipts.css?v=6" />
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
 </head>
 <body>
@@ -105,7 +105,7 @@
   </div>
 
   <!-- print zone خارج المودال للتوافق مع متصفحات الجوال -->
-  <div id="consumptionPrintZone" style="display:none"></div>
+  <div id="invPrintZone" style="display:none"></div>
 
   <div id="receiptViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
     <div class="inv-dialog">
@@ -141,6 +141,14 @@
             <div class="inv-shop-contact-row">
               <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               <span class="inv-shop-sub" id="crShopPhone"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="crShopTaxRow" style="display:none">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+              <span class="inv-shop-sub" id="crShopTax" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="crShopCrRow" style="display:none">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span class="inv-shop-sub" id="crShopCr" dir="ltr"></span>
             </div>
           </div>
           <div class="inv-divider-thick inv-sep"></div>
@@ -180,10 +188,10 @@
               <span class="cr-info-label">تاريخ التسليم</span>
               <span class="cr-info-val" id="crDeliveredAt" dir="ltr"></span>
             </div>
-          </div>
-          <div class="inv-meta-row" id="crRefundNumRow" style="display:none">
-            <span class="inv-meta-label">رقم المرتجع</span>
-            <span class="inv-meta-val" id="crRefundNum" dir="ltr"></span>
+            <div class="cr-info-cell" id="crRefundNumRow" style="display:none">
+              <span class="cr-info-label">رقم المرتجع</span>
+              <span class="cr-info-val" id="crRefundNum" dir="ltr"></span>
+            </div>
           </div>
           <div class="inv-meta-row" id="crRefundReasonRow" style="display:none">
             <span class="inv-meta-label">سبب الإرجاع</span>
@@ -217,6 +225,6 @@
   <script src="../../assets/auth-guard.js"></script>
   <script src="../../assets/i18n.js"></script>
   <script src="../../assets/JsBarcode.min.js"></script>
-  <script src="consumption-receipts.js"></script>
+  <script src="consumption-receipts.js?v=4"></script>
 </body>
 </html>

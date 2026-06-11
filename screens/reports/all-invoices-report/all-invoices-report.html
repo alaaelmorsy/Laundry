@@ -340,21 +340,39 @@
       </div>
       <div class="inv-dialog-body">
         <div class="inv-paper" id="invoicePaper">
-          <div class="inv-logo-wrap" id="invLogoWrap" style="display:none">
-            <img id="invLogo" class="inv-logo" data-i18n-alt="settings-logo-hint" alt="شعار المغسلة" />
+          <!-- Shop header -->
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="invLogoWrap" style="display:none">
+              <img id="invLogo" class="inv-logo" data-i18n-alt="settings-logo-hint" alt="شعار المغسلة" />
+            </div>
+            <div class="inv-shop-name" id="invShopName"></div>
+            <div class="inv-shop-sub" id="invShopAddress"></div>
+            <div class="inv-shop-contact-row" id="invShopPhoneRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span class="inv-shop-sub" id="invShopPhone"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="invVatHeaderRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+              <span class="inv-shop-sub" id="invVatNumber" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="invCRRow" style="display:none">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span class="inv-shop-sub" id="invCR" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="invEmailRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <span class="inv-shop-sub" id="invShopEmail"></span>
+            </div>
+            <div id="invCustomFields" style="display:none"></div>
           </div>
-          <div class="inv-shop-name" id="invShopName"></div>
-          <div class="inv-shop-sub" id="invShopAddress"></div>
-          <div class="inv-shop-sub" id="invShopPhone"></div>
-          <div class="inv-shop-sub" id="invVatNumber" dir="ltr"></div>
-          <div class="inv-shop-sub" id="invCR" dir="ltr" style="display:none"></div>
-          <div class="inv-shop-sub" id="invShopEmail"></div>
-          <div id="invCustomFields" style="display:none"></div>
+
           <div class="inv-divider-thick inv-sep"></div>
-          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000" data-i18n="all-invoices-simplified-invoice">فاتورة ضريبية مبسطة</span></div>
+
+          <!-- Invoice meta -->
+          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" id="invMainTitle" style="color:#000" data-i18n="all-invoices-simplified-invoice">فاتورة ضريبية مبسطة</span></div>
           <div class="cr-info-grid">
             <div class="cr-info-cell">
-              <span class="cr-info-label" data-i18n="all-invoices-invoice-num">رقم الفاتورة</span>
+              <span class="cr-info-label" id="invOrderNumLabel" data-i18n="all-invoices-invoice-num">رقم الفاتورة</span>
               <span class="cr-info-val" id="invOrderNum" dir="ltr"></span>
             </div>
             <div class="cr-info-cell">
@@ -364,6 +382,10 @@
             <div class="cr-info-cell">
               <span class="cr-info-label" data-i18n="all-invoices-payment-method">طريقة الدفع</span>
               <span class="cr-info-val" id="invPayment"></span>
+            </div>
+            <div class="cr-info-cell" id="invCashierRow" style="display:none">
+              <span class="cr-info-label">الكاشير</span>
+              <span class="cr-info-val" id="invCashierName"></span>
             </div>
             <div class="cr-info-cell" id="invCustNameRow" style="display:none">
               <span class="cr-info-label" data-i18n="all-invoices-name">الاسم</span>
@@ -423,6 +445,14 @@
               <span class="inv-grand-label" id="invTotalLabel">الإجمالي شامل الضريبة</span>
               <span class="inv-grand-val" id="invTotal" dir="ltr"></span>
             </div>
+            <div class="inv-total-row" id="invBalBeforeRow" style="display:none">
+              <span class="inv-total-label" id="invBalBeforeLabel">الرصيد قبل</span>
+              <span class="inv-total-val" id="invBalBefore" dir="ltr"></span>
+            </div>
+            <div class="inv-total-row" id="invBalAfterRow" style="display:none">
+              <span class="inv-total-label" id="invBalAfterLabel">الرصيد بعد</span>
+              <span class="inv-total-val" id="invBalAfter" dir="ltr"></span>
+            </div>
             <div class="inv-total-row" id="invPaidRow" style="display:none">
               <span class="inv-total-label">المدفوع</span>
               <span class="inv-total-val inv-paid-val" id="invPaidAmount" dir="ltr"></span>
@@ -473,15 +503,30 @@
       </div>
       <div class="inv-dialog-body">
         <div class="inv-paper" id="cnPaper">
-          <div class="inv-logo-wrap" id="cnLogoWrap" style="display:none">
-            <img id="cnLogo" class="inv-logo" alt="شعار المغسلة" />
+          <!-- Shop header -->
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="cnLogoWrap" style="display:none">
+              <img id="cnLogo" class="inv-logo" alt="شعار المغسلة" />
+            </div>
+            <div class="inv-shop-name" id="cnShopName"></div>
+            <div class="inv-shop-sub" id="cnShopAddress"></div>
+            <div class="inv-shop-contact-row" id="cnShopPhoneRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.26h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span class="inv-shop-sub" id="cnShopPhone"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="cnVatHeaderRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+              <span class="inv-shop-sub" id="cnVatNumber" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="cnCRRow" style="display:none">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span class="inv-shop-sub" id="cnCR" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="cnEmailRow">
+              <svg class="inv-contact-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <span class="inv-shop-sub" id="cnShopEmail"></span>
+            </div>
           </div>
-          <div class="inv-shop-name" id="cnShopName"></div>
-          <div class="inv-shop-sub" id="cnShopAddress"></div>
-          <div class="inv-shop-sub" id="cnShopPhone"></div>
-          <div class="inv-shop-sub" id="cnVatNumber" dir="ltr"></div>
-          <div class="inv-shop-sub" id="cnCR" dir="ltr" style="display:none"></div>
-          <div class="inv-shop-sub" id="cnShopEmail"></div>
           <div class="inv-divider-thick inv-sep"></div>
           <div style="border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 0;margin:4px 0;text-align:center">
             <span class="inv-meta-label" style="color:#000;font-size:12px;display:block;text-align:center">إشعار دائن للفاتورة الضريبية المبسطة</span>

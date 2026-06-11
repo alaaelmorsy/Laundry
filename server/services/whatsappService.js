@@ -156,6 +156,23 @@ async function sendDocument(phone, buffer, filename, caption) {
 
   const jid = n + '@s.whatsapp.net';
 
+  // التحقق من أن الرقم مسجّل في واتساب قبل الإرسال
+  if (_sock && typeof _sock.onWhatsApp === 'function') {
+    try {
+      const results = await _sock.onWhatsApp(n);
+      const found = Array.isArray(results) ? results[0] : results;
+      if (!found || !found.exists) {
+        console.log('[WhatsApp] رقم غير مسجّل في واتساب، تخطي الإرسال:', n);
+        return { success: false, error: 'not_on_whatsapp' };
+      }
+    } catch (_) {
+      // إذا فشل التحقق (مثلاً انقطاع مؤقت)، نكمل الإرسال
+    }
+  }
+
+  // تأخير عشوائي بين 3 و8 ثوانٍ لتقليل خطر الحظر
+  await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 5000)));
+
   try {
     await _sock.sendMessage(jid, {
       document: buffer,

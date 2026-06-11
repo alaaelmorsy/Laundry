@@ -7,5 +7,6 @@
       "runtimeArgs": ["server/index.js"],
       "port": 3000
     }
-  ]
+  ],
+  "autoVerify": false
 }

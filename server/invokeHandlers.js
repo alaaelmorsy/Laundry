@@ -882,6 +882,11 @@ async function invoke(method, payload, _user) {
         if (settings && settings.zatcaEnabled && result && result.id && !result.isConsumptionOnly) {
           setImmediate(async () => {
             try {
+              const zatcaCfg = await db.getZatcaSettings();
+              if (zatcaCfg && zatcaCfg.sendStartDate) {
+                const invoiceDate = (result.createdAt || new Date()).toISOString().slice(0, 10);
+                if (invoiceDate < zatcaCfg.sendStartDate) return;
+              }
               const bridge = LocalZatcaBridge.getInstance();
               await bridge.submitOrderById(result.id);
             } catch (_) { /* فشل صامت — المجدول سيعيد المحاولة */ }
@@ -1045,6 +1050,7 @@ async function invoke(method, payload, _user) {
           paymentMethod: (payload && payload.paymentMethod) || 'cash',
           paidCash: (payload && payload.paidCash) || 0,
           paidCard: (payload && payload.paidCard) || 0,
+          createdBy: (_user && (_user.username || _user.name)) || 'system',
         });
         return { success: true, ...(result || {}) };
       } catch (err) {
@@ -1408,6 +1414,17 @@ async function invoke(method, payload, _user) {
         const { orderId } = payload || {};
         if (!orderId) return { success: false, message: 'معرّف الفاتورة مطلوب' };
 
+        const zatcaCfg = await db.getZatcaSettings();
+        if (zatcaCfg && zatcaCfg.sendStartDate) {
+          const orderData = await db.getOrderById(orderId);
+          const invoiceDate = orderData && orderData.order && orderData.order.created_at
+            ? new Date(orderData.order.created_at).toISOString().slice(0, 10)
+            : null;
+          if (invoiceDate && invoiceDate < zatcaCfg.sendStartDate) {
+            return { success: false, message: `هذه الفاتورة بتاريخ ${invoiceDate} قبل تاريخ بداية الإرسال المحدد (${zatcaCfg.sendStartDate})` };
+          }
+        }
+
         const bridge = LocalZatcaBridge.getInstance();
         const result = await bridge.submitOrderById(orderId);
         return { success: result.success, ...result };
@@ -1421,6 +1438,14 @@ async function invoke(method, payload, _user) {
       try {
         const { cnId } = payload || {};
         if (!cnId) return { success: false, message: 'معرّف الإشعار الدائن مطلوب' };
+
+        const zatcaCfg = await db.getZatcaSettings();
+        if (zatcaCfg && zatcaCfg.sendStartDate) {
+          const cnDate = await db.getCreditNoteDate(cnId);
+          if (cnDate && cnDate < zatcaCfg.sendStartDate) {
+            return { success: false, message: `هذا الإشعار الدائن بتاريخ ${cnDate} قبل تاريخ بداية الإرسال المحدد (${zatcaCfg.sendStartDate})` };
+          }
+        }
 
         const bridge = LocalZatcaBridge.getInstance();
         const result = await bridge.submitCreditNoteById(cnId);
@@ -1702,6 +1727,13 @@ async function invoke(method, payload, _user) {
       } catch (err) {
         return { success: false, message: err.message };
       }
+    }
+
+    case 'getZakatReport': {
+      const { dateFrom, dateTo } = payload;
+      if (!dateFrom || !dateTo) return { success: false, message: 'dateFrom و dateTo مطلوبان' };
+      const result = await db.getZakatReport({ dateFrom, dateTo });
+      return { success: true, ...result };
     }
 
     default:

@@ -10,6 +10,7 @@ window.addEventListener('DOMContentLoaded', () => {
     { id: 'cardSubscriptionsReport',  perm: 'report_subscriptions',  url: '/screens/reports/subscriptions-report/subscriptions-report.html' },
     { id: 'cardTypesReport',          perm: 'report_types',          url: '/screens/reports/types-report/types-report.html' },
     { id: 'cardWorkerReport',         perm: 'report_worker',         url: '/screens/reports/worker-report/worker-report.html' },
+    { id: 'cardZakatReport',          perm: 'report_zakat',          url: '/screens/reports/zakat-report/zakat-report.html' },
   ];
 
   function applyPermissions() {
@@ -17,7 +18,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Admin or legacy (has `reports` but no sub-perms yet) → show all
     const hasSubPerms = u && u.permissions &&
       ['report_daily','report_period','report_expenses','report_credit_invoices',
-       'report_all_invoices','report_subscriptions','report_types','report_worker']
+       'report_all_invoices','report_subscriptions','report_types','report_worker','report_zakat']
         .some(k => k in u.permissions);
 
     REPORT_CARDS.forEach(({ id, perm, url }) => {

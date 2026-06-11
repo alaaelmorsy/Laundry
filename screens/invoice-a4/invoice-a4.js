@@ -104,6 +104,13 @@
     /* ── Customer ── */
     setText('a4CustName',  data.custName || '—');
     setText('a4CustPhone', data.custPhone || '—');
+    var a4CustVatRow = document.getElementById('a4CustVatRow');
+    if (data.custVat && a4CustVatRow) {
+      setText('a4CustVat', data.custVat);
+      a4CustVatRow.style.display = '';
+    } else if (a4CustVatRow) {
+      a4CustVatRow.style.display = 'none';
+    }
 
     /* ── Loyalty points ── */
     var loyEarned   = Number(data.loyaltyEarned   || 0);

@@ -27,7 +27,7 @@
 
     if (showWarning && quota.quota_total > 0 && quota.quota_remaining <= 0 && !_quotaWarningShown) {
       _quotaWarningShown = true;
-      showToast('انتهت باقة الرسائل — تواصل مع الدعم الفني لشراء باقة جديدة', 'error');
+      showToast(window.I18N.t('whatsapp-toast-quota-error'), 'error');
     }
   }
 
@@ -35,7 +35,7 @@
     var remaining = parseInt(document.getElementById('statRemaining').textContent, 10);
     var total     = parseInt(document.getElementById('statTotal').textContent, 10);
     if (total > 0 && remaining <= 0) {
-      showToast('انتهت باقة الرسائل — تواصل مع الدعم الفني لشراء باقة جديدة', 'error');
+      showToast(window.I18N.t('whatsapp-toast-quota-error'), 'error');
       return false;
     }
     return true;
@@ -59,9 +59,9 @@
     dot.className = 'status-dot ' + status;
 
     var labels = {
-      connected:    'متصل ✓',
-      connecting:   'جاري الاتصال...',
-      disconnected: 'غير متصل',
+      connected:    window.I18N.t('whatsapp-status-connected'),
+      connecting:   window.I18N.t('whatsapp-status-connecting'),
+      disconnected: window.I18N.t('whatsapp-status-disconnected'),
     };
     text.textContent = labels[status] || status;
 
@@ -140,7 +140,7 @@
 
   document.getElementById('btnRefresh').addEventListener('click', async function () {
     await fetchStatus();
-    showToast('تم تحديث الحالة');
+    showToast(window.I18N.t('whatsapp-toast-status-updated'));
   });
 
   document.getElementById('btnConnect').addEventListener('click', async function () {
@@ -152,12 +152,12 @@
         renderStatus(res.status, res.qr);
         renderQuota(res.quota);
         startPolling();
-        showToast('جاري الاتصال... امسح رمز QR من هاتفك');
+        showToast(window.I18N.t('whatsapp-toast-connecting'));
       } else {
-        showToast((res && res.message) || 'فشل الاتصال', 'error');
+        showToast((res && res.message) || window.I18N.t('whatsapp-toast-conn-failed'), 'error');
       }
     } catch (e) {
-      showToast('حدث خطأ أثناء الاتصال', 'error');
+      showToast(window.I18N.t('whatsapp-toast-conn-error'), 'error');
     } finally {
       btn.disabled = false;
     }
@@ -180,10 +180,10 @@
         if (res && res.success) {
           renderStatus('disconnected', null);
           stopPolling();
-          showToast('تم قطع الاتصال وحذف الجلسة');
+          showToast(window.I18N.t('whatsapp-toast-disconnected'));
         }
       } catch (e) {
-        showToast('حدث خطأ', 'error');
+        showToast(window.I18N.t('whatsapp-toast-error'), 'error');
       } finally {
         btn.disabled = false;
       }
@@ -195,42 +195,44 @@
     var message = document.getElementById('inputMessage').value.trim();
 
     if (!phone || !message) {
-      showToast('الرجاء إدخال رقم الجوال والرسالة', 'error');
+      showToast(window.I18N.t('whatsapp-toast-validation'), 'error');
       return;
     }
     if (_currentStatus !== 'connected') {
-      showToast('يجب الاتصال بـ WhatsApp أولاً', 'error');
+      showToast(window.I18N.t('whatsapp-toast-must-connect'), 'error');
       return;
     }
     if (!checkQuotaBeforeSend()) return;
 
     var btn = this;
     btn.disabled = true;
-    btn.textContent = 'جارٍ الإرسال...';
+    var btnOriginalHtml = btn.innerHTML;
+    btn.textContent = window.I18N.t('whatsapp-btn-sending');
 
     try {
       var res = await window.api.whatsappSendTest({ phone: phone, message: message });
       if (res && res.success) {
-        showToast('✓ تم إرسال الرسالة بنجاح');
+        showToast(window.I18N.t('whatsapp-toast-sent-success'));
         document.getElementById('inputPhone').value   = '';
         document.getElementById('inputMessage').value = '';
         // Refresh quota
         var q = await window.api.whatsappGetQuota();
         if (q && q.success) renderQuota(q);
       } else {
-        showToast((res && res.message) || 'فشل الإرسال', 'error');
+        showToast((res && res.message) || window.I18N.t('whatsapp-toast-send-failed'), 'error');
       }
     } catch (e) {
-      showToast('حدث خطأ أثناء الإرسال', 'error');
+      showToast(window.I18N.t('whatsapp-toast-send-error'), 'error');
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> إرسال رسالة تجريبية';
+      btn.innerHTML = btnOriginalHtml;
     }
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
   (async function init() {
+    if (window.I18N) window.I18N.apply();
     startPolling();
     await fetchStatus();
   })();

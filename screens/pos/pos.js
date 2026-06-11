@@ -2,6 +2,8 @@
   'use strict';
 
   /* ========== STATE ========== */
+  var _lastKnownWaStatus = null;
+
   const state = {
     products: [],
     services: [],
@@ -167,6 +169,7 @@
     btnCloseSuccess: document.getElementById('btnCloseSuccess'),
     consumptionReceiptModal: document.getElementById('consumptionReceiptModal'),
     btnCrModalClose: document.getElementById('btnCrModalClose'),
+    btnCrModalWhatsapp: document.getElementById('btnCrModalWhatsapp'),
     btnCrModalExportPdf: document.getElementById('btnCrModalExportPdf'),
     btnCrModalPrint: document.getElementById('btnCrModalPrint'),
     invoiceModal: document.getElementById('invoiceModal'),
@@ -187,6 +190,8 @@
     invCustName: document.getElementById('invCustName'),
     invCustPhoneRow: document.getElementById('invCustPhoneRow'),
     invCustPhone: document.getElementById('invCustPhone'),
+    invCustVatRow: document.getElementById('invCustVatRow'),
+    invCustVat: document.getElementById('invCustVat'),
     invSubSection: document.getElementById('invSubSection'),
     invSubRefRow: document.getElementById('invSubRefRow'),
     invSubRef: document.getElementById('invSubRef'),
@@ -226,6 +231,7 @@
     invFooterEmail: document.getElementById('invFooterEmail'),
     btnInvPrint: document.getElementById('btnInvPrint'),
     btnInvExportPdf: document.getElementById('btnInvExportPdf'),
+    btnInvWhatsapp: document.getElementById('btnInvWhatsapp'),
     btnInvNewSale: null,
     btnInvClose: document.getElementById('btnInvClose'),
     tabSale:               document.getElementById('tabSale'),
@@ -456,6 +462,22 @@
     } else {
       window.addEventListener('userReady', applyPosPermissions, { once: true });
     }
+
+    // مراقبة حالة اتصال الواتساب
+    setInterval(async function() {
+      try {
+        const res = await window.api.whatsappGetStatus();
+        const newStatus = res && res.status ? res.status : 'disconnected';
+        if (_lastKnownWaStatus !== null) {
+          if (newStatus === 'disconnected' && _lastKnownWaStatus === 'connected') {
+            showTopToast('🔴 واتساب | انقطع الاتصال', 'error', 5000);
+          } else if (newStatus === 'connected' && _lastKnownWaStatus !== 'connected') {
+            showTopToast('🟢 واتساب | تم استعادة الاتصال', 'success', 4000);
+          }
+        }
+        _lastKnownWaStatus = newStatus;
+      } catch (_) {}
+    }, 15000);
   }
 
   function applyPosPermissions() {
@@ -1335,7 +1357,8 @@
         <div class="customer-option" data-id="${c.id}"
           data-name="${escHtml(c.customer_name || '')}"
           data-phone="${escHtml(c.phone || '')}"
-          data-sub="${escHtml(c.subscription_number || '')}">
+          data-sub="${escHtml(c.subscription_number || '')}"
+          data-tax="${escHtml(c.tax_number || '')}">
           <div class="customer-option-row">
             <div class="customer-option-name">${escHtml(c.customer_name || c.subscription_number)}</div>
             ${c.subscription_number ? `<span class="copt-sub-num">${escHtml(c.subscription_number)}</span>` : ''}
@@ -1352,7 +1375,8 @@
           id: parseInt(opt.dataset.id, 10),
           name: opt.dataset.name,
           phone: opt.dataset.phone,
-          subscription_number: opt.dataset.sub
+          subscription_number: opt.dataset.sub,
+          taxNumber: opt.dataset.tax || ''
         });
       });
     });
@@ -1958,13 +1982,14 @@
         vatNumber: s.vatNumber,
         commercialRegister: s.commercialRegister,
         logoDataUrl: s.logoDataUrl,
-        titleAr: 'فاتورة ضريبية مبسطة',
-        titleEn: 'Simplified Tax Invoice',
+        titleAr: order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
+        titleEn: order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice',
         orderNum: order.invoice_seq || order.order_number || '',
         date: formatInvoiceDate(order.created_at),
         payment: paymentLabel(order.payment_method),
         custName: order.customer_name,
         custPhone: order.phone,
+        custVat: order.customer_vat || '',
         subRef: subscription ? subscription.subscription_number : null,
         subPackageName: subscription ? subscription.package_name : null,
         subBalance: subscription ? subscription.credit_remaining : null,
@@ -2084,6 +2109,13 @@
     a4mText('a4mPayment',  data.payment);
     a4mText('a4mCustName',  data.custName || '—');
     a4mText('a4mCustPhone', data.custPhone || '—');
+    var a4mCustVatRow = document.getElementById('a4mCustVatRow');
+    if (data.custVat && a4mCustVatRow) {
+      a4mText('a4mCustVat', data.custVat);
+      a4mCustVatRow.style.display = '';
+    } else if (a4mCustVatRow) {
+      a4mCustVatRow.style.display = 'none';
+    }
 
     if (data.subRef) {
       a4mText('a4mSubRef', data.subRef);
@@ -2391,13 +2423,14 @@
           const _crPaperEl = document.getElementById('crModalPaper');
           const _crHtml = _crPaperEl ? _crPaperEl.outerHTML : null;
           const _crOrderNum = state.viewingConsumptionReceiptNum || '';
+          const _crTotal = state.viewingConsumptionReceiptAmount || 0;
           // After a successful save + print request, empty the cart automatically.
           if (!state._creditNoteModalMode && !state.viewingDeferredInvoice && state.shouldClearCartAfterConsumptionPrint !== false) {
             clearCart();
           }
           // إرسال إيصال الاستهلاك عبر الواتساب عند الطباعة
           if (_crWaSettings.whatsappSendOnPrint && _crHtml && _crWaPhone) {
-            sendInvoiceWhatsAppFromHtml(_crHtml, 'thermal', _crWaPhone, _crOrderNum, null, 'consumption');
+            sendInvoiceWhatsAppFromHtml(_crHtml, 'thermal', _crWaPhone, _crOrderNum, null, 'consumption', _crTotal);
           }
           // Keep the receipt modal visible after printing so the user can
           // export PDF or review details. The user closes it manually.
@@ -2443,7 +2476,8 @@
       : null;
     var balBefore = balAfter != null ? balAfter + consumed : null;
 
-    state.viewingConsumptionReceiptNum = formatConsumptionReceiptNum(result.consumptionReceiptSeq);
+    state.viewingConsumptionReceiptNum    = formatConsumptionReceiptNum(result.consumptionReceiptSeq);
+    state.viewingConsumptionReceiptAmount = consumed;
 
     document.getElementById('crModalReceiptNum').textContent = state.viewingConsumptionReceiptNum;
     document.getElementById('crModalDate').textContent = formatInvoiceDate(new Date());
@@ -2759,7 +2793,10 @@
 
     /* ── Reset CN mode elements ── */
     state._creditNoteModalMode = false;
-    if (els.invTypeLabel)   els.invTypeLabel.textContent = 'فاتورة ضريبية مبسطة';
+    if (els.invTypeLabel) {
+      const _cust = state.selectedCustomer;
+      els.invTypeLabel.textContent = (_cust && _cust.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة';
+    }
     if (els.invCNRefRow)    els.invCNRefRow.style.display = 'none';
     if (els.invCNRefundRow) els.invCNRefundRow.style.display = 'none';
     if (els.invOrderNumRow) els.invOrderNumRow.style.display = '';
@@ -2792,8 +2829,15 @@
       } else {
         els.invCustPhoneRow.style.display = 'none';
       }
+      if (cust.taxNumber && els.invCustVat) {
+        els.invCustVat.textContent = cust.taxNumber;
+        els.invCustVatRow.style.display = '';
+      } else if (els.invCustVatRow) {
+        els.invCustVatRow.style.display = 'none';
+      }
     } else {
       els.invCustomerSection.style.display = 'none';
+      if (els.invCustVatRow) els.invCustVatRow.style.display = 'none';
     }
 
     /* ── Subscription ── */
@@ -3149,8 +3193,11 @@
       orderNum:           invoiceSeq ? String(invoiceSeq) : (orderNumber || '—'),
       date:               formatInvoiceDate(orderDate),
       payment:            pmLabelsA4[state.paymentMethod] || state.paymentMethod,
+      titleAr:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
+      titleEn:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'Tax Invoice' : 'Simplified Tax Invoice',
       custName:           state.selectedCustomer ? state.selectedCustomer.name : '',
       custPhone:          state.selectedCustomer ? state.selectedCustomer.phone : '',
+      custVat:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? state.selectedCustomer.taxNumber : '',
       subRef:             subscription && subscription.subscription_number ? subscription.subscription_number : '',
       subPackageName:     subscription && subscription.package_name ? subscription.package_name : '',
       subBalance:         subscription && subscription.credit_remaining != null ? parseFloat(subscription.credit_remaining) : null,
@@ -3242,7 +3289,7 @@
         };
       });
       state.selectedCustomer = order.customer_name
-        ? { name: order.customer_name, phone: order.phone || '' }
+        ? { name: order.customer_name, phone: order.phone || '', taxNumber: order.customer_vat || '' }
         : state.selectedCustomer;
       if (order.customer_loyalty_points != null) {
         state.customerLoyaltyBalance = Number(order.customer_loyalty_points);
@@ -3317,6 +3364,7 @@
       if (els.invTypeLabel)   els.invTypeLabel.textContent = 'فاتورة ضريبية مبسطة';
       if (els.invCNRefRow)    els.invCNRefRow.style.display = 'none';
       if (els.invOrderNumRow) els.invOrderNumRow.style.display = '';
+      if (els.invCustVatRow)  els.invCustVatRow.style.display = 'none';
       clearCart();
       clearCustomer();
       return;
@@ -3549,30 +3597,41 @@
   }
 
   // إرسال من HTML الشاشة (مطابق للطباعة تماماً)
-  async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload, stage) {
+  async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload, stage, totalAmount) {
     if (!html || !phone) return;
     const s = state.appSettings || {};
     const num = orderNum || '';
+    const totalLine = totalAmount ? '\n*الإجمالي: ' + Number(totalAmount).toFixed(2) + ' SAR*' : '';
     const _stageMessages = {
-      receive:     'تم استلام ملابسكم 👔\nفاتورة رقم: ' + num,
-      subscription:'تم استلام ملابسكم 👔\nفاتورة رقم: ' + num,
-      pay:         'تم دفع الفاتورة بنجاح ✅\nفاتورة رقم: ' + num,
-      clean:       'تم تنظيف ملابسكم 🧺\nفاتورة رقم: ' + num,
-      deliver:     'تم تسليم ملابسكم 🎁\nفاتورة رقم: ' + num,
-      consumption: 'تم استلام ملابسكم 👔\nإيصال استهلاك رقم: ' + num,
+      receive:     'تم استلام ملابسكم 👔\nفاتورة رقم: ' + num + totalLine,
+      subscription:'تم تفعيل اشتراككم بنجاح 🎉\nفاتورة رقم: ' + num + totalLine,
+      pay:         'تم دفع الفاتورة بنجاح ✅\nفاتورة رقم: ' + num + totalLine,
+      clean:       'تم تنظيف ملابسكم 🧺\nفاتورة رقم: ' + num + totalLine,
+      deliver:     'تم تسليم ملابسكم 🎁\nفاتورة رقم: ' + num + totalLine,
+      consumption: 'تم استلام ملابسكم 👔\nإيصال استهلاك رقم: ' + num + totalLine,
     };
     const autoMsg = _stageMessages[stage] || '';
-    const optionalMsg = s.whatsappInvoiceMessage || '';
+    const optionalMsg = s.whatsappInvoiceMessage
+      ? s.whatsappInvoiceMessage.split('\n').map(function(l) { var t = l.trim(); return t ? '*' + t + '*' : ''; }).join('\n')
+      : '';
     const caption = autoMsg
       ? (optionalMsg ? autoMsg + '\n\n' + optionalMsg : autoMsg)
       : optionalMsg;
     try {
-      await window.api.whatsappSendInvoicePdfFromHtml({
+      const _waRes = await window.api.whatsappSendInvoicePdfFromHtml({
         html, paperType: paperType || 'thermal', phone,
         caption,
         orderNum: num,
         zatcaPayload: zatcaPayload || null
       });
+      const _label = stage === 'consumption' ? 'إيصال رقم: ' + num : 'فاتورة رقم: ' + num;
+      if (_waRes && _waRes.success) {
+        showTopToast('✅ واتساب | ' + _label + ' — تم الإرسال', 'success', 4000);
+      } else if (_waRes && (_waRes.message === 'not_on_whatsapp' || _waRes.error === 'not_on_whatsapp')) {
+        showTopToast('⚠️ واتساب | ' + _label + ' — الرقم غير مسجّل في واتساب', 'warning', 5000);
+      } else {
+        showTopToast('❌ واتساب | ' + _label + ' — فشل الإرسال', 'error', 5000);
+      }
     } catch (_) {}
   }
 
@@ -3621,7 +3680,7 @@
           serviceName: item.service_name_ar || '', qty: item.quantity,
           unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0) };
       });
-      state.selectedCustomer = { name: order.customer_name || '', phone: order.phone || '' };
+      state.selectedCustomer = { name: order.customer_name || '', phone: order.phone || '', taxNumber: order.customer_vat || '' };
       state.paymentMethod    = (totalCash > 0 && totalCard > 0) ? 'mixed' : (order.payment_method || 'cash');
       if (totalCash > 0 && totalCard > 0) { state.mixedCash = totalCash; state.mixedCard = totalCard; }
       state.vatRate          = Number(order.vat_rate != null ? order.vat_rate : (state.vatRate || 15));
@@ -3692,7 +3751,7 @@
               totalAmount: String(Number(order.total_amount || 0).toFixed(2)),
               vatAmount:   String(Number(order.vat_amount   || 0).toFixed(2))
             } : null);
-        await sendInvoiceWhatsAppFromHtml(capturedHtml, paperType, phone, orderNum, _zatcaPayload, stage);
+        await sendInvoiceWhatsAppFromHtml(capturedHtml, paperType, phone, orderNum, _zatcaPayload, stage, order.total_amount || 0);
       }
     } catch (_) {}
   }
@@ -3765,6 +3824,7 @@
                 timestamp:   new Date().toISOString(),
                 totalAmount: '0.00', vatAmount: '0.00'
               } : null);
+          const _waTotal = (state.lastA4Data && state.lastA4Data.total) || 0;
           // After a successful save + print request, empty the cart automatically.
           if (!state._creditNoteModalMode && !state.viewingDeferredInvoice) {
             clearCart();
@@ -3772,9 +3832,9 @@
           // إرسال الفاتورة عبر الواتساب إذا كان الإعداد مفعلاً (من HTML مطابق للطباعة)
           if (_waSub && _waSettings.whatsappSendOnSubscription) {
             state._printingSubscription = false;
-            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'subscription');
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'subscription', _waTotal);
           } else if (!_waSub && _waSettings.whatsappSendOnPrint) {
-            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'receive');
+            if (_waHtml) sendInvoiceWhatsAppFromHtml(_waHtml, _waPaperType, _waPhone, _waOrderNum, _waZatca, 'receive', _waTotal);
           }
           state._printingSubscription = false;
           // Keep the invoice modal visible after printing so the user can
@@ -3842,6 +3902,7 @@
         id: invoice.customer_id || null,
         name: invoice.customer_name,
         phone: invoice.phone || '',
+        taxNumber: invoice.customer_vat || '',
       };
       els.chipName.textContent = invoice.customer_name;
       els.chipPhone.textContent = invoice.phone || '';
@@ -4580,9 +4641,44 @@
     });
 
     els.btnInvClose.addEventListener('click', closeInvoiceModal);
+
+    if (els.btnInvWhatsapp) {
+      els.btnInvWhatsapp.addEventListener('click', async function () {
+        var phone = state.lastA4Data && state.lastA4Data.custPhone;
+        if (!phone) {
+          showTopToast('⚠️ واتساب | لا يوجد عميل مسجّل في هذه الفاتورة', 'warning', 4000);
+          return;
+        }
+        var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        var paperEl = paperType === 'a4'
+          ? document.getElementById('invoicePaperA4m')
+          : document.getElementById('invoicePaper');
+        if (!paperEl) return;
+        var html = paperEl.outerHTML;
+        var orderNum = (state.lastA4Data && state.lastA4Data.orderNum) || '';
+        var total = (state.lastA4Data && state.lastA4Data.total) || 0;
+        var zatcaPayload = (state.lastA4Data && state.lastA4Data.zatcaPayload) || null;
+        await sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload, 'receive', total);
+      });
+    }
     if (els.btnCrModalClose) {
       els.btnCrModalClose.addEventListener('click', function () {
         if (els.consumptionReceiptModal) els.consumptionReceiptModal.style.display = 'none';
+      });
+    }
+    if (els.btnCrModalWhatsapp) {
+      els.btnCrModalWhatsapp.addEventListener('click', async function () {
+        var phone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
+        if (!phone) {
+          showTopToast('⚠️ واتساب | لا يوجد عميل مسجّل في هذا الإيصال', 'warning', 4000);
+          return;
+        }
+        var crPaperEl = document.getElementById('crModalPaper');
+        if (!crPaperEl) return;
+        var html = crPaperEl.outerHTML;
+        var orderNum = state.viewingConsumptionReceiptNum || '';
+        var total = state.viewingConsumptionReceiptAmount || 0;
+        await sendInvoiceWhatsAppFromHtml(html, 'thermal', phone, orderNum, null, 'consumption', total);
       });
     }
     if (els.btnCrModalPrint) {
@@ -5123,6 +5219,7 @@
 
     els.deferredList.innerHTML = pageItems.map((inv) => {
       const isReceipt    = inv.rowType === 'receipt';
+      const isRefunded   = !!inv.is_refund || !!inv.refunded_at || !!inv.has_credit_note;
       const hasCleaned   = !!inv.cleaning_date;
       const hasDelivered = !!inv.delivery_date;
       const hasPaid      = !isReceipt && inv.payment_status === 'paid';
@@ -5181,15 +5278,15 @@
         <td class="def-td-actions">
           ${viewBtn}
           ${payBtn}
-          <button class="def-tbl-btn def-tbl-clean ${hasCleaned ? 'def-tbl-done' : ''}"
-            onclick="${cleanOnclick}" ${hasCleaned ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-clean')}">
+          <button class="def-tbl-btn def-tbl-clean ${isRefunded ? 'def-tbl-disabled' : (hasCleaned ? 'def-tbl-done' : '')}"
+            onclick="${cleanOnclick}" ${hasCleaned || isRefunded ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-clean')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-            ${hasCleaned ? t('pos-deferred-badge-cleaned') : t('pos-deferred-btn-clean')}
+            ${isRefunded ? 'مرتجع' : (hasCleaned ? t('pos-deferred-badge-cleaned') : t('pos-deferred-btn-clean'))}
           </button>
-          <button class="def-tbl-btn def-tbl-deliver ${hasDelivered ? 'def-tbl-done' : ''}"
-            onclick="${deliverOnclick}" ${hasDelivered ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-deliver')}">
+          <button class="def-tbl-btn def-tbl-deliver ${isRefunded ? 'def-tbl-disabled' : (hasDelivered ? 'def-tbl-done' : '')}"
+            onclick="${deliverOnclick}" ${hasDelivered || isRefunded ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-deliver')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            ${hasDelivered ? t('pos-deferred-badge-delivered') : t('pos-deferred-btn-deliver')}
+            ${isRefunded ? 'مرتجع' : (hasDelivered ? t('pos-deferred-badge-delivered') : t('pos-deferred-btn-deliver'))}
           </button>
         </td>
       </tr>`;
@@ -5305,6 +5402,33 @@
     }
   }
 
+  // عرض معلومات المودال فقط بدون تعيين قيمة حقل المبلغ (للعرض الأولي من البيانات المحلية)
+  function updatePayModalDisplayInfo() {
+    const inv = payModalState.invoice;
+    if (!inv) return;
+
+    const total = num(inv.total_amount);
+    const paid = num(inv.paid_amount);
+    const remaining = Math.max(0, num(inv.remaining_amount));
+
+    els.payModalInvNum.textContent = `${inv.invoice_seq || inv.order_number || inv.id}`;
+    els.payModalCustName.textContent = inv.customer_name || '—';
+    els.payModalCustPhone.textContent = inv.phone || '—';
+    els.payModalTotalVal.innerHTML = `<span class="sar">&#xE900;</span><span class="pay-amt-num">${fmtMoney(total)}</span>`;
+    els.payModalPaidVal.innerHTML = `<span class="sar">&#xE900;</span><span class="pay-amt-num">${fmtMoney(paid)}</span>`;
+    els.payModalRemainingVal.innerHTML = `<span class="sar">&#xE900;</span><span class="pay-amt-num">${fmtMoney(remaining)}</span>`;
+
+    const isFullyPaid = inv.payment_status === 'paid' || remaining <= 0.0001;
+    els.payInputSection.style.display = isFullyPaid ? 'none' : '';
+    els.payFullyPaidBanner.style.display = isFullyPaid ? 'flex' : 'none';
+    els.btnPayDeferredConfirm.style.display = isFullyPaid ? 'none' : '';
+
+    if (!isFullyPaid) {
+      els.payAmountInput.max = remaining.toFixed(2);
+      // لا نعيّن القيمة هنا — ننتظر البيانات الحقيقية من السيرفر
+    }
+  }
+
   function updateAfterInfo() {
     const inv = payModalState.invoice;
     if (!inv) return;
@@ -5415,7 +5539,7 @@
           : Math.max(0, num(localInv.total_amount) - num(localInv.paid_amount)),
       };
       payModalState.payments = [];
-      updatePayModalDisplay();
+      updatePayModalDisplayInfo(); // عرض المعلومات فقط بدون تعيين المبلغ
       renderPayHistory();
     } else {
       // If no local invoice, initialize with empty state
@@ -5615,12 +5739,22 @@
     fillCrModalShopExtra(s);
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
-    if (titleEl) titleEl.textContent = 'إيصال استهلاك';
-    if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
-    if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = 'none';
-    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المستهلك';
-    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل';
-    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد';
+    if (r.refund_id) {
+      if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
+      if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = '';
+      if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = r.refund_reason ? '' : 'none';
+      if (els.crModalRefundReason) els.crModalRefundReason.textContent = r.refund_reason || '';
+      if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المسترجع';
+      if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
+      if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+    } else {
+      if (titleEl) titleEl.textContent = 'إيصال استهلاك';
+      if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';
+      if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = 'none';
+      if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المستهلك';
+      if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل';
+      if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد';
+    }
 
     const fmtDt = (d) => {
       if (!d) return '';
@@ -5632,6 +5766,7 @@
 
     state.viewingConsumptionReceiptNum = 'C-' + Number(r.receipt_seq);
     document.getElementById('crModalReceiptNum').textContent = state.viewingConsumptionReceiptNum;
+    if (els.crModalRefundNum) els.crModalRefundNum.textContent = r.credit_note_seq ? 'R-' + Number(r.credit_note_seq) : state.viewingConsumptionReceiptNum;
     document.getElementById('crModalDate').textContent = fmtDt(r.created_at);
     document.getElementById('crModalCustomer').textContent = r.customer_name || '—';
     document.getElementById('crModalPhone').textContent = r.phone || '—';
@@ -5660,9 +5795,15 @@
     })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';
-    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
-    document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
-    document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
+    if (r.refund_id) {
+      document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.refund_amount || r.amount_consumed || 0);
+      document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.refund_old_balance || 0);
+      document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.refund_new_balance || 0);
+    } else {
+      document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
+      document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
+      document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
+    }
 
     const tbody = document.getElementById('crModalItemsBody');
     if (tbody) tbody.innerHTML = buildConsumptionItemsHtml(r.items || []);
@@ -5755,17 +5896,29 @@
       const built = await _buildReceiptHtmlSilent(receiptId);
       if (!built || !built.html) return;
       const s = state.appSettings || {};
-      const optionalMsg = s.whatsappInvoiceMessage || '';
+      const totalAmount = rcpt.total_amount || rcpt.amount_consumed || 0;
+      const totalLine = totalAmount ? '\n*الإجمالي: ' + Number(totalAmount).toFixed(2) + ' SAR*' : '';
       const stageAutoMsg = {
-        clean:   'تم تنظيف ملابسكم 🧺\nإيصال استهلاك رقم: ' + built.rcptNum,
-        deliver: 'تم تسليم ملابسكم 🎁\nإيصال استهلاك رقم: ' + built.rcptNum,
+        clean:   'تم تنظيف ملابسكم 🧺\nإيصال استهلاك رقم: ' + built.rcptNum + totalLine,
+        deliver: 'تم تسليم ملابسكم 🎁\nإيصال استهلاك رقم: ' + built.rcptNum + totalLine,
       };
       const autoMsg = stageAutoMsg[stage] || '';
+      const optionalMsg = s.whatsappInvoiceMessage
+        ? s.whatsappInvoiceMessage.split('\n').map(function(l) { var t = l.trim(); return t ? '*' + t + '*' : ''; }).join('\n')
+        : '';
       const caption = autoMsg ? (optionalMsg ? autoMsg + '\n\n' + optionalMsg : autoMsg) : optionalMsg;
-      await window.api.whatsappSendInvoicePdfFromHtml({
+      const _waRes = await window.api.whatsappSendInvoicePdfFromHtml({
         html: built.html, paperType: 'thermal', phone: rcpt.phone,
         caption, orderNum: built.rcptNum, zatcaPayload: null
       });
+      const _label = 'إيصال رقم: ' + built.rcptNum;
+      if (_waRes && _waRes.success) {
+        showTopToast('✅ واتساب | ' + _label + ' — تم الإرسال', 'success', 4000);
+      } else if (_waRes && (_waRes.message === 'not_on_whatsapp' || _waRes.error === 'not_on_whatsapp')) {
+        showTopToast('⚠️ واتساب | ' + _label + ' — الرقم غير مسجّل في واتساب', 'warning', 5000);
+      } else {
+        showTopToast('❌ واتساب | ' + _label + ' — فشل الإرسال', 'error', 5000);
+      }
     } catch (_) {}
   }
 
@@ -5984,6 +6137,10 @@
   }
 
   async function _applyReceiptActions(receipt, actions, barcodeVal) {
+    if (receipt.is_refund) {
+      showTopToast('لا يمكن تنفيذ إجراءات على إيصال مسترجع', 'error');
+      return;
+    }
     if (actions.includes('clean') && !receipt.cleaning_date) {
       const cr = await window.api.markReceiptCleaned({ receiptId: Number(receipt.id) });
       if (!cr || !cr.success) { showTopToast('فشل تحديث حالة التنظيف', 'error'); return; }
@@ -6128,7 +6285,7 @@
       lineTotal:     parseFloat(item.line_total || 0),
     }));
     state.selectedCustomer = order.customer_name
-      ? { name: order.customer_name, phone: order.phone || '' }
+      ? { name: order.customer_name, phone: order.phone || '', taxNumber: order.customer_vat || '' }
       : null;
     state.paymentMethod    = order.payment_method || 'cash';
     state.vatRate          = Number(order.vat_rate || 15);

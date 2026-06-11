@@ -43,6 +43,7 @@
     invoiceViewModal: document.getElementById('invoiceViewModal'),
     btnInvPrint: document.getElementById('btnInvPrint'),
     btnInvExportPdf: document.getElementById('btnInvExportPdf'),
+    btnInvWhatsapp: document.getElementById('btnInvWhatsapp'),
     btnInvClose: document.getElementById('btnInvClose'),
     invLogoWrap: document.getElementById('invLogoWrap'),
     invLogo: document.getElementById('invLogo'),
@@ -96,6 +97,7 @@
     /* Credit note modal */
     cnViewModal: document.getElementById('cnViewModal'),
     btnCnClose: document.getElementById('btnCnClose'),
+    btnCnWhatsapp: document.getElementById('btnCnWhatsapp'),
     btnCnPrint: document.getElementById('btnCnPrint'),
     btnCnExportPdf: document.getElementById('btnCnExportPdf'),
     cnLogoWrap: document.getElementById('cnLogoWrap'),
@@ -269,6 +271,9 @@
     a4s('a4mRowCleanedAt',   !!data.cleanedAt);   if (data.cleanedAt)   a4t('a4mCleanedAt',   data.cleanedAt);
     a4s('a4mRowDeliveredAt', !!data.deliveredAt); if (data.deliveredAt) a4t('a4mDeliveredAt', data.deliveredAt);
     a4s('a4mRowPaidAt',      !!data.paidAt);      if (data.paidAt)      a4t('a4mPaidAt',      data.paidAt);
+    a4s('a4mRowCashier',     !!(data.cashierName || data.createdBy));
+    const _ciCashier = data.cashierName || data.createdBy || '';
+    if (_ciCashier) a4t('a4mCashierName', _ciCashier);
     (function() {
       const section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
       if (!section) return;
@@ -336,6 +341,15 @@
       a4h('a4mMixedCard', sf(paidCard)); a4s('a4mMixedCardRow', true);
     } else {
       a4s('a4mMixedCashRow', false); a4s('a4mMixedCardRow', false);
+    }
+
+    const paidAmt = Number(data.paidAmount || 0);
+    const remainAmt = Number(data.remainingAmount || 0);
+    if (remainAmt > 0) {
+      a4h('a4mPaidAmount', sf(paidAmt)); a4s('a4mPaidRow', true);
+      a4h('a4mRemainingAmount', sf(remainAmt)); a4s('a4mRemainingRow', true);
+    } else {
+      a4s('a4mPaidRow', false); a4s('a4mRemainingRow', false);
     }
 
     const notesEl = document.getElementById('a4mFooterNotes');
@@ -419,6 +433,9 @@
     a4s('RowCleanedAt',   !!data.cleanedAt);   if (data.cleanedAt)   a4t('CleanedAt',   data.cleanedAt);
     a4s('RowDeliveredAt', !!data.deliveredAt); if (data.deliveredAt) a4t('DeliveredAt', data.deliveredAt);
     a4s('RowPaidAt',      !!data.paidAt);      if (data.paidAt)      a4t('PaidAt',      data.paidAt);
+    const _cnCashier = data.createdBy || data.cashierName || '';
+    a4s('RowCashier', !!_cnCashier);
+    if (_cnCashier) a4t('CashierName', _cnCashier);
     (function() {
       const section = document.querySelector('#cnPaperA4m .a4m-bill-to');
       if (!section) return;
@@ -511,6 +528,34 @@
           .then(res => { if (res && res.success && res.svg) qrEl.innerHTML = res.svg; })
           .catch(() => {});
       }
+    }
+  }
+
+  /* ========== WHATSAPP SEND ========== */
+  async function _sendViaWhatsapp(html, paperType, phone, orderNum, total, docType) {
+    const s = state.appSettings || {};
+    const totalLine = total ? '\n*الإجمالي: ' + Number(total).toFixed(2) + ' SAR*' : '';
+    const autoMsg = docType === 'creditNote'
+      ? 'تم إنشاء إشعار دائن بنجاح ✅\nإشعار رقم: ' + orderNum + totalLine
+      : 'فاتورة رقم: ' + orderNum + totalLine;
+    const optionalMsg = s.whatsappInvoiceMessage
+      ? s.whatsappInvoiceMessage.split('\n').map(function(l) { var t = l.trim(); return t ? '*' + t + '*' : ''; }).join('\n')
+      : '';
+    const caption = autoMsg ? (optionalMsg ? autoMsg + '\n\n' + optionalMsg : autoMsg) : optionalMsg;
+    try {
+      const res = await window.api.whatsappSendInvoicePdfFromHtml({
+        html, paperType: paperType || 'thermal', phone, caption, orderNum: orderNum || '', zatcaPayload: null
+      });
+      const label = docType === 'creditNote' ? 'إشعار رقم: ' + orderNum : 'فاتورة رقم: ' + orderNum;
+      if (res && res.success) {
+        showToast('✅ واتساب | ' + label + ' — تم الإرسال', 'success');
+      } else if (res && (res.message === 'not_on_whatsapp' || res.error === 'not_on_whatsapp')) {
+        showToast('⚠️ واتساب | ' + label + ' — الرقم غير مسجّل في واتساب', 'error');
+      } else {
+        showToast('❌ واتساب | ' + label + ' — فشل الإرسال', 'error');
+      }
+    } catch (_) {
+      showToast('❌ واتساب | فشل الإرسال', 'error');
     }
   }
 
@@ -830,7 +875,8 @@
     setRow(els.invCleanedAtRow, order.cleaning_date, els.invCleanedAt);
     setRow(els.invDeliveredAtRow, order.delivery_date, els.invDeliveredAt);
 
-    if (order.created_by) { els.invCreatedBy.textContent = order.created_by; els.invCreatedByRow.style.display = ''; }
+    const _invThermalCashier = order.cashier_name || order.created_by || '';
+    if (_invThermalCashier) { els.invCreatedBy.textContent = _invThermalCashier; els.invCreatedByRow.style.display = ''; }
     else els.invCreatedByRow.style.display = 'none';
 
     if (order.customer_name || order.phone) {
@@ -980,7 +1026,9 @@
       })),
       subtotal: subtotalA4, discount, discountLabel: order.discount_label || '', extra, vatRate, vatAmount, total,
       paidCash: isMixed ? pc : 0, paidCard: isMixed ? pd : 0,
+      paidAmount: parseFloat(order.paid_amount || 0), remainingAmount: parseFloat(order.remaining_amount || 0),
       starch: order.starch || '', bluing: order.bluing || '',
+      cashierName: order.cashier_name || order.created_by || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
       customFields: Array.isArray(s.customFields) ? s.customFields : [],
       commercialRegister: s.commercialRegister || '', vatNumber: s.vatNumber || '',
@@ -1076,8 +1124,8 @@
     setRow(els.cnCleanedAtRow, order && order.cleaning_date, els.cnCleanedAt);
     setRow(els.cnDeliveredAtRow, order && order.delivery_date, els.cnDeliveredAt);
 
-    if (cn.created_by) { els.cnCreatedBy.textContent = cn.created_by; els.cnCreatedByRow.style.display = ''; }
-    else if (order && order.created_by) { els.cnCreatedBy.textContent = order.created_by; els.cnCreatedByRow.style.display = ''; }
+    const _cnThermalCashier = cn.cashier_name || cn.created_by || (order && (order.cashier_name || order.created_by)) || '';
+    if (_cnThermalCashier) { els.cnCreatedBy.textContent = _cnThermalCashier; els.cnCreatedByRow.style.display = ''; }
     else els.cnCreatedByRow.style.display = 'none';
 
     if (cn.customer_name || cn.phone) {
@@ -1222,7 +1270,7 @@
       invoiceNotes: s.invoiceNotes || '', logoDataUrl: s.logoDataUrl || '',
       orderNum: cn.credit_note_number || '',
       originalInvoiceSeq: cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || ''),
-      createdBy: cn.created_by || (order && order.created_by) || '',
+      createdBy: cn.cashier_name || cn.created_by || (order && (order.cashier_name || order.created_by)) || '',
       date: formatDate(cn.created_at), payment: order ? paymentLabel(order.payment_method) : '—',
       custName: cn.customer_name || '', custPhone: cn.phone || '',
       subPackageName: subscription && subscription.package_name ? subscription.package_name : '',
@@ -1411,6 +1459,18 @@
       const orig = els.btnInvExportPdf.innerHTML;
       exportCurrentPdfFromHtml(paperEl, orderNum, els.btnInvExportPdf, orig);
     });
+    if (els.btnInvWhatsapp) {
+      els.btnInvWhatsapp.addEventListener('click', async () => {
+        const phone = state.lastA4Data && state.lastA4Data.custPhone;
+        if (!phone) { showToast('لا يوجد عميل مسجّل في هذه الفاتورة', 'error'); return; }
+        const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        const paperEl = paperType === 'a4' ? document.getElementById('invoicePaperA4m') : document.getElementById('invoicePaper');
+        if (!paperEl) return;
+        const orderNum = (state.lastA4Data && state.lastA4Data.orderNum) || '';
+        const total = (state.lastA4Data && state.lastA4Data.total) || 0;
+        await _sendViaWhatsapp(paperEl.outerHTML, paperType, phone, orderNum, total, 'invoice');
+      });
+    }
 
     /* Credit note modal events */
     els.btnCnClose.addEventListener('click', () => closeModal('creditNote'));
@@ -1423,6 +1483,18 @@
       const orig = els.btnCnExportPdf.innerHTML;
       exportCurrentPdfFromHtml(paperEl, noteNum, els.btnCnExportPdf, orig);
     });
+    if (els.btnCnWhatsapp) {
+      els.btnCnWhatsapp.addEventListener('click', async () => {
+        const phone = state.lastA4Data && state.lastA4Data.custPhone;
+        if (!phone) { showToast('لا يوجد عميل مسجّل في هذا الإشعار', 'error'); return; }
+        const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        const paperEl = paperType === 'a4' ? document.getElementById('cnPaperA4m') : document.getElementById('cnPaper');
+        if (!paperEl) return;
+        const noteNum = (state.lastA4Data && state.lastA4Data.orderNum) || '';
+        const total = (state.lastA4Data && state.lastA4Data.total) || 0;
+        await _sendViaWhatsapp(paperEl.outerHTML, paperType, phone, noteNum, total, 'creditNote');
+      });
+    }
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {

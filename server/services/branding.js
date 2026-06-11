@@ -26,6 +26,10 @@ async function loadAppBrandingForReceipts() {
       cityAr: s.cityAr || '',
       postalCode: s.postalCode || '',
       additionalNumber: s.additionalNumber || '',
+      phone: s.phone || '',
+      email: s.email || '',
+      locationAr: s.locationAr || '',
+      locationEn: s.locationEn || '',
       customFields
     };
   } catch (_) {
@@ -41,6 +45,10 @@ async function loadAppBrandingForReceipts() {
       cityAr: '',
       postalCode: '',
       additionalNumber: '',
+      phone: '',
+      email: '',
+      locationAr: '',
+      locationEn: '',
       customFields: []
     };
   }

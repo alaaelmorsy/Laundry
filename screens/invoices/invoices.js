@@ -236,6 +236,13 @@
     a4mText('a4mPayment',  data.payment);
     a4mText('a4mCustName',  data.custName || '—');
     a4mText('a4mCustPhone', data.custPhone || '—');
+    var invA4mCustVatRow = document.getElementById('a4mCustVatRow');
+    if (data.custVat && invA4mCustVatRow) {
+      a4mText('a4mCustVat', data.custVat);
+      invA4mCustVatRow.style.display = '';
+    } else if (invA4mCustVatRow) {
+      invA4mCustVatRow.style.display = 'none';
+    }
 
     if (data.subRef) {
       a4mText('a4mSubRef', data.subRef);
@@ -334,6 +341,20 @@
       a4mShow('a4mMixedCardRow', false);
     }
 
+    /* Deferred partial payment */
+    const paidAmt = Number(data.paidAmount || 0);
+    const remainAmt = Number(data.remainingAmount || 0);
+    const isDeferred4 = remainAmt > 0;
+    if (isDeferred4) {
+      a4mHtml('a4mPaidAmount', sarFmt(paidAmt));
+      a4mShow('a4mPaidRow', true);
+      a4mHtml('a4mRemainingAmount', sarFmt(remainAmt));
+      a4mShow('a4mRemainingRow', true);
+    } else {
+      a4mShow('a4mPaidRow', false);
+      a4mShow('a4mRemainingRow', false);
+    }
+
     const a4mNotesEl = document.getElementById('a4mFooterNotes');
     if (a4mNotesEl) {
       if (data.invoiceNotes) {
@@ -349,6 +370,8 @@
     if (data.starch) a4mText('a4mStarch', data.starch);
     a4mShow('a4mRowBluing', !!data.bluing);
     if (data.bluing) a4mText('a4mBluing', data.bluing);
+    a4mShow('a4mRowCashier', !!data.cashierName);
+    if (data.cashierName) a4mText('a4mCashierName', data.cashierName);
     (function() {
       const section = document.querySelector('#invoicePaperA4m .a4m-bill-to');
       if (!section) return;
@@ -779,7 +802,7 @@
     els.invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     if (s.commercialRegister) {
-      els.invCR.textContent = s.commercialRegister;
+      els.invCR.textContent = 'السجل التجاري: ' + s.commercialRegister;
       els.invCRRow.style.display = '';
     } else {
       els.invCRRow.style.display = 'none';
@@ -834,8 +857,9 @@
       els.invDeliveredAtRow.style.display = 'none';
     }
 
-    if (order.created_by) {
-      els.invCreatedBy.textContent = order.created_by;
+    const _invCashier = order.cashier_name || order.created_by || '';
+    if (_invCashier) {
+      els.invCreatedBy.textContent = _invCashier;
       els.invCreatedByRow.style.display = '';
     } else {
       els.invCreatedByRow.style.display = 'none';
@@ -1077,8 +1101,11 @@
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date:               formatInvoiceDate(order.created_at),
       payment:            paymentLabel(order.payment_method),
+      titleAr:            order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
+      titleEn:            order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice',
       custName:           order.customer_name || '',
       custPhone:          order.phone || '',
+      custVat:            order.customer_vat || '',
       subRef:             subscription && subscription.subscription_number ? subscription.subscription_number : '',
       subPackageName:     subscription && subscription.package_name ? subscription.package_name : '',
       subBalance:         subscription && subscription.credit_remaining != null ? parseFloat(subscription.credit_remaining) : null,
@@ -1103,8 +1130,11 @@
       total:            total,
       paidCash:         isMixed ? pc : 0,
       paidCard:         isMixed ? pd : 0,
+      paidAmount:       parseFloat(order.paid_amount || 0),
+      remainingAmount:  parseFloat(order.remaining_amount || 0),
       starch:           order.starch || '',
       bluing:           order.bluing || '',
+      cashierName:      order.cashier_name || order.created_by || '',
       priceDisplayMode: isInclusiveA4 ? 'inclusive' : 'exclusive',
       customFields: Array.isArray(s.customFields) ? s.customFields : [],
       qrPayload: vatRate > 0 ? {
