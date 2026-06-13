@@ -1,6 +1,6 @@
 {
   "name": "laundry-app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {
@@ -15,7 +15,7 @@
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
-    "build": "npx pkg . --compress GZip --output dist\\Laundry-PLUS-v%npm_package_version%.exe",
+    "build": "npx pkg . --compress GZip --output release\\laundry-app.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe' /DAppVersion=%npm_package_version% installer\\laundry.iss\"",
     "build:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --minify",
     "watch:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --watch",
     "ssl:setup": "node scripts/generate-ssl.js",
