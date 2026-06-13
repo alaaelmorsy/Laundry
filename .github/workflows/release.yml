@@ -105,7 +105,8 @@ jobs:
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           & $iscc "/DAppVersion=$version" "installer\laundry.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
-          $size = [Math]::Round((Get-Item "dist\PLUS-Laundry-Setup.exe").Length / 1MB, 1)
+          $setupExe = "dist\Laundry-PLUS-Setup-v$version.exe"
+          $size = [Math]::Round((Get-Item $setupExe).Length / 1MB, 1)
           echo "Installer size: $size MB"
 
       # ── 9. Create source ZIP for auto-update ─────────────────────────────────
