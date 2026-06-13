@@ -3,6 +3,7 @@ ssl/
 .env
 .env.*
 !.env.example
+installer/.env
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -18,3 +19,6 @@ dist/
 build/
 .cache/
 .parcel-cache/
+backup/
+data/update-log.txt
+data/update-status.json

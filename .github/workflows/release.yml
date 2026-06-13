@@ -1,0 +1,123 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Read version from package.json ────────────────────────────────────
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $v = $pkg.version
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "tag=v$v" >> $env:GITHUB_OUTPUT
+          echo "Version: $v"
+
+      # ── 3. Check if release already exists ───────────────────────────────────
+      - name: Check existing release
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.version.outputs.version }}"
+          $exists = gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            echo "exists=true" >> $env:GITHUB_OUTPUT
+            echo "Release $tag already exists — skipping."
+          } else {
+            echo "exists=false" >> $env:GITHUB_OUTPUT
+            echo "Release $tag does not exist — will create."
+          }
+
+      # ── 4. Setup Node.js ─────────────────────────────────────────────────────
+      - name: Setup Node.js
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # ── 5. Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: npm ci
+
+      # ── 6. Build exe with pkg ────────────────────────────────────────────────
+      - name: Build exe
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          npx pkg . --compress GZip --output "dist\Laundry-PLUS-v$version.exe"
+
+      # ── 7. Create source ZIP for auto-update ─────────────────────────────────
+      - name: Create source ZIP
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $zipName = "laundry-v$version.zip"
+
+          # Collect files/dirs to include (exclude data, node_modules, .env, etc.)
+          $exclude = @('node_modules', 'data', '.env', 'ssl', 'backup', '.git',
+                       '.specify', 'specs', 'dist', 'release', '.github', '.kilo')
+
+          $items = Get-ChildItem -Path . -Force |
+            Where-Object { $exclude -notcontains $_.Name -and $_.Name -ne '.env' }
+
+          Compress-Archive -Path ($items | Select-Object -ExpandProperty FullName) `
+                           -DestinationPath $zipName -Force
+
+          echo "ZIP created: $zipName ($('{0:N0}' -f (Get-Item $zipName).Length) bytes)"
+
+      # ── 8. Generate SHA256 checksums ─────────────────────────────────────────
+      - name: Generate checksums
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $zipName = "laundry-v$version.zip"
+          $exeName = "dist\Laundry-PLUS-v$version.exe"
+
+          $zipHash = (Get-FileHash $zipName -Algorithm SHA256).Hash.ToLower()
+          $exeHash = (Get-FileHash $exeName -Algorithm SHA256).Hash.ToLower()
+
+          "$zipHash  $zipName" | Out-File -FilePath sha256sums.txt -Encoding utf8
+          "$exeHash  Laundry-PLUS-v$version.exe" | Add-Content -Path sha256sums.txt -Encoding utf8
+
+          echo "Checksums:"
+          Get-Content sha256sums.txt
+
+      # ── 9. Create GitHub Release and upload assets ───────────────────────────
+      - name: Create Release
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "v$version"
+          $zipName = "laundry-v$version.zip"
+
+          gh release create $tag `
+            --title "الإصدار $tag" `
+            --notes "إصدار $tag — تحديث تلقائي" `
+            $zipName `
+            sha256sums.txt `
+            "dist\Laundry-PLUS-v$version.exe"
+
+          echo "Release $tag created successfully."
