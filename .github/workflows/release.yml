@@ -57,15 +57,33 @@ jobs:
         shell: pwsh
         run: npm ci --ignore-scripts
 
-      # ── 6. Build exe with pkg ────────────────────────────────────────────────
+      # ── 6. Build exe with pkg → release\laundry-app.exe ─────────────────────
       - name: Build exe
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          npx @yao-pkg/pkg . --compress GZip --target node18-win-x64 --output "dist\Laundry-PLUS-v$version.exe"
+          npx pkg . --compress GZip --output "release\laundry-app.exe"
+          echo "exe size: $([Math]::Round((Get-Item 'release\laundry-app.exe').Length / 1MB, 1)) MB"
 
-      # ── 7. Create source ZIP for auto-update ─────────────────────────────────
+      # ── 7. Install Inno Setup ─────────────────────────────────────────────────
+      - name: Install Inno Setup
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      # ── 8. Build installer ────────────────────────────────────────────────────
+      - name: Build installer
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=$version" "installer\laundry.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
+          $size = [Math]::Round((Get-Item "dist\PLUS-Laundry-Setup.exe").Length / 1MB, 1)
+          echo "Installer size: $size MB"
+
+      # ── 9. Create source ZIP for auto-update ─────────────────────────────────
       - name: Create source ZIP
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
@@ -73,7 +91,6 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           $zipName = "laundry-v$version.zip"
 
-          # Collect files/dirs to include (exclude data, node_modules, .env, etc.)
           $exclude = @('node_modules', 'data', '.env', 'ssl', 'backup', '.git',
                        '.specify', 'specs', 'dist', 'release', '.github', '.kilo')
 
@@ -83,27 +100,26 @@ jobs:
           Compress-Archive -Path ($items | Select-Object -ExpandProperty FullName) `
                            -DestinationPath $zipName -Force
 
-          echo "ZIP created: $zipName ($('{0:N0}' -f (Get-Item $zipName).Length) bytes)"
+          echo "ZIP size: $([Math]::Round((Get-Item $zipName).Length / 1MB, 1)) MB"
 
-      # ── 8. Generate SHA256 checksums ─────────────────────────────────────────
+      # ── 10. Generate SHA256 checksums ─────────────────────────────────────────
       - name: Generate checksums
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
           $zipName = "laundry-v$version.zip"
-          $exeName = "dist\Laundry-PLUS-v$version.exe"
+          $setupName = "dist\PLUS-Laundry-Setup.exe"
 
-          $zipHash = (Get-FileHash $zipName -Algorithm SHA256).Hash.ToLower()
-          $exeHash = (Get-FileHash $exeName -Algorithm SHA256).Hash.ToLower()
+          $zipHash   = (Get-FileHash $zipName   -Algorithm SHA256).Hash.ToLower()
+          $setupHash = (Get-FileHash $setupName -Algorithm SHA256).Hash.ToLower()
 
-          "$zipHash  $zipName" | Out-File -FilePath sha256sums.txt -Encoding utf8
-          "$exeHash  Laundry-PLUS-v$version.exe" | Add-Content -Path sha256sums.txt -Encoding utf8
+          "$zipHash    $zipName"              | Out-File -FilePath sha256sums.txt -Encoding utf8
+          "$setupHash  PLUS-Laundry-Setup.exe" | Add-Content -Path sha256sums.txt -Encoding utf8
 
-          echo "Checksums:"
           Get-Content sha256sums.txt
 
-      # ── 9. Create GitHub Release and upload assets ───────────────────────────
+      # ── 11. Create GitHub Release and upload assets ───────────────────────────
       - name: Create Release
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
@@ -119,6 +135,6 @@ jobs:
             --notes "إصدار $tag — تحديث تلقائي" `
             $zipName `
             sha256sums.txt `
-            "dist\Laundry-PLUS-v$version.exe"
+            "dist\PLUS-Laundry-Setup.exe"
 
           echo "Release $tag created successfully."

@@ -3,7 +3,9 @@
 ; Output: dist\PLUS-Laundry-Setup.exe
 
 #define AppName "PLUS Laundry"
-#define AppVersion "1.0.12"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppPublisher "PLUS Systems"
 #define AppExeName "laundry-app.exe"
 #define TaskName "LaundryPOS"

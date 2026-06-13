@@ -1,6 +1,6 @@
 {
   "name": "laundry-app",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {
@@ -15,7 +15,7 @@
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
-    "build": "pkg . --compress GZip --icon assets\\icon\\app.ico && copy dist\\laundry-app.exe release\\laundry-app.exe",
+    "build": "npx pkg . --compress GZip --output dist\\Laundry-PLUS-v%npm_package_version%.exe",
     "build:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --minify",
     "watch:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --watch",
     "ssl:setup": "node scripts/generate-ssl.js",
