@@ -77,6 +77,7 @@ async function _createSubInvoice({
  * @param {object} _user JWT payload
  */
 async function invoke(method, payload, reqUser) {
+  const _user = reqUser || null;
   const m = String(method || '').trim();
   switch (m) {
     case 'getAppSettings': {
