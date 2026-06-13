@@ -75,6 +75,20 @@ jobs:
           Invoke-WebRequest -Uri $mkcertUrl -OutFile release\mkcert.exe -UseBasicParsing
           echo "mkcert: $([Math]::Round((Get-Item 'release\mkcert.exe').Length / 1KB, 0)) KB"
 
+      # ── 7b. Create default installer .env ────────────────────────────────────
+      - name: Create installer env file
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          @"
+PORT=3000
+DB_HOST=127.0.0.1
+DB_USER=root
+DB_PASSWORD=Db2@dm1n2022
+DB_PORT=3306
+DB_NAME=laundry_db
+"@ | Set-Content -Path installer\.env -Encoding utf8
+
       # ── 8. Install Inno Setup ─────────────────────────────────────────────────
       - name: Install Inno Setup
         if: steps.check.outputs.exists == 'false'
