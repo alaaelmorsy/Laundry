@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "v${{ steps.version.outputs.version }}"
-          $exists = gh release view $tag 2>$null
+          gh release view $tag 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) {
             echo "exists=true" >> $env:GITHUB_OUTPUT
             echo "Release $tag already exists — skipping."
@@ -42,6 +42,7 @@ jobs:
             echo "exists=false" >> $env:GITHUB_OUTPUT
             echo "Release $tag does not exist — will create."
           }
+          exit 0
 
       # ── 4. Setup Node.js ─────────────────────────────────────────────────────
       - name: Setup Node.js
