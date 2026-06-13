@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # ── 6. Build exe with pkg ────────────────────────────────────────────────
       - name: Build exe
@@ -63,7 +63,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          npx pkg . --compress GZip --output "dist\Laundry-PLUS-v$version.exe"
+          npx @yao-pkg/pkg . --compress GZip --target node18-win-x64 --output "dist\Laundry-PLUS-v$version.exe"
 
       # ── 7. Create source ZIP for auto-update ─────────────────────────────────
       - name: Create source ZIP
