@@ -4,7 +4,7 @@
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {
-    "targets": ["node18-win-x64"],
+    "targets": ["node20-win-x64"],
     "assets": [
       "screens/**/*",
       "assets/**/*",
