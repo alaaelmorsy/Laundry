@@ -65,7 +65,17 @@ jobs:
           npx pkg . --compress GZip --output "release\laundry-app.exe"
           echo "exe size: $([Math]::Round((Get-Item 'release\laundry-app.exe').Length / 1MB, 1)) MB"
 
-      # ── 7. Install Inno Setup ─────────────────────────────────────────────────
+      # ── 7. Prepare release folder assets ─────────────────────────────────────
+      - name: Prepare release assets
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          $mkcertUrl = "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-windows-amd64.exe"
+          Invoke-WebRequest -Uri $mkcertUrl -OutFile release\mkcert.exe -UseBasicParsing
+          echo "mkcert: $([Math]::Round((Get-Item 'release\mkcert.exe').Length / 1KB, 0)) KB"
+
+      # ── 8. Install Inno Setup ─────────────────────────────────────────────────
       - name: Install Inno Setup
         if: steps.check.outputs.exists == 'false'
         shell: pwsh

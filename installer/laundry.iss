@@ -47,15 +47,10 @@ Source: "..\release\mkcert.exe";      DestDir: "{app}"; Flags: ignoreversion
 Source: "nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; السكريبتات — تُستبدل دائماً
-Source: "..\release\scripts\*";           DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\scripts\register-task.ps1";   DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\scripts\*";               DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ملف الإعدادات — مضمَّن بكلمة السر الصحيحة، لا يُستبدل عند إعادة التثبيت
 Source: ".env"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
-
-; بيانات أولية — لا تُحذف ولا تُستبدل عند إعادة التثبيت
-Source: "..\release\data\*"; DestDir: "{app}\data"; \
-  Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall
 
 [Dirs]
 ; إنشاء مجلد ssl فارغ (mkcert سيملؤه)
