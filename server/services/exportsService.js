@@ -7,7 +7,7 @@ const reportHtml = require('./reportHtml');
 const { loadAppBrandingForReceipts } = require('./branding');
 const { htmlToPdfBuffer } = require('../pdfFromHtml');
 
-const ROOT = path.join(__dirname, '..', '..');
+const { APP_ROOT: ROOT } = require('../paths');
 
 function readFontB64(file) {
   return fs.readFileSync(path.join(ROOT, 'assets', 'fonts', file)).toString('base64');
@@ -1297,6 +1297,242 @@ ${showExpenses ? `
   throw new Error('نوع التصدير غير مدعوم');
 }
 
+async function exportCustomerAccountReport(body) {
+  const { type, customerInfo = {}, dateFrom, dateTo, reportData = {} } = body || {};
+  const { movements = [], summary = {}, subscriptionPeriods = [] } = reportData;
+
+  const f = cairoFonts();
+  const zlib = require('zlib');
+
+  const pad    = x => String(x).padStart(2, '0');
+  const fmt    = n => Number(n || 0).toFixed(2);
+  const esc    = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmtDT  = dt => {
+    if (!dt) return '—';
+    try { const d = new Date(dt); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; } catch { return String(dt); }
+  };
+  const fmtDate = dt => {
+    if (!dt) return '—';
+    try { const d = new Date(dt); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; } catch { return String(dt); }
+  };
+  const sarCell = n => `${fmt(n)}&nbsp;<span style="font-family:SaudiRiyal">&#xE900;</span>`;
+  const typeLabels = {
+    paid_invoice:'فاتورة مدفوعة', deferred_invoice:'فاتورة آجلة', deferred_payment:'سداد آجل',
+    subscription:'اشتراك', consumption:'إيصال استهلاك', consumption_refund:'مرتجع إيصال', credit_note:'فاتورة دائنة',
+  };
+  const custTypeLabels = { individual:'فرد', company:'شركة', hotel:'فندق' };
+
+  let branding = {};
+  try { branding = await loadAppBrandingForReceipts(); } catch { /* ignore */ }
+
+  const laundryNameAr = branding.laundryNameAr || '';
+  const vatNumber     = branding.vatNumber || '';
+  const now    = new Date();
+  const nowStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  let logoHtml = '';
+  if (branding.logoGzipBuffer) {
+    try {
+      const buf = Buffer.isBuffer(branding.logoGzipBuffer) ? branding.logoGzipBuffer : Buffer.from(branding.logoGzipBuffer);
+      const raw = await new Promise((res, rej) => zlib.gunzip(buf, (e, r) => e ? rej(e) : res(r)));
+      logoHtml = `<img src="data:image/png;base64,${raw.toString('base64')}" style="height:56px;object-fit:contain;display:block">`;
+    } catch { /* no logo */ }
+  }
+
+  if (type === 'pdf') {
+    let running = Number(summary.priorBalance || 0);
+    let totalD = 0, totalC = 0;
+    const rows = movements.map(m => {
+      const d = Number(m.debit  || 0);
+      const c = Number(m.credit || 0);
+      running = Math.round((running + d - c) * 100) / 100;
+      totalD += d; totalC += c;
+      const balClr = running > 0 ? '#dc2626' : '#059669';
+      const paidCell     = m.paid_at       ? `<span style="color:#059669;font-weight:700" title="${esc(fmtDT(m.paid_at))}">✓</span>`      : '<span style="color:#cbd5e1">—</span>';
+      const cleaningCell = m.cleaning_date ? `<span style="color:#059669;font-weight:700" title="${esc(fmtDT(m.cleaning_date))}">✓</span>` : '<span style="color:#cbd5e1">—</span>';
+      const deliveryCell = m.delivery_date ? `<span style="color:#059669;font-weight:700" title="${esc(fmtDT(m.delivery_date))}">✓</span>` : '<span style="color:#cbd5e1">—</span>';
+      return `<tr>
+        <td style="white-space:nowrap;font-size:7.5px">${esc(fmtDT(m.mv_date))}</td>
+        <td>${esc(typeLabels[m.mv_type] || m.mv_type)}</td>
+        <td>${esc(m.description || '')}</td>
+        <td style="direction:ltr;text-align:left">${d > 0 ? sarCell(d) : '—'}</td>
+        <td style="direction:ltr;text-align:left">${c > 0 ? sarCell(c) : '—'}</td>
+        <td style="direction:ltr;text-align:left;color:${balClr};font-weight:600">${sarCell(running)}</td>
+        <td style="text-align:center">${paidCell}</td>
+        <td style="text-align:center">${cleaningCell}</td>
+        <td style="text-align:center">${deliveryCell}</td>
+      </tr>`;
+    }).join('');
+    totalD = Math.round(totalD * 100) / 100;
+    totalC = Math.round(totalC * 100) / 100;
+    const footerClr = running > 0 ? '#dc2626' : '#059669';
+    const footerRow = `<tr style="background:#f1f5f9;font-weight:700">
+        <td colspan="3" style="text-align:left">الإجمالي</td>
+        <td style="direction:ltr;text-align:left">${sarCell(totalD)}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(totalC)}</td>
+        <td style="direction:ltr;text-align:left;color:${footerClr}">${sarCell(running)}</td>
+        <td colspan="3"></td>
+      </tr>`;
+
+    const subRows = subscriptionPeriods.map(sp => {
+      const clr = sp.status === 'active' ? '#059669' : '#94a3b8';
+      return `<tr>
+        <td style="color:${clr};font-weight:600">${sp.status === 'active' ? 'نشط' : 'منتهٍ'}</td>
+        <td>${fmtDate(sp.period_from)}</td>
+        <td>${sp.period_to ? fmtDate(sp.period_to) : '—'}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(sp.total_value)}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(sp.total_consumed)}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(sp.credit_remaining)}</td>
+      </tr>`;
+    }).join('');
+
+    const closingClr = Number(summary.closingBalance || 0) > 0 ? '#dc2626' : '#059669';
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8">
+<style>
+@font-face{font-family:Cairo;src:url('data:font/woff2;base64,${f.cairoBoldB64}') format('woff2');font-weight:700}
+@font-face{font-family:Cairo;src:url('data:font/woff2;base64,${f.cairoRegularB64}') format('woff2');font-weight:400}
+@font-face{font-family:SaudiRiyal;src:url('data:font/woff;base64,${f.saudiRiyalB64}') format('woff')}
+*{font-family:Cairo,sans-serif;box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:12mm}
+body{font-size:9px;color:#1e293b;background:#fff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #f97316;padding-bottom:8px;margin-bottom:10px}
+.rpt-title{font-size:13px;font-weight:700;color:#f97316;text-align:center}
+.co-name{font-size:12px;font-weight:700} .co-meta{font-size:8px;color:#64748b;margin-top:2px}
+.cust-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap}
+.cust-bar span{color:#64748b} .cust-bar strong{color:#1e293b}
+.sg{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px}
+.sc{border:1px solid #e2e8f0;border-radius:3px;padding:5px 6px;text-align:center}
+.sc .lbl{font-size:7.5px;color:#64748b;margin-bottom:2px}
+.sc .val{font-size:9px;font-weight:700}
+.sc.p1{border-right:3px solid #6366f1}.sc.p2{border-right:3px solid #ef4444}
+.sc.p3{border-right:3px solid #10b981}.sc.p4{border-right:3px solid #f59e0b}
+.sc.p5{border-right:3px solid ${closingClr}}
+h3{font-size:9px;font-weight:700;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e2e8f0}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}
+th{background:#f1f5f9;padding:4px 5px;text-align:right;font-weight:700;border:1px solid #e2e8f0;font-size:8px}
+td{padding:3px 5px;border:1px solid #f1f5f9;font-size:8px;vertical-align:top}
+tr:nth-child(even) td{background:#fafbfc}
+thead{display:table-header-group}
+.ft{font-size:7.5px;color:#94a3b8;text-align:center;margin-top:6px;border-top:1px solid #e2e8f0;padding-top:5px}
+</style></head>
+<body>
+<div class="hdr">
+  <div>${logoHtml}</div>
+  <div style="text-align:center">
+    <div class="rpt-title">كشف حساب العميل</div>
+    <div style="font-size:8px;color:#64748b;margin-top:3px">الفترة: ${fmtDate(dateFrom)} — ${fmtDate(dateTo)}</div>
+  </div>
+  <div style="text-align:left">
+    <div class="co-name">${esc(laundryNameAr)}</div>
+    ${vatNumber ? `<div class="co-meta">الرقم الضريبي: ${esc(vatNumber)}</div>` : ''}
+    <div class="co-meta">تاريخ الإنشاء: ${nowStr}</div>
+  </div>
+</div>
+<div class="cust-bar">
+  <div><span>العميل: </span><strong>${esc(customerInfo.customer_name || '')}</strong></div>
+  ${customerInfo.phone ? `<div><span>الجوال: </span><strong dir="ltr">${esc(customerInfo.phone)}</strong></div>` : ''}
+  ${customerInfo.tax_number ? `<div><span>الرقم الضريبي: </span><strong>${esc(customerInfo.tax_number)}</strong></div>` : ''}
+  <div><span>النوع: </span><strong>${esc(custTypeLabels[customerInfo.customer_type] || 'فرد')}</strong></div>
+</div>
+<div class="sg">
+  <div class="sc p1"><div class="lbl">الرصيد السابق</div><div class="val">${sarCell(summary.priorBalance)}</div></div>
+  <div class="sc p2"><div class="lbl">إجمالي المدين</div><div class="val">${sarCell(summary.totalDebit)}</div></div>
+  <div class="sc p3"><div class="lbl">إجمالي الدائن</div><div class="val">${sarCell(summary.totalCredit)}</div></div>
+  <div class="sc p4"><div class="lbl">المديونية الآجلة</div><div class="val">${sarCell(summary.deferredOutstanding)}</div></div>
+  <div class="sc p5"><div class="lbl">الرصيد الختامي</div><div class="val" style="color:${closingClr}">${sarCell(summary.closingBalance)}</div></div>
+</div>
+${subscriptionPeriods.length ? `
+<h3>ملخص الاشتراك</h3>
+<table>
+<thead><tr><th>الحالة</th><th>تاريخ البدء</th><th>تاريخ الانتهاء</th><th>القيمة</th><th>الاستهلاك</th><th>المتبقي</th></tr></thead>
+<tbody>${subRows}</tbody>
+</table>` : ''}
+<h3>الحركات التفصيلية (${movements.length} حركة)</h3>
+<table>
+<thead><tr><th>التاريخ</th><th>النوع</th><th>الوصف</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th>تم الدفع</th><th>التنظيف</th><th>التسليم</th></tr></thead>
+<tbody>${rows}${footerRow}</tbody>
+</table>
+<div class="ft">PLUS Laundry System — كشف حساب العميل — ${nowStr}</div>
+</body></html>`;
+
+    const buffer = await htmlToPdfBuffer(html, { landscape: false });
+    return { buffer, filename: `كشف-حساب_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  if (type === 'excel') {
+    const wb = XLSX.utils.book_new();
+
+    let running = Number(summary.priorBalance || 0);
+    let totalD = 0, totalC = 0;
+    const mvRows = movements.map(m => {
+      const d = Number(m.debit  || 0);
+      const c = Number(m.credit || 0);
+      running = Math.round((running + d - c) * 100) / 100;
+      totalD += d; totalC += c;
+      return [
+        fmtDT(m.mv_date),
+        typeLabels[m.mv_type] || m.mv_type,
+        m.description || '',
+        d || '',
+        c || '',
+        running,
+        m.paid_at       ? '✓' : '—',
+        m.cleaning_date ? '✓' : '—',
+        m.delivery_date ? '✓' : '—',
+      ];
+    });
+    totalD = Math.round(totalD * 100) / 100;
+    totalC = Math.round(totalC * 100) / 100;
+
+    const custTypeLabelsEx = { individual:'فرد', company:'شركة', hotel:'فندق' };
+    const mvInfo = [
+      [`كشف حساب العميل: ${customerInfo.customer_name || ''}`],
+      [`الجوال: ${customerInfo.phone || '—'}`],
+      ...(customerInfo.tax_number ? [[`الرقم الضريبي: ${customerInfo.tax_number}`]] : []),
+      [`نوع العميل: ${custTypeLabelsEx[customerInfo.customer_type] || 'فرد'}`],
+      [`الفترة: ${fmtDT(dateFrom)} — ${fmtDT(dateTo)}`],
+      [],
+      [`الرصيد السابق: ${fmt(summary.priorBalance)}`, '', `إجمالي المدين: ${fmt(summary.totalDebit)}`, '', `إجمالي الدائن: ${fmt(summary.totalCredit)}`],
+      [`المديونية الآجلة الحالية: ${fmt(summary.deferredOutstanding)}`, '', `الرصيد الختامي: ${fmt(summary.closingBalance)}`],
+      [],
+      ['التاريخ والوقت','نوع الحركة','الوصف','المدين','الدائن','الرصيد التراكمي','تم الدفع','التنظيف','التسليم'],
+      ...mvRows,
+      ['الإجمالي', '', '', totalD, totalC, running, '', '', ''],
+    ];
+    const mvWs = XLSX.utils.aoa_to_sheet(mvInfo);
+    mvWs['!cols'] = [{wch:18},{wch:16},{wch:34},{wch:12},{wch:12},{wch:14},{wch:10},{wch:10},{wch:10}];
+    if (!mvWs['!sheetViews']) mvWs['!sheetViews'] = [{}];
+    mvWs['!sheetViews'][0].rightToLeft = true;
+    XLSX.utils.book_append_sheet(wb, mvWs, 'كشف الحساب');
+
+    if (subscriptionPeriods.length) {
+      const spWs = XLSX.utils.aoa_to_sheet([
+        ['الحالة','تاريخ البدء','تاريخ الانتهاء','القيمة الإجمالية','الاستهلاك','الرصيد المتبقي'],
+        ...subscriptionPeriods.map(sp => [
+          sp.status === 'active' ? 'نشط' : 'منتهٍ',
+          fmtDate(sp.period_from),
+          sp.period_to ? fmtDate(sp.period_to) : '—',
+          Number(sp.total_value    || 0),
+          Number(sp.total_consumed || 0),
+          Number(sp.credit_remaining || 0),
+        ]),
+      ]);
+      spWs['!cols'] = [{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+      if (!spWs['!sheetViews']) spWs['!sheetViews'] = [{}];
+      spWs['!sheetViews'][0].rightToLeft = true;
+      XLSX.utils.book_append_sheet(wb, spWs, 'ملخص الاشتراك');
+    }
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `كشف-حساب_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
 module.exports = {
   exportExpenses,
   exportCustomers,
@@ -1316,6 +1552,7 @@ module.exports = {
   exportSubscriptionsReport,
   exportTypesReport,
   exportZakatReport,
+  exportCustomerAccountReport,
   MAX_PRODUCT_IMAGE_RAW_BYTES,
   cairoFonts
 };

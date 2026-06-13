@@ -374,7 +374,10 @@
 
   function bindEvents() {
     els.btnBack.addEventListener('click', () => window.api.navigateBack());
-    els.btnCrClose.addEventListener('click', () => { els.receiptViewModal.style.display = 'none'; });
+    els.btnCrClose.addEventListener('click', () => {
+      els.receiptViewModal.style.display = 'none';
+      if (window.self !== window.top) window.parent.postMessage('doc-viewer-close', '*');
+    });
     if (els.btnCrMarkCleaned) {
       els.btnCrMarkCleaned.addEventListener('click', async () => {
         if (!state.viewingOrderId) return;
@@ -472,5 +475,13 @@
     const settingsRes = await window.api.getAppSettings();
     if (settingsRes && settingsRes.success) state.appSettings = settingsRes.settings || settingsRes;
     await loadReceipts();
+
+    // فتح إيصال محدد عند التضمين في iframe من شاشة أخرى
+    const pendingReceiptId = localStorage.getItem('viewReceiptId');
+    if (pendingReceiptId) {
+      localStorage.removeItem('viewReceiptId');
+      const rid = Number(pendingReceiptId);
+      if (rid) await openReceipt(rid);
+    }
   });
 })();

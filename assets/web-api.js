@@ -399,7 +399,15 @@
     whatsappSendInvoicePdfFromHtml: (data) => invoke('whatsappSendInvoicePdfFromHtml', data),
 
     getZakatReport:          (data) => invoke('getZakatReport', data),
+    getCustomerAccountStatement: (data) => invoke('getCustomerAccountStatement', data),
     exportZakatReport:       (data) => exportBinary('/api/export/zakat-report', data),
+    exportCustomerAccountReport: (data) => exportBinary('/api/export/customer-account-report', data),
+
+    // Update
+    checkForUpdate:    (payload) => invoke('checkForUpdate', payload || {}),
+    getUpdateStatus:   ()        => invoke('getUpdateStatus'),
+    performUpdate:     ()        => invoke('performUpdate'),
+    getUpdateProgress: ()        => invoke('getUpdateProgress'),
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

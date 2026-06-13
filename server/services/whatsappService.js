@@ -3,8 +3,9 @@
 const path   = require('path');
 const fs     = require('fs');
 const QRCode = require('qrcode');
+const { DATA_ROOT } = require('../paths');
 
-const SESSION_DIR = path.join(__dirname, '../../data/whatsapp_session');
+const SESSION_DIR = path.join(DATA_ROOT, 'data', 'whatsapp_session');
 if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true });
 
 let _sock      = null;

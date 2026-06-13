@@ -15,8 +15,8 @@
 
 **Purpose**: التحقق من وجود الـ workflow file وتجهيز البيئة
 
-- [ ] T001 تحقق من وجود `.github/workflows/release.yml` في المشروع
-- [ ] T002 تحقق من ضبط Workflow permissions على "Read and write" في GitHub repo settings
+- [x] T001 تحقق من وجود `.github/workflows/release.yml` في المشروع
+- [x] T002 تحقق من ضبط Workflow permissions على "Read and write" في GitHub repo settings
 
 ---
 
@@ -26,9 +26,9 @@
 
 **⚠️ CRITICAL**: لا يمكن البدء في اختبار أي User Story قبل اكتمال هذه المرحلة
 
-- [ ] T003 تعديل خطوة "Build exe" في `.github/workflows/release.yml` لاستخدام `--output "dist\Laundry-PLUS-v$version.exe"` بدلاً من `dist\laundry-app.exe`
-- [ ] T004 تعديل خطوة "Generate checksums" في `.github/workflows/release.yml` — تحديث متغير `$exeName` وسطر الـ hash ليحمل `Laundry-PLUS-v$version.exe`
-- [ ] T005 تعديل خطوة "Create Release" في `.github/workflows/release.yml` — تحديث مسار الـ exe المرفوع من `dist\laundry-app.exe` إلى `dist\Laundry-PLUS-v$version.exe`
+- [x] T003 تعديل خطوة "Build exe" في `.github/workflows/release.yml` لاستخدام `--output "dist\Laundry-PLUS-v$version.exe"` بدلاً من `dist\laundry-app.exe`
+- [x] T004 تعديل خطوة "Generate checksums" في `.github/workflows/release.yml` — تحديث متغير `$exeName` وسطر الـ hash ليحمل `Laundry-PLUS-v$version.exe`
+- [x] T005 تعديل خطوة "Create Release" في `.github/workflows/release.yml` — تحديث مسار الـ exe المرفوع من `dist\laundry-app.exe` إلى `dist\Laundry-PLUS-v$version.exe`
 
 **ملاحظة**: التعديلات T003-T005 تم تطبيقها بالفعل في جلسة التخطيط. هذه المهام للتحقق فقط.
 
@@ -44,7 +44,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] رفع الكود على GitHub — `git add .github/workflows/release.yml && git commit -m "fix: rename exe to Laundry-PLUS-v{version}" && git push`
+- [x] T006 [US1] رفع الكود على GitHub — `git add .github/workflows/release.yml && git commit -m "fix: rename exe to Laundry-PLUS-v{version}" && git push`
 - [ ] T007 [US1] مراقبة الـ workflow على `https://github.com/alaaelmorsy/Laundry/actions` والتحقق من نجاح كل خطوة
 - [ ] T008 [US1] التحقق من الـ Release على `https://github.com/alaaelmorsy/Laundry/releases` — يجب أن يحتوي على:
   - `Laundry-PLUS-v1.0.12.exe`
@@ -93,7 +93,7 @@
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T018 [P] توثيق طريقة رفع إصدار جديد في `README` أو `CLAUDE.md` — خطوات: غيّر version → push → انتظر 15 دقيقة
-- [ ] T019 التحقق من أن `.gitignore` يستثني `dist/` لمنع رفع الـ exe المحلي على GitHub
+- [x] T019 التحقق من أن `.gitignore` يستثني `dist/` لمنع رفع الـ exe المحلي على GitHub
 
 ---
 

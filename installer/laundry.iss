@@ -1,0 +1,197 @@
+; PLUS Laundry - Inno Setup Installer Script
+; Build: npm run build:installer
+; Output: dist\PLUS-Laundry-Setup.exe
+
+#define AppName "PLUS Laundry"
+#define AppVersion "1.0.12"
+#define AppPublisher "PLUS Systems"
+#define AppExeName "laundry-app.exe"
+#define TaskName "LaundryPOS"
+
+[Setup]
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppPublisher={#AppPublisher}
+AppId={{B2F3A1C4-9D8E-4F2B-A7C6-3E5D1F0B8A94}
+DefaultDirName={autopf}\PLUS\Laundry
+DefaultGroupName={#AppName}
+OutputDir=..\dist
+OutputBaseFilename=PLUS-Laundry-Setup
+SetupIconFile=..\assets\icon\app.ico
+UninstallDisplayIcon={app}\{#AppExeName}
+Compression=lzma2/ultra64
+SolidCompression=yes
+PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64compatible
+WizardStyle=modern
+DisableProgramGroupPage=yes
+
+[Languages]
+Name: "default"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+FinishedHeadingLabel=اكتمل تثبيت [name]
+FinishedLabel=تم تثبيت [name] بنجاح على جهازك.%n%nسيُفتح المتصفح تلقائياً على:%n https://localhost:3443
+StatusExtractFiles=جاري نسخ الملفات...
+StatusCreateIcons=جاري إنشاء الاختصارات...
+StatusRunProgram=جاري تشغيل البرنامج...
+
+[Files]
+; البرنامج الرئيسي — يُستبدل دائماً
+Source: "..\release\laundry-app.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\release\mkcert.exe";      DestDir: "{app}"; Flags: ignoreversion
+
+; NSSM — يُسجَّل البرنامج كـ Windows Service
+Source: "nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; السكريبتات — تُستبدل دائماً
+Source: "..\release\scripts\*";           DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\scripts\register-task.ps1";   DestDir: "{app}\scripts"; Flags: ignoreversion
+
+; ملف الإعدادات — مضمَّن بكلمة السر الصحيحة، لا يُستبدل عند إعادة التثبيت
+Source: ".env"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
+
+; بيانات أولية — لا تُحذف ولا تُستبدل عند إعادة التثبيت
+Source: "..\release\data\*"; DestDir: "{app}\data"; \
+  Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall
+
+[Dirs]
+; إنشاء مجلد ssl فارغ (mkcert سيملؤه)
+Name: "{app}\ssl"
+
+[Icons]
+; اختصار سطح المكتب — يفتح المتصفح مباشرة بدون نافذة سوداء
+Name: "{commondesktop}\{#AppName}"; \
+  Filename: "{sys}\explorer.exe"; \
+  Parameters: "https://localhost:3443"; \
+  IconFilename: "{app}\{#AppExeName}"; \
+  Comment: "فتح نظام إدارة المغسلة"
+
+[Run]
+; 1) تثبيت mkcert CA في Windows trust store
+Filename: "{app}\mkcert.exe"; \
+  Parameters: "-install"; \
+  WorkingDir: "{app}"; \
+  Flags: waituntilterminated; \
+  StatusMsg: "جاري تثبيت شهادة HTTPS الموثوقة..."
+
+; 2) توليد شهادة localhost موثوقة خاصة بهذا الجهاز
+Filename: "{app}\mkcert.exe"; \
+  Parameters: "-key-file ""{app}\ssl\localhost-key.pem"" -cert-file ""{app}\ssl\localhost-cert.pem"" localhost 127.0.0.1"; \
+  WorkingDir: "{app}"; \
+  Flags: runhidden waituntilterminated; \
+  StatusMsg: "جاري إنشاء شهادة localhost..."
+
+
+[UninstallRun]
+; إزالة Task Scheduler القديم إن وجد (للتوافق مع الإصدارات السابقة)
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName '{#TaskName}' -Confirm:$false -ErrorAction SilentlyContinue"""; \
+  Flags: runhidden waituntilterminated; \
+  RunOnceId: "RemoveLaundryTask"
+
+[Registry]
+; حذف أي تشغيل تلقائي قديم عبر Registry (الإصدارات السابقة)
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; \
+  ValueName: "PLUSLaundry"; Flags: deletevalue
+
+; حذف متغيرات Node.js الضارة من System environment نهائياً
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueName: "OPENSSL_CONF";    Flags: deletevalue; Tasks: ;
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueName: "OPENSSL_ENGINES"; Flags: deletevalue; Tasks: ;
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueName: "NODE_OPTIONS";    Flags: deletevalue; Tasks: ;
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueName: "NODE_PATH";       Flags: deletevalue; Tasks: ;
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueName: "NODE_ENV";        Flags: deletevalue; Tasks: ;
+
+[Code]
+function SetFileAttributes(lpFileName: String; dwFileAttributes: DWORD): BOOL;
+  external 'SetFileAttributesW@kernel32.dll stdcall';
+
+procedure RegisterService(AppDir: String);
+var NssmPath: String; ResultCode: Integer;
+begin
+  NssmPath := AppDir + '\nssm.exe';
+  { إلغاء تسجيل قديم إن وجد }
+  Exec(NssmPath, 'remove LaundryPlusApp confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+  { تسجيل الـ Service }
+  Exec(NssmPath, 'install LaundryPlusApp "' + AppDir + '\{#AppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp AppDirectory "' + AppDir + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp DisplayName {#AppName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp Description نظام إدارة المغسلة', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { تشغيل مؤجل — يعطي MySQL وقتاً للبدء قبل البرنامج }
+  Exec(NssmPath, 'set LaundryPlusApp Start SERVICE_DELAYED_AUTO_START', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { إعادة التشغيل عند الفشل مع تأخير 30 ثانية (كافٍ لبدء MySQL) }
+  Exec(NssmPath, 'set LaundryPlusApp AppExit Default Restart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp AppRestartDelay 30000', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { حد أقصى 3 محاولات كل 2 دقيقة قبل التوقف عن المحاولة }
+  Exec(NssmPath, 'set LaundryPlusApp AppThrottle 120000', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp ObjectName LocalSystem', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { تشغيل الـ Service فوراً }
+  Exec(NssmPath, 'start LaundryPlusApp', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { إعداد recovery actions عبر sc.exe: restart عند الفشل }
+  Exec(ExpandConstant('{sys}\sc.exe'),
+       'failure LaundryPlusApp reset= 86400 actions= restart/30000/restart/60000/restart/120000',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { Scheduled Task: يفحص كل 5 دقائق — إذا Paused يستأنف تلقائياً }
+  Exec('powershell.exe',
+       '-NoProfile -ExecutionPolicy Bypass -Command "' +
+       '$action = New-ScheduledTaskAction -Execute ''sc.exe'' -Argument ''continue LaundryPlusApp''; ' +
+       '$trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 5) -Once -At (Get-Date); ' +
+       '$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Hidden; ' +
+       'Register-ScheduledTask -TaskName ''LaundryPlusWatchdog'' -Action $action -Trigger $trigger ' +
+       '-Settings $settings -RunLevel Highest -Force | Out-Null"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var EnvFile, AppDir: String; ResultCode: Integer;
+begin
+  if CurStep = ssInstall then begin
+    { إيقاف الـ Service القديم عبر NSSM }
+    Exec(ExpandConstant('{app}\nssm.exe'), 'stop LaundryPlusApp', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(2000);
+    { احتياط: taskkill لو NSSM لم يكن مثبتاً }
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
+  end;
+  if CurStep = ssPostInstall then begin
+    AppDir := ExpandConstant('{app}');
+
+    { منح صلاحية الكتابة الكاملة لمجلد التثبيت لجميع المستخدمين }
+    Exec(ExpandConstant('{sys}\icacls.exe'),
+         '"' + AppDir + '" /grant *S-1-5-32-545:(OI)(CI)F /T /Q',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+    { إخفاء .env }
+    EnvFile := AppDir + '\.env';
+    if FileExists(EnvFile) then
+      SetFileAttributes(EnvFile, $0002);
+
+    { تسجيل وتشغيل الـ Windows Service }
+    RegisterService(AppDir);
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var ResultCode: Integer;
+begin
+  if CurUninstallStep = usUninstall then begin
+    { إيقاف وإزالة الـ Watchdog Task }
+    Exec('powershell.exe',
+         '-NoProfile -ExecutionPolicy Bypass -Command "Unregister-ScheduledTask -TaskName ''LaundryPlusWatchdog'' -Confirm:$false -ErrorAction SilentlyContinue"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    { إيقاف وإزالة الـ Service }
+    Exec(ExpandConstant('{app}\nssm.exe'), 'stop LaundryPlusApp', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
+    Exec(ExpandConstant('{app}\nssm.exe'), 'remove LaundryPlusApp confirm', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;

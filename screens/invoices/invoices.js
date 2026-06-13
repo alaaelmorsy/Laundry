@@ -1356,6 +1356,9 @@
   function closeInvoiceModal() {
     els.invoiceViewModal.style.display = 'none';
     document.body.classList.remove('invtype-a4');
+    if (window.self !== window.top) {
+      window.parent.postMessage('doc-viewer-close', '*');
+    }
   }
 
   /* ========== START ========== */
@@ -1371,9 +1374,7 @@
         const el = document.querySelector(sel);
         if (el) el.style.display = 'none';
       });
-      // إخفاء زر العودة في المودال
-      const btnInvClose = document.getElementById('btnInvClose');
-      if (btnInvClose) btnInvClose.style.display = 'none';
+      // إبقاء زر إغلاق مرئياً — يُغلق الـ iframe ويعود للتقرير عبر postMessage
     }
 
     // الاستجابة لأوامر من المودال الأب (طباعة / تصدير PDF)

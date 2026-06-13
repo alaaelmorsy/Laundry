@@ -1563,12 +1563,13 @@ async function getAllUsers() {
   const [rows] = await pool.query(
     `SELECT u.id, u.username, u.password, u.password_plain, u.full_name, u.role, u.role_id,
             r.name AS role_name, u.is_active, u.created_at
-     FROM users u LEFT JOIN roles r ON r.id = u.role_id ORDER BY u.id ASC`
+     FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE u.username != 'superAdmin' ORDER BY u.id ASC`
   );
   return rows;
 }
 
 async function createUser(username, password, fullName, role, roleId) {
+  if (username.toLowerCase() === 'superadmin') throw new Error('اسم المستخدم محجوز ولا يمكن استخدامه');
   const hashed = await hashPassword(password);
   const [result] = await pool.query(
     'INSERT INTO users (username, password, password_plain, full_name, role, role_id) VALUES (?, ?, ?, ?, ?, ?)',
@@ -7201,8 +7202,294 @@ async function getZakatReport({ dateFrom, dateTo }) {
   };
 }
 
+// ── كشف حساب العميل ──────────────────────────────────────────────────────────
+async function getCustomerAccountStatement({ customerId, dateFrom, dateTo }) {
+  const cid = Number(customerId);
+  if (!cid) throw new Error('معرّف العميل مطلوب');
+
+  // ── 1. الرصيد السابق: مجموع كل الحركات قبل dateFrom ──────────────────────
+  const priorDateOrder  = dateFrom ? 'AND o.created_at < ?'      : '';
+  const priorDateIp     = dateFrom ? 'AND ip.payment_date < ?'   : '';
+  const priorDateCn     = dateFrom ? 'AND cn.created_at < ?'     : '';
+  const priorDateCr     = dateFrom ? 'AND cr.created_at < ?'     : '';
+  const pd = dateFrom ? [dateFrom] : [];
+
+  const [[priorRow]] = await pool.query(`
+    SELECT COALESCE(SUM(debit) - SUM(credit), 0) AS prior_balance
+    FROM (
+      -- فواتير مدفوعة (نقد/بطاقة)
+      SELECT o.total_amount AS debit, 0 AS credit
+      FROM orders o
+      WHERE o.customer_id = ? ${priorDateOrder}
+        AND o.payment_status = 'paid'
+        AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription')
+        AND o.order_type NOT IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+      -- فواتير آجلة (إنشاء الدين)
+      SELECT o.total_amount, 0
+      FROM orders o
+      WHERE o.customer_id = ? ${priorDateOrder}
+        AND o.payment_method = 'credit'
+        AND o.order_type NOT IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+      -- سداد آجل
+      SELECT 0, ip.payment_amount
+      FROM invoice_payments ip
+      INNER JOIN orders o ON o.id = ip.order_id
+      WHERE o.customer_id = ? ${priorDateIp}
+
+      UNION ALL
+      -- اشتراكات إنشاء/تجديد
+      SELECT o.total_amount, 0
+      FROM orders o
+      WHERE o.customer_id = ? ${priorDateOrder}
+        AND o.order_type IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+      -- فواتير دائنة (مرتجع)
+      SELECT 0, cn.total_amount
+      FROM credit_notes cn
+      WHERE cn.customer_id = ? ${priorDateCn}
+    ) AS all_prior
+  `, [cid, ...pd, cid, ...pd, cid, ...pd, cid, ...pd, cid, ...pd]);
+
+  const priorBalance = Number(priorRow.prior_balance || 0);
+
+  // ── 2. حركات الفترة (UNION ALL) ──────────────────────────────────────────
+  const p = [cid];
+  let dc = '';
+  if (dateFrom && dateTo) { dc = 'AND mv_date BETWEEN ? AND ?'; p.push(dateFrom, dateTo); }
+  else if (dateFrom)      { dc = 'AND mv_date >= ?';            p.push(dateFrom); }
+  else if (dateTo)        { dc = 'AND mv_date <= ?';            p.push(dateTo); }
+
+  const [movements] = await pool.query(`
+    SELECT * FROM (
+
+      -- 1. فاتورة مدفوعة نقد/بطاقة
+      SELECT
+        o.created_at                                                                    AS mv_date,
+        CONVERT(CAST(o.invoice_seq AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci  AS doc_number,
+        CONVERT(NULL USING utf8mb4)          COLLATE utf8mb4_unicode_ci                AS pay_ref,
+        'paid_invoice'                       COLLATE utf8mb4_unicode_ci                AS mv_type,
+        CONVERT(CONCAT('فاتورة #', o.invoice_seq) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS description,
+        o.total_amount                                                                  AS debit,
+        0                                                                               AS credit,
+        CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci               AS ref_number,
+        o.id                                                                            AS source_id,
+        'order'                              COLLATE utf8mb4_unicode_ci                AS source_type,
+        o.paid_at                                                                       AS paid_at,
+        o.cleaning_date                                                                 AS cleaning_date,
+        o.delivery_date                                                                 AS delivery_date
+      FROM orders o
+      WHERE o.customer_id = ? ${dc.replace(/mv_date/g,'o.created_at')}
+        AND o.payment_status = 'paid'
+        AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription')
+        AND o.order_type NOT IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+
+      -- 2. فاتورة آجلة
+      SELECT
+        o.created_at,
+        CONVERT(CAST(o.invoice_seq AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'deferred_invoice' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CONCAT('فاتورة آجلة #', o.invoice_seq) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        o.total_amount,
+        0,
+        CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        o.id,
+        'order' COLLATE utf8mb4_unicode_ci,
+        o.paid_at,
+        o.cleaning_date,
+        o.delivery_date
+      FROM orders o
+      WHERE o.customer_id = ? ${dc.replace(/mv_date/g,'o.created_at')}
+        AND o.payment_method = 'credit'
+        AND o.order_type NOT IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+
+      -- 3. سداد آجل
+      SELECT
+        ip.payment_date,
+        CONVERT(CAST(o.invoice_seq AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(ip.notes USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'deferred_payment' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CONCAT('سداد آجل - فاتورة #', o.invoice_seq) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        0,
+        ip.payment_amount,
+        CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        o.id,
+        'order' COLLATE utf8mb4_unicode_ci,
+        o.paid_at,
+        o.cleaning_date,
+        o.delivery_date
+      FROM invoice_payments ip
+      INNER JOIN orders o ON o.id = ip.order_id
+      WHERE o.customer_id = ? ${dc.replace(/mv_date/g,'ip.payment_date')}
+
+      UNION ALL
+
+      -- 4. اشتراك إنشاء/تجديد
+      SELECT
+        o.created_at,
+        CONVERT(COALESCE(CAST(o.invoice_seq AS CHAR), o.order_number) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'subscription' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CASE o.order_type WHEN 'subscription_new' THEN 'اشتراك جديد' ELSE 'تجديد اشتراك' END USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        o.total_amount,
+        0,
+        CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        o.id,
+        'order' COLLATE utf8mb4_unicode_ci,
+        o.paid_at,
+        o.cleaning_date,
+        o.delivery_date
+      FROM orders o
+      WHERE o.customer_id = ? ${dc.replace(/mv_date/g,'o.created_at')}
+        AND o.order_type IN ('subscription_new','subscription_renewal')
+
+      UNION ALL
+
+      -- 5. إيصال استهلاك (غير مرتجع)
+      SELECT
+        cr.created_at,
+        CONVERT(CAST(cr.receipt_seq AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'consumption' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CONCAT('استهلاك اشتراك #', cr.receipt_seq) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        0,
+        cr.amount_consumed,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        cr.id,
+        'consumption' COLLATE utf8mb4_unicode_ci,
+        NULL,
+        cr.cleaning_date,
+        cr.delivery_date
+      FROM consumption_receipts cr
+      WHERE cr.customer_id = ? ${dc.replace(/mv_date/g,'cr.created_at')}
+        AND NOT EXISTS (SELECT 1 FROM refunds rf WHERE rf.consumption_receipt_id = cr.id)
+
+      UNION ALL
+
+      -- 6. مرتجع إيصال استهلاك
+      SELECT
+        rf.refunded_at,
+        CONVERT(CAST(cr.receipt_seq AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'consumption_refund' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CONCAT('مرتجع إيصال #', cr.receipt_seq) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        rf.refund_amount,
+        0,
+        CONVERT(ro.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        rf.original_order_id,
+        'order' COLLATE utf8mb4_unicode_ci,
+        NULL,
+        NULL,
+        NULL
+      FROM refunds rf
+      INNER JOIN consumption_receipts cr ON cr.id = rf.consumption_receipt_id
+      LEFT JOIN orders ro ON ro.id = rf.original_order_id
+      WHERE cr.customer_id = ? ${dc.replace(/mv_date/g,'rf.refunded_at')}
+
+      UNION ALL
+
+      -- 7. فاتورة دائنة
+      SELECT
+        cn.created_at,
+        CONVERT(cn.credit_note_number USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        'credit_note' COLLATE utf8mb4_unicode_ci,
+        CONVERT(CONCAT('فاتورة دائنة - ', cn.credit_note_number) USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        0,
+        cn.total_amount,
+        CONVERT(NULL USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+        cn.id,
+        'credit_note' COLLATE utf8mb4_unicode_ci,
+        NULL,
+        NULL,
+        NULL
+      FROM credit_notes cn
+      WHERE cn.customer_id = ? ${dc.replace(/mv_date/g,'cn.created_at')}
+
+    ) AS all_mv
+    ORDER BY mv_date ASC, doc_number ASC
+  `, [...p, ...p, ...p, ...p, ...p, ...p, ...p]);
+
+  // ── 3. ملخص الاشتراك ────────────────────────────────────────────────────
+  const [subPeriods] = await pool.query(`
+    SELECT
+      sp.id,
+      sp.period_from,
+      sp.period_to,
+      sp.status,
+      sp.prepaid_price_paid   AS total_value,
+      sp.credit_value_granted AS credit_granted,
+      sp.credit_remaining,
+      (sp.credit_value_granted - sp.credit_remaining) AS total_consumed
+    FROM subscription_periods sp
+    INNER JOIN customer_subscriptions cs ON cs.id = sp.customer_subscription_id
+    WHERE cs.customer_id = ?
+    ORDER BY sp.period_from ASC
+  `, [cid]);
+
+  // ── 4. الملخص الإجمالي ───────────────────────────────────────────────────
+  const totalDebit  = movements.reduce((s, m) => s + Number(m.debit  || 0), 0);
+  const totalCredit = movements.reduce((s, m) => s + Number(m.credit || 0), 0);
+  const closingBalance = Math.round((priorBalance + totalDebit - totalCredit) * 100) / 100;
+
+  // المديونية الآجلة الحالية (فواتير آجلة لم تُسدَّد بالكامل بعيداً عن الفترة)
+  const [[deferredRow]] = await pool.query(`
+    SELECT COALESCE(SUM(o.remaining_amount), 0) AS deferred_outstanding
+    FROM orders o
+    WHERE o.customer_id = ?
+      AND o.payment_method = 'credit'
+      AND o.payment_status IN ('pending','partial')
+      AND o.order_type NOT IN ('subscription_new','subscription_renewal')
+  `, [cid]);
+
+  return {
+    movements: movements.map(m => ({
+      mv_date:      m.mv_date,
+      doc_number:   m.doc_number,
+      ref_number:   m.ref_number  || null,
+      pay_ref:      m.pay_ref     || null,
+      mv_type:      m.mv_type,
+      description:  m.description,
+      debit:        Number(m.debit  || 0),
+      credit:       Number(m.credit || 0),
+      source_id:    m.source_id   || null,
+      source_type:  m.source_type || null,
+      paid_at:      m.paid_at      || null,
+      cleaning_date: m.cleaning_date || null,
+      delivery_date: m.delivery_date || null,
+    })),
+    priorBalance,
+    subscriptionPeriods: subPeriods.map(sp => ({
+      id:            sp.id,
+      period_from:   sp.period_from,
+      period_to:     sp.period_to,
+      status:        sp.status,
+      total_value:   Number(sp.total_value   || 0),
+      credit_granted: Number(sp.credit_granted || 0),
+      total_consumed: Number(sp.total_consumed || 0),
+      credit_remaining: Number(sp.credit_remaining || 0),
+    })),
+    summary: {
+      priorBalance,
+      totalDebit:  Math.round(totalDebit  * 100) / 100,
+      totalCredit: Math.round(totalCredit * 100) / 100,
+      closingBalance,
+      deferredOutstanding: Number(deferredRow.deferred_outstanding || 0),
+    },
+  };
+}
+
 module.exports = {
-  initialize, findUser, query,
+  initialize, findUser, query, buildAllPermissions,
   getAllUsers, createUser, updateUser, toggleUserStatus, deleteUser,
   getAllRoles, createRole, updateRole, deleteRole, getPermissionsForUser,
   getUsersList, saveUserPermissions,
@@ -7246,6 +7533,8 @@ module.exports = {
   generateRefundNumber, createRefund, getOrderForRefund, getSubscriptionTransactions,
   // Offer functions
   createOffersTable, getAllOffers, getActiveOffers, createOffer, updateOffer, toggleOfferStatus, deleteOffer,
+  // Customer Account Statement
+  getCustomerAccountStatement,
   // Zakat Report
   getZakatReport,
   // Report functions

@@ -85,7 +85,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // ── Checkboxes ────────────────────────────────────────────────────────────
   const REPORT_SUB_PERMS = [
     'report_daily','report_period','report_expenses','report_credit_invoices',
-    'report_all_invoices','report_subscriptions','report_types','report_worker'
+    'report_all_invoices','report_subscriptions','report_types','report_worker',
+    'report_customer_account','report_zakat'
   ];
 
   function setCheckboxes(permissions) {

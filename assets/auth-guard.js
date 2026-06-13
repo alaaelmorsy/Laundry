@@ -22,7 +22,7 @@
   window.hasPermission = function (key) {
     const u = window.__currentUser;
     if (!u) return false;
-    if (u.role === 'admin') return true;
+    if (u.role === 'admin' || u.role === 'superadmin') return true;
     return !!(u.permissions && u.permissions[key]);
   };
 })();

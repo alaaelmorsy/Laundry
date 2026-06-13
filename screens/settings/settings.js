@@ -7,6 +7,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const tabLoyalty = document.getElementById('tabLoyalty');
   const tabClosing = document.getElementById('tabClosing');
   const tabSystemRestore = document.getElementById('tabSystemRestore');
+  const tabUpdate = document.getElementById('tabUpdate');
   const panelLaundry = document.getElementById('panelLaundry');
   const panelTax = document.getElementById('panelTax');
   const panelPrinter = document.getElementById('panelPrinter');
@@ -14,6 +15,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const panelLoyalty = document.getElementById('panelLoyalty');
   const panelClosing = document.getElementById('panelClosing');
   const panelSystemRestore = document.getElementById('panelSystemRestore');
+  const panelUpdate = document.getElementById('panelUpdate');
   const btnSaveLaundry = document.getElementById('btnSaveLaundry');
   const btnSaveTax = document.getElementById('btnSaveTax');
   const btnSavePrinter = document.getElementById('btnSavePrinter');
@@ -194,7 +196,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function setPanel(name) {
-    [tabLaundry, tabTax, tabPrinter, tabReportEmail, tabLoyalty, tabClosing, tabSystemRestore].forEach((t) => {
+    [tabLaundry, tabTax, tabPrinter, tabReportEmail, tabLoyalty, tabClosing, tabSystemRestore, tabUpdate].forEach((t) => {
       if (!t) return;
       t.classList.toggle('active', t.dataset.panel === name);
     });
@@ -205,6 +207,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (panelLoyalty) panelLoyalty.classList.toggle('active', name === 'loyalty');
     if (panelClosing) panelClosing.classList.toggle('active', name === 'closing');
     if (panelSystemRestore) panelSystemRestore.classList.toggle('active', name === 'systemRestore');
+    if (panelUpdate) panelUpdate.classList.toggle('active', name === 'update');
   }
 
   function fmtDateTimeLocal(v) {
@@ -467,6 +470,15 @@ window.addEventListener('DOMContentLoaded', () => {
   if (tabLoyalty) tabLoyalty.addEventListener('click', () => setPanel('loyalty'));
   if (tabClosing) tabClosing.addEventListener('click', () => setPanel('closing'));
   if (tabSystemRestore) tabSystemRestore.addEventListener('click', () => setPanel('systemRestore'));
+  if (tabUpdate) tabUpdate.addEventListener('click', () => { setPanel('update'); initUpdatePanel(); });
+
+  window.addEventListener('userReady', (e) => {
+    const user = e.detail;
+    if (!user || user.role !== 'superadmin') {
+      if (tabSystemRestore) tabSystemRestore.style.display = 'none';
+      if (panelSystemRestore) panelSystemRestore.style.display = 'none';
+    }
+  });
 
   btnBack.addEventListener('click', () => window.api.navigateBack());
 
@@ -797,6 +809,205 @@ window.addEventListener('DOMContentLoaded', () => {
         updateRestoreConfirmBtn();
       }
     });
+  }
+
+  // ── UPDATE PANEL LOGIC ────────────────────────────────────────────────────
+  let updatePanelReady = false;
+  let progressPollTimer = null;
+  let reconnectPollTimer = null;
+
+  function initUpdatePanel() {
+    if (updatePanelReady) return;
+    updatePanelReady = true;
+    // fix corrupted lang key if previous I18N.apply(DOMElement) call damaged it
+    const storedLang = localStorage.getItem('app_lang');
+    if (storedLang && storedLang !== 'ar' && storedLang !== 'en') {
+      localStorage.setItem('app_lang', 'ar');
+    }
+
+    const elVersion     = document.getElementById('updateCurrentVersion');
+    const btnCheck      = document.getElementById('btnCheckUpdate');
+    const resultArea    = document.getElementById('updateResultArea');
+    const progressPanel = document.getElementById('updateProgressPanel');
+    const progressBar   = document.getElementById('updateProgressBar');
+    const progressTitle = document.getElementById('updateProgressTitle');
+    const stepsList     = document.getElementById('updateStepsList');
+
+    // show current version
+    try {
+      window.api.getUpdateStatus().then(r => {
+        if (r && r.currentVersion && elVersion) elVersion.textContent = r.currentVersion;
+      }).catch(() => {});
+    } catch (_) {}
+
+    if (btnCheck) btnCheck.addEventListener('click', handleCheckUpdate);
+
+    async function handleCheckUpdate() {
+      if (!btnCheck) return;
+      btnCheck.disabled = true;
+      const origContent = btnCheck.innerHTML;
+      btnCheck.innerHTML = `<span data-i18n="settings-update-checking">جارٍ الفحص...</span>`;
+      if (resultArea) resultArea.style.display = 'none';
+
+      try {
+        const res = await window.api.checkForUpdate({ force: true });
+        if (!res || !res.success) {
+          showToast(res?.message || I18N.t('settings-update-error-generic'), 'error');
+          return;
+        }
+        if (elVersion && res.currentVersion) elVersion.textContent = res.currentVersion;
+        renderUpdateResult(res);
+      } catch (e) {
+        showToast(e.message || I18N.t('settings-update-error-generic'), 'error');
+      } finally {
+        btnCheck.disabled = false;
+        btnCheck.innerHTML = origContent;
+      }
+    }
+
+    function renderUpdateResult(res) {
+      if (!resultArea) return;
+      if (!res.hasUpdate) {
+        resultArea.innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border-radius:10px;border:1px solid var(--bdr)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="font-size:14px;color:var(--tx1)">${I18N.t('settings-update-up-to-date')}</span>
+          </div>`;
+        resultArea.style.display = 'block';
+        return;
+      }
+      const notes = (res.releaseNotes || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      const pubDate = res.publishedAt ? new Date(res.publishedAt).toLocaleDateString() : '';
+      resultArea.innerHTML = `
+        <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="font-size:14px;font-weight:700;color:#1d4ed8">${I18N.t('settings-update-available')}</span>
+          </div>
+          <div style="font-size:13px;color:var(--tx2)">
+            <strong>${I18N.t('settings-update-version-label')}:</strong> ${res.latestVersion || ''}
+            ${pubDate ? `&nbsp;·&nbsp;<strong>${I18N.t('settings-update-published')}:</strong> ${pubDate}` : ''}
+          </div>
+          ${notes ? `<div style="font-size:12px;color:var(--tx3);max-height:120px;overflow-y:auto;line-height:1.6;padding:8px;background:rgba(255,255,255,.6);border-radius:8px">${notes}</div>` : ''}
+          <button type="button" id="btnUpdateNow" style="align-self:flex-start;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            ${I18N.t('settings-update-now-btn')}
+          </button>
+        </div>`;
+      resultArea.style.display = 'block';
+      const btnNow = document.getElementById('btnUpdateNow');
+      if (btnNow) btnNow.addEventListener('click', handleUpdateNow);
+    }
+
+    async function handleUpdateNow() {
+      const btnNow = document.getElementById('btnUpdateNow');
+      if (btnNow) btnNow.disabled = true;
+      if (btnCheck) btnCheck.disabled = true;
+
+      showProgressPanel();
+
+      try {
+        const res = await window.api.performUpdate();
+        if (!res || !res.success) {
+          hideProgressPanel();
+          showToast(res?.message || I18N.t('settings-update-error-generic'), 'error');
+          if (btnNow) btnNow.disabled = false;
+          if (btnCheck) btnCheck.disabled = false;
+          return;
+        }
+        // Server will exit — start polling progress then reconnect
+        startProgressPolling();
+      } catch (e) {
+        hideProgressPanel();
+        showToast(e.message || I18N.t('settings-update-error-generic'), 'error');
+        if (btnNow) btnNow.disabled = false;
+        if (btnCheck) btnCheck.disabled = false;
+      }
+    }
+
+    function showProgressPanel() {
+      if (progressPanel) progressPanel.style.display = 'block';
+      if (resultArea) resultArea.style.display = 'none';
+    }
+
+    function hideProgressPanel() {
+      if (progressPanel) progressPanel.style.display = 'none';
+    }
+
+    function renderSteps(steps) {
+      if (!stepsList) return;
+      const icons = {
+        done:    `<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>`,
+        active:  `<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg>`,
+        pending: `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg>`,
+      };
+      stepsList.innerHTML = (steps || []).map(s => `
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:${s.status === 'pending' ? 'var(--tx4)' : s.status === 'done' ? 'var(--tx2)' : 'var(--tx1)'}">
+          ${icons[s.status] || icons.pending}
+          <span>${s.label || ''}</span>
+        </div>`).join('');
+    }
+
+    function startProgressPolling() {
+      clearInterval(progressPollTimer);
+      let serverGone = false;
+
+      progressPollTimer = setInterval(async () => {
+        try {
+          const res = await window.api.getUpdateProgress();
+          if (res && res.inProgress) {
+            if (progressBar) progressBar.style.width = (res.percent || 0) + '%';
+            if (progressTitle) progressTitle.textContent = res.stepLabel || I18N.t('settings-update-restarting');
+            renderSteps(res.steps);
+          }
+        } catch (_) {
+          // Server went offline — switch to reconnect mode
+          if (!serverGone) {
+            serverGone = true;
+            clearInterval(progressPollTimer);
+            if (progressTitle) progressTitle.textContent = I18N.t('settings-update-restarting');
+            if (progressBar) progressBar.style.width = '90%';
+            startReconnectPolling();
+          }
+        }
+      }, 1000);
+    }
+
+    function startReconnectPolling() {
+      clearInterval(reconnectPollTimer);
+      reconnectPollTimer = setInterval(async () => {
+        try {
+          const res = await window.api.getUpdateStatus();
+          if (res && res.success !== false) {
+            clearInterval(reconnectPollTimer);
+            if (progressBar) progressBar.style.width = '100%';
+            hideProgressPanel();
+            handleUpdateResult(res);
+          }
+        } catch (_) {}
+      }, 3000);
+    }
+
+    function handleUpdateResult(statusRes) {
+      const result = statusRes && statusRes.lastUpdateResult;
+      if (!result) return;
+      if (result.status === 'success') {
+        showToast(`${I18N.t('settings-update-success')} ${result.toVersion || ''}`, 'success');
+        if (document.getElementById('updateCurrentVersion')) {
+          document.getElementById('updateCurrentVersion').textContent = result.toVersion || '';
+        }
+        if (resultArea) resultArea.style.display = 'none';
+      } else {
+        showToast(I18N.t('settings-update-rollback'), 'error');
+        if (btnCheck) btnCheck.disabled = false;
+      }
+    }
+  }
+
+  // Check if URL hash requests update tab on load
+  if (window.location.hash === '#update' && tabUpdate) {
+    setPanel('update');
+    initUpdatePanel();
   }
 
   I18N.apply();

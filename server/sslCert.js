@@ -13,8 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const forge = require('node-forge');
+const { DATA_ROOT } = require('./paths');
 
-const CERT_DIR = path.join(__dirname, '..', 'ssl');
+const CERT_DIR = path.join(DATA_ROOT, 'ssl');
 const KEY_FILE = path.join(CERT_DIR, 'key.pem');
 const CERT_FILE = path.join(CERT_DIR, 'cert.pem');
 

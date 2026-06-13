@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const db = require('../database/db');
 const exportsService = require('./services/exportsService');
+const updateService = require('./services/updateService');
 const { loadAppBrandingForReceipts } = require('./services/branding');
 const { encryptText, decryptText, sendDailyReportEmail, buildProfessionalEmailHtml } = require('./services/emailService');
 const { LocalZatcaBridge } = require('./services/zatcaBridge');
@@ -75,7 +76,7 @@ async function _createSubInvoice({
  * @param {object} payload
  * @param {object} _user JWT payload
  */
-async function invoke(method, payload, _user) {
+async function invoke(method, payload, reqUser) {
   const m = String(method || '').trim();
   switch (m) {
     case 'getAppSettings': {
@@ -1722,6 +1723,9 @@ async function invoke(method, payload, _user) {
 
     case 'systemRestore': {
       try {
+        if (!reqUser || reqUser.role !== 'superadmin') {
+          return { success: false, message: 'غير مصرح — هذه الصلاحية للمشرف العام فقط' };
+        }
         const result = await db.systemRestore(payload || {});
         return result;
       } catch (err) {
@@ -1734,6 +1738,50 @@ async function invoke(method, payload, _user) {
       if (!dateFrom || !dateTo) return { success: false, message: 'dateFrom و dateTo مطلوبان' };
       const result = await db.getZakatReport({ dateFrom, dateTo });
       return { success: true, ...result };
+    }
+
+    case 'getCustomerAccountStatement': {
+      const { customerId, dateFrom, dateTo } = payload;
+      if (!customerId) return { success: false, message: 'customerId مطلوب' };
+      const result = await db.getCustomerAccountStatement({ customerId, dateFrom, dateTo });
+      return { success: true, ...result };
+    }
+
+    case 'checkForUpdate': {
+      try {
+        const force = payload && payload.force === true;
+        const result = await updateService.checkForUpdate(force);
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.code || 'UPDATE_CHECK_FAILED' };
+      }
+    }
+
+    case 'getUpdateStatus': {
+      try {
+        const result = updateService.getUpdateStatus();
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'performUpdate': {
+      try {
+        const result = await updateService.performUpdate();
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message, code: err.code || 'UPDATE_FAILED' };
+      }
+    }
+
+    case 'getUpdateProgress': {
+      try {
+        const result = updateService.getUpdateProgress();
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
     }
 
     default:
