@@ -49,6 +49,9 @@ Source: "nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; السكريبتات — تُستبدل دائماً
 Source: "..\scripts\*";               DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; أداة تشخيص في جذر التثبيت
+Source: "..\scripts\diagnose.bat";    DestDir: "{app}"; Flags: ignoreversion
+
 ; ملف الإعدادات — مضمَّن بكلمة السر الصحيحة، لا يُستبدل عند إعادة التثبيت
 Source: ".env"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
@@ -65,19 +68,7 @@ Name: "{commondesktop}\{#AppName}"; \
   Comment: "فتح نظام إدارة المغسلة"
 
 [Run]
-; 1) تثبيت mkcert CA في Windows trust store
-Filename: "{app}\mkcert.exe"; \
-  Parameters: "-install"; \
-  WorkingDir: "{app}"; \
-  Flags: waituntilterminated; \
-  StatusMsg: "جاري تثبيت شهادة HTTPS الموثوقة..."
-
-; 2) توليد شهادة localhost موثوقة خاصة بهذا الجهاز
-Filename: "{app}\mkcert.exe"; \
-  Parameters: "-key-file ""{app}\ssl\localhost-key.pem"" -cert-file ""{app}\ssl\localhost-cert.pem"" localhost 127.0.0.1"; \
-  WorkingDir: "{app}"; \
-  Flags: runhidden waituntilterminated; \
-  StatusMsg: "جاري إنشاء شهادة localhost..."
+; لا توجد خطوات mkcert هنا — تعمل من [Code] حتى تظهر نوافذها فوق الـ installer
 
 
 [UninstallRun]
@@ -108,6 +99,56 @@ Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environmen
 function SetFileAttributes(lpFileName: String; dwFileAttributes: DWORD): BOOL;
   external 'SetFileAttributesW@kernel32.dll stdcall';
 
+{ فحص حجم ملف بأمان — يرجع 0 إذا غير موجود }
+function GetFileSizeSafe(FileName: String): Int64;
+var FSize: Int64;
+begin
+  Result := 0;
+  if FileExists(FileName) then
+    if FileSize64(FileName, FSize) then
+      Result := FSize;
+end;
+
+{ فحص MySQL قبل بدء التثبيت — تنبيه إذا غير مثبتة لكن لا نمنع التثبيت }
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+  MySqlFound: Boolean;
+  TmpFile: String;
+begin
+  Result := True;
+  MySqlFound := False;
+
+  { 1) ابحث عن خدمة MySQL في النظام }
+  TmpFile := ExpandConstant('{tmp}\mysql-check.txt');
+  Exec(ExpandConstant('{cmd}'),
+       '/C sc query type= service state= all | findstr /I "MySQL" > "' + TmpFile + '"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  if GetFileSizeSafe(TmpFile) > 0 then
+    MySqlFound := True;
+
+  { 2) أو افحص المنفذ 3306 }
+  if not MySqlFound then begin
+    Exec(ExpandConstant('{cmd}'),
+         '/C netstat -an | findstr ":3306" > "' + TmpFile + '"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if GetFileSizeSafe(TmpFile) > 0 then
+      MySqlFound := True;
+  end;
+
+  if not MySqlFound then begin
+    if MsgBox(
+        'تحذير: لم يتم العثور على MySQL Server على هذا الجهاز.' + #13#10 + #13#10 +
+        'البرنامج يحتاج MySQL Server مثبّتة بكلمة سر root:' + #13#10 +
+        '   Db2@dm1n2022' + #13#10 + #13#10 +
+        'إذا كانت مثبّتة بكلمة سر مختلفة، عدّل ملف .env بعد التثبيت.' + #13#10 + #13#10 +
+        'هل تريد المتابعة على أي حال؟',
+        mbConfirmation, MB_YESNO) = IDNO then
+      Result := False;
+  end;
+end;
+
 procedure RegisterService(AppDir: String);
 var NssmPath: String; ResultCode: Integer;
 begin
@@ -124,10 +165,21 @@ begin
   Exec(NssmPath, 'set LaundryPlusApp Start SERVICE_DELAYED_AUTO_START', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   { إعادة التشغيل عند الفشل مع تأخير 30 ثانية (كافٍ لبدء MySQL) }
   Exec(NssmPath, 'set LaundryPlusApp AppExit Default Restart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(NssmPath, 'set LaundryPlusApp AppRestartDelay 30000', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  { حد أقصى 3 محاولات كل 2 دقيقة قبل التوقف عن المحاولة }
-  Exec(NssmPath, 'set LaundryPlusApp AppThrottle 120000', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { تأخير 10 ثوانٍ فقط — البرنامج نفسه ينتظر MySQL داخلياً لمدة 90 ثانية }
+  Exec(NssmPath, 'set LaundryPlusApp AppRestartDelay 10000', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { تعطيل AppThrottle تماماً — كان يسبب تجميد الـ service في حالة Paused }
+  Exec(NssmPath, 'set LaundryPlusApp AppThrottle 0', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(NssmPath, 'set LaundryPlusApp ObjectName LocalSystem', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { === CRITICAL: NSSM stdout/stderr logging — بدونه لا يمكن تشخيص الأخطاء === }
+  ForceDirectories(AppDir + '\data\logs');
+  Exec(NssmPath, 'set LaundryPlusApp AppStdout "' + AppDir + '\data\logs\service-stdout.log"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp AppStderr "' + AppDir + '\data\logs\service-stderr.log"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { Rotation: عند 5MB يُنشأ ملف جديد }
+  Exec(NssmPath, 'set LaundryPlusApp AppRotateFiles 1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp AppRotateOnline 1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(NssmPath, 'set LaundryPlusApp AppRotateBytes 5242880', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { بيئة: TZ صريح حتى لا يفشل الـ logging }
+  Exec(NssmPath, 'set LaundryPlusApp AppEnvironmentExtra "NODE_NO_WARNINGS=1"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   { تشغيل الـ Service فوراً }
   Exec(NssmPath, 'start LaundryPlusApp', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   { إعداد recovery actions عبر sc.exe: restart عند الفشل }
@@ -170,6 +222,22 @@ begin
     EnvFile := AppDir + '\.env';
     if FileExists(EnvFile) then
       SetFileAttributes(EnvFile, $0002);
+
+    { تنبيه المستخدم قبل تثبيت شهادة HTTPS }
+    MsgBox('سيظهر حوار أمان لتثبيت شهادة HTTPS.' + #13#10 +
+           'انقر "نعم" للموافقة حتى يكتمل التثبيت.',
+           mbInformation, MB_OK);
+
+    { تثبيت mkcert CA في Windows trust store — الحوار يظهر الآن فوق كل النوافذ }
+    Exec(AppDir + '\mkcert.exe', '-install', AppDir,
+         SW_SHOW, ewWaitUntilTerminated, ResultCode);
+
+    { توليد شهادة localhost }
+    Exec(AppDir + '\mkcert.exe',
+         '-key-file "' + AppDir + '\ssl\localhost-key.pem"' +
+         ' -cert-file "' + AppDir + '\ssl\localhost-cert.pem"' +
+         ' localhost 127.0.0.1',
+         AppDir, SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
     { تسجيل وتشغيل الـ Windows Service }
     RegisterService(AppDir);

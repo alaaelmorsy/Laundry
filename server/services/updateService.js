@@ -19,7 +19,9 @@ let updateProgress = {
   currentStep: null,
   stepLabel: '',
   percent: 0,
-  steps: []
+  steps: [],
+  downloadedBytes: 0,
+  totalBytes: 0,
 };
 
 const STEPS = [
@@ -42,7 +44,7 @@ function buildSteps(activeId) {
   });
 }
 
-function setProgress(stepId, percent) {
+function setProgress(stepId, percent, extra = {}) {
   const step = STEPS.find(s => s.id === stepId);
   updateProgress = {
     inProgress: true,
@@ -50,11 +52,13 @@ function setProgress(stepId, percent) {
     stepLabel: step ? step.label.ar : stepId,
     percent,
     steps: buildSteps(stepId),
+    downloadedBytes: extra.downloadedBytes ?? updateProgress.downloadedBytes,
+    totalBytes: extra.totalBytes ?? updateProgress.totalBytes,
   };
 }
 
 function clearProgress() {
-  updateProgress = { inProgress: false, currentStep: null, stepLabel: '', percent: 0, steps: [] };
+  updateProgress = { inProgress: false, currentStep: null, stepLabel: '', percent: 0, steps: [], downloadedBytes: 0, totalBytes: 0 };
 }
 
 // ── logging ───────────────────────────────────────────────────────────────────
@@ -138,6 +142,7 @@ async function checkForUpdate(force = false) {
         publishedAt: cached.publishedAt,
         downloadUrl: cached.downloadUrl,
         checksumUrl: cached.checksumUrl,
+        assetSize: cached.assetSize || null,
         lastChecked: cached.lastChecked,
       };
     }
@@ -192,7 +197,9 @@ async function checkForUpdate(force = false) {
   const latestVersion = (release.tag_name || '').replace(/^v/, '');
   const hasUpdate = isNewer(currentVersion, latestVersion);
 
-  const zipAsset = (release.assets || []).find(a => a.name.endsWith('.zip'));
+  const exeAsset  = (release.assets || []).find(
+    a => a.name.startsWith('laundry-app-v') && a.name.endsWith('.exe')
+  );
   const csumAsset = (release.assets || []).find(a => a.name === 'sha256sums.txt');
 
   const status = {
@@ -201,8 +208,9 @@ async function checkForUpdate(force = false) {
     latestVersion,
     hasUpdate,
     releaseNotes: release.body || '',
-    downloadUrl: zipAsset ? zipAsset.browser_download_url : null,
+    downloadUrl: exeAsset ? exeAsset.browser_download_url : null,
     checksumUrl: csumAsset ? csumAsset.browser_download_url : null,
+    assetSize: exeAsset ? (exeAsset.size || null) : null,
     publishedAt: release.published_at || null,
     lastUpdateResult: cached && cached.lastUpdateResult ? cached.lastUpdateResult : null,
     _etag: res.headers.etag || null,
@@ -211,7 +219,7 @@ async function checkForUpdate(force = false) {
   writeStatus(status);
   logEvent('INFO', `Update check: current=${currentVersion} latest=${latestVersion} hasUpdate=${hasUpdate}`);
 
-  return { hasUpdate, currentVersion, latestVersion, releaseNotes: status.releaseNotes, publishedAt: status.publishedAt, downloadUrl: status.downloadUrl, checksumUrl: status.checksumUrl, lastChecked: status.lastChecked };
+  return { hasUpdate, currentVersion, latestVersion, releaseNotes: status.releaseNotes, publishedAt: status.publishedAt, downloadUrl: status.downloadUrl, checksumUrl: status.checksumUrl, assetSize: status.assetSize, lastChecked: status.lastChecked };
 }
 
 // ── T006: getUpdateStatus ─────────────────────────────────────────────────────
@@ -224,6 +232,7 @@ function getUpdateStatus() {
     latestVersion: cached ? (cached.latestVersion || pkg.version) : pkg.version,
     lastChecked: cached ? cached.lastChecked : null,
     lastUpdateResult: cached ? (cached.lastUpdateResult || null) : null,
+    assetSize: cached ? (cached.assetSize || null) : null,
   };
 }
 
@@ -335,7 +344,7 @@ function downloadWithProgress(url, destPath, onProgress) {
       const out = fs.createWriteStream(destPath);
       res.on('data', chunk => {
         received += chunk.length;
-        if (total > 0 && onProgress) onProgress(Math.round(received * 100 / total));
+        if (onProgress) onProgress(total > 0 ? Math.round(received * 100 / total) : 0, received, total);
       });
       res.pipe(out);
       out.on('finish', () => { logEvent('INFO', `Download complete: ${destPath} (${received} bytes)`); resolve(); });
@@ -390,16 +399,16 @@ async function performUpdate() {
     setProgress('downloading', 15);
 
     // download
-    const zipName = `laundry-v${targetVersion}.zip`;
-    const zipPath = path.join(DATA_DIR, zipName);
-    await downloadWithProgress(cached.downloadUrl, zipPath, pct => {
-      setProgress('downloading', 15 + Math.round(pct * 0.5));
+    const exeName = `laundry-app-v${targetVersion}.exe`;
+    const exePath = path.join(DATA_DIR, exeName);
+    await downloadWithProgress(cached.downloadUrl, exePath, (pct, received, total) => {
+      setProgress('downloading', 15 + Math.round(pct * 0.5), { downloadedBytes: received, totalBytes: total });
     });
     setProgress('verify', 68);
 
     // verify
     if (cached.checksumUrl) {
-      await verifySha256(zipPath, cached.checksumUrl);
+      await verifySha256(exePath, cached.checksumUrl);
     } else {
       logEvent('WARN', 'No checksumUrl in cached status — skipping verification');
     }
@@ -414,7 +423,7 @@ async function performUpdate() {
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', updaterScript,
       '-ServerPid', String(process.pid),
       '-TargetVersion', targetVersion,
-      '-ZipPath', zipPath,
+      '-NewExePath', exePath,
       '-BackupPath', backupPath,
       '-AppRoot', ROOT,
     ];
@@ -433,10 +442,10 @@ async function performUpdate() {
     updateInProgress = false;
     clearProgress();
     logEvent('ERROR', `performUpdate failed: ${err.message}`);
-    // clean up temp zip if it exists
+    // clean up temp exe if it exists
     try {
-      const zipPath = path.join(DATA_DIR, `laundry-v${targetVersion}.zip`);
-      if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+      const exePath = path.join(DATA_DIR, `laundry-app-v${targetVersion}.exe`);
+      if (fs.existsSync(exePath)) fs.unlinkSync(exePath);
     } catch (_) {}
     throw err;
   }

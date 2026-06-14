@@ -57,12 +57,15 @@ jobs:
         shell: pwsh
         run: npm ci --ignore-scripts
 
-      # ── 6. Build exe with pkg → release\laundry-app.exe ─────────────────────
+      # ── 6. Build exe with pkg ────────────────────────────────────────────────
       - name: Build exe
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
         run: |
-          npx pkg . --compress GZip --output "release\laundry-app.exe"
+          $version = "${{ steps.version.outputs.version }}"
+          npx pkg . --compress GZip --output "release\laundry-app-v$version.exe"
+          # نسخة بدون رقم للـ installer (laundry.iss يتوقع laundry-app.exe)
+          Copy-Item "release\laundry-app-v$version.exe" "release\laundry-app.exe"
           echo "exe size: $([Math]::Round((Get-Item 'release\laundry-app.exe').Length / 1MB, 1)) MB"
 
       # ── 7. Prepare release folder assets ─────────────────────────────────────
@@ -96,7 +99,7 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      # ── 8. Build installer ────────────────────────────────────────────────────
+      # ── 9. Build installer ────────────────────────────────────────────────────
       - name: Build installer
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
@@ -109,39 +112,20 @@ jobs:
           $size = [Math]::Round((Get-Item $setupExe).Length / 1MB, 1)
           echo "Installer size: $size MB"
 
-      # ── 9. Create source ZIP for auto-update ─────────────────────────────────
-      - name: Create source ZIP
-        if: steps.check.outputs.exists == 'false'
-        shell: pwsh
-        run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $zipName = "laundry-v$version.zip"
-
-          $exclude = @('node_modules', 'data', '.env', 'ssl', 'backup', '.git',
-                       '.specify', 'specs', 'dist', 'release', '.github', '.kilo')
-
-          $items = Get-ChildItem -Path . -Force |
-            Where-Object { $exclude -notcontains $_.Name -and $_.Name -ne '.env' }
-
-          Compress-Archive -Path ($items | Select-Object -ExpandProperty FullName) `
-                           -DestinationPath $zipName -Force
-
-          echo "ZIP size: $([Math]::Round((Get-Item $zipName).Length / 1MB, 1)) MB"
-
       # ── 10. Generate SHA256 checksums ─────────────────────────────────────────
       - name: Generate checksums
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $zipName = "laundry-v$version.zip"
-          $setupName = "dist\Laundry-PLUS-Setup-v$version.exe"
+          $version    = "${{ steps.version.outputs.version }}"
+          $updateExe  = "release\laundry-app-v$version.exe"
+          $setupExe   = "dist\Laundry-PLUS-Setup-v$version.exe"
 
-          $zipHash   = (Get-FileHash $zipName   -Algorithm SHA256).Hash.ToLower()
-          $setupHash = (Get-FileHash $setupName -Algorithm SHA256).Hash.ToLower()
+          $updateHash = (Get-FileHash $updateExe -Algorithm SHA256).Hash.ToLower()
+          $setupHash  = (Get-FileHash $setupExe  -Algorithm SHA256).Hash.ToLower()
 
-          "$zipHash    $zipName"                          | Out-File -FilePath sha256sums.txt -Encoding utf8
-          "$setupHash  Laundry-PLUS-Setup-v$version.exe" | Add-Content -Path sha256sums.txt -Encoding utf8
+          "$updateHash  laundry-app-v$version.exe"          | Out-File  -FilePath sha256sums.txt -Encoding utf8
+          "$setupHash   Laundry-PLUS-Setup-v$version.exe"   | Add-Content -Path sha256sums.txt -Encoding utf8
 
           Get-Content sha256sums.txt
 
@@ -152,14 +136,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $tag = "v$version"
-          $zipName = "laundry-v$version.zip"
+          $version   = "${{ steps.version.outputs.version }}"
+          $tag       = "v$version"
+          $updateExe = "release\laundry-app-v$version.exe"
 
           gh release create $tag `
             --title "الإصدار $tag" `
             --notes "إصدار $tag — تحديث تلقائي" `
-            $zipName `
+            $updateExe `
             sha256sums.txt `
             "dist\Laundry-PLUS-Setup-v$version.exe"
 

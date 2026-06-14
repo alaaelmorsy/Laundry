@@ -8,17 +8,20 @@ const { DATA_ROOT } = require('../paths');
 const SESSION_DIR = path.join(DATA_ROOT, 'data', 'whatsapp_session');
 if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true });
 
+const BAILEYS_FALLBACK_VERSION = [2, 3000, 1035194821];
+
 let _sock      = null;
 let _status    = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
 let _qrDataUrl = null;
+let _lastError = null;
 
-async function _loadBaileys() {
-  const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion
-  } = await import('@whiskeysockets/baileys');
+// Lazy load — لو فشل (تعارض إصدار Node)، باقي البرنامج يستمر بدون واتساب
+let _baileysBundle = null;
+function _loadBaileys() {
+  if (!_baileysBundle) {
+    _baileysBundle = require('../../generated/baileys-bundle.cjs');
+  }
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = _baileysBundle;
   return { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion };
 }
 
@@ -29,13 +32,18 @@ async function connect() {
 
   try {
     const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } =
-      await _loadBaileys();
+      _loadBaileys();
 
     const pino = require('pino');
     const logger = pino({ level: 'silent' });
 
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-    const { version }          = await fetchLatestBaileysVersion();
+    let version;
+    try {
+      ({ version } = await fetchLatestBaileysVersion());
+    } catch (_) {
+      version = BAILEYS_FALLBACK_VERSION;
+    }
 
     _sock = makeWASocket({
       version,
@@ -45,6 +53,7 @@ async function connect() {
       browser:               ['Laundry POS', 'Chrome', '1.0.0'],
       connectTimeoutMs:      60_000,
       keepAliveIntervalMs:   30_000,
+      mediaUploadTimeoutMs:  60_000,
     });
 
     _sock.ev.on('creds.update', saveCreds);
@@ -83,6 +92,7 @@ async function connect() {
   } catch (err) {
     _status = 'disconnected';
     _sock   = null;
+    _lastError = err.message;
     console.error('[WhatsApp] connect error:', err.message);
   }
 }
@@ -107,7 +117,7 @@ async function disconnect() {
 }
 
 function getStatus() {
-  return { status: _status, qr: _qrDataUrl };
+  return { status: _status, qr: _qrDataUrl, error: _lastError };
 }
 
 /**
@@ -174,16 +184,62 @@ async function sendDocument(phone, buffer, filename, caption) {
   // تأخير عشوائي بين 3 و8 ثوانٍ لتقليل خطر الحظر
   await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 5000)));
 
+  const messageContent = {
+    document: buffer,
+    mimetype: 'application/pdf',
+    fileName: filename || 'invoice.pdf',
+    caption: caption || ''
+  };
+
+  // المحاولة 1: إرسال عادي
   try {
-    await _sock.sendMessage(jid, {
-      document: buffer,
-      mimetype: 'application/pdf',
-      fileName: filename || 'invoice.pdf',
-      caption: caption || ''
-    });
+    await _sock.sendMessage(jid, messageContent);
     return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
+  } catch (err1) {
+    const msg1 = err1.message || '';
+    console.log(`[WhatsApp] sendDocument attempt 1 failed: ${msg1}`);
+
+    // فقط الأخطاء المتعلقة بـ media upload نحاول معها reconnect
+    if (!/media|upload|host|timeout|connection/i.test(msg1)) {
+      return { success: false, error: msg1 };
+    }
+
+    // المحاولة 2: refresh media connection ثم أعد المحاولة
+    try {
+      if (typeof _sock.refreshMediaConn === 'function') {
+        console.log('[WhatsApp] Refreshing media connection...');
+        await _sock.refreshMediaConn(true);
+      }
+      await new Promise(r => setTimeout(r, 3000));
+      await _sock.sendMessage(jid, messageContent);
+      console.log('[WhatsApp] ✓ Sent on attempt 2 after media refresh');
+      return { success: true };
+    } catch (err2) {
+      console.log(`[WhatsApp] sendDocument attempt 2 failed: ${err2.message}`);
+
+      // المحاولة 3: إعادة اتصال كامل ثم أعد المحاولة
+      try {
+        console.log('[WhatsApp] Doing full reconnect for media...');
+        if (_sock && typeof _sock.end === 'function') {
+          try { _sock.end(); } catch (_) {}
+        }
+        _sock   = null;
+        _status = 'disconnected';
+        await connect();
+        // انتظر حتى يصبح متصلاً (حد أقصى 30 ثانية)
+        for (let i = 0; i < 60 && _status !== 'connected'; i++) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+        if (_status !== 'connected') {
+          return { success: false, error: 'فشل إعادة الاتصال بعد محاولات الإرسال' };
+        }
+        await _sock.sendMessage(jid, messageContent);
+        console.log('[WhatsApp] ✓ Sent on attempt 3 after full reconnect');
+        return { success: true };
+      } catch (err3) {
+        return { success: false, error: err3.message || msg1 };
+      }
+    }
   }
 }
 

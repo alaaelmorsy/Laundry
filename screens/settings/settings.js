@@ -833,10 +833,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const progressTitle = document.getElementById('updateProgressTitle');
     const stepsList     = document.getElementById('updateStepsList');
 
-    // show current version
+    function fmtBytes(b) {
+      if (!b) return '';
+      if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+      if (b >= 1024) return (b / 1024).toFixed(0) + ' KB';
+      return b + ' B';
+    }
+
+    // show current version + auto-show update result if cached
     try {
       window.api.getUpdateStatus().then(r => {
         if (r && r.currentVersion && elVersion) elVersion.textContent = r.currentVersion;
+        if (r && r.hasUpdate) renderUpdateResult(r);
       }).catch(() => {});
     } catch (_) {}
 
@@ -878,6 +886,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       const notes = (res.releaseNotes || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
       const pubDate = res.publishedAt ? new Date(res.publishedAt).toLocaleDateString() : '';
+      const sizeLabel = res.assetSize ? `&nbsp;·&nbsp;<strong>الحجم:</strong> ${fmtBytes(res.assetSize)}` : '';
       resultArea.innerHTML = `
         <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -887,6 +896,7 @@ window.addEventListener('DOMContentLoaded', () => {
           <div style="font-size:13px;color:var(--tx2)">
             <strong>${I18N.t('settings-update-version-label')}:</strong> ${res.latestVersion || ''}
             ${pubDate ? `&nbsp;·&nbsp;<strong>${I18N.t('settings-update-published')}:</strong> ${pubDate}` : ''}
+            ${sizeLabel}
           </div>
           ${notes ? `<div style="font-size:12px;color:var(--tx3);max-height:120px;overflow-y:auto;line-height:1.6;padding:8px;background:rgba(255,255,255,.6);border-radius:8px">${notes}</div>` : ''}
           <button type="button" id="btnUpdateNow" style="align-self:flex-start;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px">
@@ -925,13 +935,17 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    const downloadSizeEl = document.getElementById('updateDownloadSize');
+
     function showProgressPanel() {
       if (progressPanel) progressPanel.style.display = 'block';
       if (resultArea) resultArea.style.display = 'none';
+      if (downloadSizeEl) downloadSizeEl.textContent = '';
     }
 
     function hideProgressPanel() {
       if (progressPanel) progressPanel.style.display = 'none';
+      if (downloadSizeEl) downloadSizeEl.textContent = '';
     }
 
     function renderSteps(steps) {
@@ -959,6 +973,17 @@ window.addEventListener('DOMContentLoaded', () => {
             if (progressBar) progressBar.style.width = (res.percent || 0) + '%';
             if (progressTitle) progressTitle.textContent = res.stepLabel || I18N.t('settings-update-restarting');
             renderSteps(res.steps);
+            // عرض حجم الملف أثناء التحميل فقط
+            if (downloadSizeEl) {
+              if (res.currentStep === 'downloading' && res.totalBytes > 0) {
+                const dlText = fmtBytes(res.downloadedBytes || 0);
+                const totText = fmtBytes(res.totalBytes);
+                const pct = res.percent > 15 ? Math.round((res.percent - 15) / 0.5) : 0;
+                downloadSizeEl.textContent = `${dlText} / ${totText} (${pct}%)`;
+              } else {
+                downloadSizeEl.textContent = '';
+              }
+            }
           }
         } catch (_) {
           // Server went offline — switch to reconnect mode

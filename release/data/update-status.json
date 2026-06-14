@@ -1,12 +1,12 @@
 {
-  "lastChecked": "2026-06-13T22:08:10.390Z",
+  "lastChecked": "2026-06-13T23:17:19.331Z",
   "currentVersion": "1.0.3",
-  "latestVersion": "1.0.4",
+  "latestVersion": "1.0.10",
   "hasUpdate": true,
-  "releaseNotes": "إصدار v1.0.4 — تحديث تلقائي",
-  "downloadUrl": "https://github.com/alaaelmorsy/Laundry/releases/download/v1.0.4/laundry-v1.0.4.zip",
-  "checksumUrl": "https://github.com/alaaelmorsy/Laundry/releases/download/v1.0.4/sha256sums.txt",
-  "publishedAt": "2026-06-13T21:32:47Z",
+  "releaseNotes": "إصدار v1.0.10 — تحديث ��لقائي",
+  "downloadUrl": "https://github.com/alaaelmorsy/Laundry/releases/download/v1.0.10/laundry-v1.0.10.zip",
+  "checksumUrl": "https://github.com/alaaelmorsy/Laundry/releases/download/v1.0.10/sha256sums.txt",
+  "publishedAt": "2026-06-13T22:40:20Z",
   "lastUpdateResult": null,
-  "_etag": "W/\"d81dc083dc1715929ad3401c3d6344e9793ffeec68cefa2d5a03b6c8bd3198ad\""
+  "_etag": "W/\"cd4acf5f76dce716e48ba4f99e583a2f444fbc49c09f7d215774ba2cef396451\""
 }

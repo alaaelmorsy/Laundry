@@ -22,3 +22,6 @@ build/
 backup/
 data/update-log.txt
 data/update-status.json
+data/whatsapp_session/
+data/logs/
+data/

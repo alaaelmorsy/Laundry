@@ -8,16 +8,29 @@ function resolveChromeExecutable() {
     return process.env.CHROME_PATH;
   }
   const candidates = [
+    // Google Chrome
     process.platform === 'win32' && 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     process.platform === 'win32' && 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    // Microsoft Edge — مثبت افتراضياً على Windows 10/11
+    process.platform === 'win32' && 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    process.platform === 'win32' && 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    // Brave كبديل آخر
+    process.platform === 'win32' && 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+    process.platform === 'win32' && 'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+    // macOS / Linux
     process.platform === 'darwin' && '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    process.platform === 'darwin' && '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium',
-    '/usr/bin/chromium-browser'
+    '/usr/bin/chromium-browser',
+    '/usr/bin/microsoft-edge'
   ].filter(Boolean);
   for (const c of candidates) {
     try {
-      if (c && fs.existsSync(c)) return c;
+      if (c && fs.existsSync(c)) {
+        console.log(`[PDF] Using browser: ${c}`);
+        return c;
+      }
     } catch (_) {}
   }
   return null;
@@ -35,9 +48,9 @@ async function getBrowser() {
   }
   const executablePath = resolveChromeExecutable();
   if (!executablePath) {
-    throw new Error(
-      'Chrome not found. Install Google Chrome or set CHROME_PATH to chrome.exe (required for PDF export on the web server).'
-    );
+    const msg = 'لم يتم العثور على متصفح مناسب لتوليد PDF. ثبّت Google Chrome أو Microsoft Edge أو حدّد CHROME_PATH في .env';
+    console.error('[PDF] ' + msg);
+    throw new Error(msg);
   }
   browserInstance = await puppeteer.launch({
     executablePath,

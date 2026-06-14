@@ -1680,8 +1680,17 @@ async function invoke(method, payload, reqUser) {
         } catch (_) {}
       }
 
-      const pdfResult = await exportsService.exportInvoicePdfFromHtml(html, paperType || 'thermal', orderNum || '');
+      let pdfResult;
+      try {
+        pdfResult = await exportsService.exportInvoicePdfFromHtml(html, paperType || 'thermal', orderNum || '');
+      } catch (pdfErr) {
+        console.error('[whatsappSendInvoicePdfFromHtml] PDF generation failed:', pdfErr.message);
+        return { success: false, message: 'فشل توليد PDF: ' + pdfErr.message };
+      }
       const result = await whatsappService.sendDocument(phone, pdfResult.buffer, pdfResult.filename, caption || '');
+      if (!result.success) {
+        console.error('[whatsappSendInvoicePdfFromHtml] WA send failed:', result.error);
+      }
       if (result.success) await db.incrementWhatsappUsed();
       return result.success ? { success: true } : { success: false, message: result.error };
     }

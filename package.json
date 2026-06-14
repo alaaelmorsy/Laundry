@@ -1,21 +1,25 @@
 {
   "name": "laundry-app",
-  "version": "1.0.10",
+  "version": "1.0.15",
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {
-    "targets": ["node18-win-x64"],
+    "targets": [
+      "node20-win-x64"
+    ],
     "assets": [
       "screens/**/*",
       "assets/**/*",
-      "node_modules/@whiskeysockets/baileys/WAProto/**"
+      "node_modules/@whiskeysockets/baileys/WAProto/**",
+      "generated/baileys-bundle.cjs"
     ],
     "outputPath": "dist"
   },
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
-    "build": "npx pkg . --compress GZip --output release\\laundry-app.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe' /DAppVersion=%npm_package_version% installer\\laundry.iss\"",
+    "bundle:baileys": "node -e \"require('esbuild').build({entryPoints:['node_modules/@whiskeysockets/baileys/lib/index.js'],bundle:true,platform:'node',format:'cjs',outfile:'generated/baileys-bundle.cjs',external:['bufferutil','utf-8-validate'],logLevel:'warning'}).then(()=>{const fs=require('fs');let b=fs.readFileSync('generated/baileys-bundle.cjs','utf8');b=b.replace(/parsedUrl\\.protocol === \\\"https:\\\" \\? await import\\(\\\"https\\\"\\) : await import\\(\\\"http\\\"\\)/g,'parsedUrl.protocol === \\\"https:\\\" ? require(\\\"https\\\") : require(\\\"http\\\")');fs.writeFileSync('generated/baileys-bundle.cjs',b);console.log('Baileys bundled + patched');}).catch(e=>{console.error(e.message);process.exit(1)})\"",
+    "build": "npm run bundle:baileys && npx --package=@yao-pkg/pkg pkg . --compress GZip --output release\\laundry-app.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe' /DAppVersion=%npm_package_version% installer\\laundry.iss\"",
     "build:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --minify",
     "watch:css": "tailwindcss -i assets/input.css -o assets/tailwind.css --watch",
     "ssl:setup": "node scripts/generate-ssl.js",
@@ -50,6 +54,8 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.2",
+    "@yao-pkg/pkg": "^6.20.0",
+    "esbuild": "^0.28.1",
     "pkg": "^5.8.1",
     "tailwindcss": "^4.2.2"
   }

@@ -43,7 +43,28 @@ async function hashPassword(plain) {
 let pool = null;
 
 async function initialize() {
-  const tempConn = await mysql.createConnection(DB_CONFIG);
+  // انتظار MySQL إلى الأبد — لا نخرج بـ exit 1 لئلا NSSM يدخل Paused
+  // نسجّل كل 30 ثانية حتى يستطيع المستخدم تشخيص المشكلة من الـ log
+  let tempConn;
+  let attempt = 0;
+  while (!tempConn) {
+    attempt++;
+    try {
+      tempConn = await mysql.createConnection(DB_CONFIG);
+      console.log(`[DB] ✓ Connected to MySQL on attempt ${attempt} (${DB_CONFIG.host}:${DB_CONFIG.port})`);
+    } catch (err) {
+      const code = err.code || 'UNKNOWN';
+      let hint = '';
+      if (code === 'ECONNREFUSED')      hint = ' → MySQL غير مثبتة أو الخدمة متوقفة';
+      else if (code === 'ER_ACCESS_DENIED_ERROR') hint = ' → كلمة سر root خاطئة في .env';
+      else if (code === 'ENOTFOUND')    hint = ' → DB_HOST غير صحيح';
+      else if (code === 'ETIMEDOUT')    hint = ' → MySQL لا تستجيب (firewall؟)';
+      console.log(`[DB] ✗ attempt ${attempt} failed [${code}]${hint}: ${err.message}`);
+      // أول 30 محاولة كل 3 ثوانٍ (90s)، بعدها كل 30 ثانية
+      const delay = attempt < 30 ? 3000 : 30000;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 
   await tempConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
   await tempConn.end();

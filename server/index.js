@@ -1,6 +1,36 @@
 const path = require('path');
+const fs   = require('fs');
 const { APP_ROOT, DATA_ROOT } = require('./paths');
-require('dotenv').config({ path: path.join(DATA_ROOT, '.env') });
+
+// ── Boot Diagnostics: يُكتب كل سطر فوراً بدون buffer ─────────────────────────
+function bootLog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  try {
+    const logsDir = path.join(DATA_ROOT, 'data', 'logs');
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+    fs.appendFileSync(path.join(logsDir, 'boot.log'), line + '\n', 'utf8');
+  } catch (_) {}
+}
+
+bootLog('═══ Boot start ═══');
+bootLog(`Node: ${process.version} | PID: ${process.pid} | isPkg: ${typeof process.pkg !== 'undefined'}`);
+bootLog(`execPath: ${process.execPath}`);
+bootLog(`APP_ROOT: ${APP_ROOT}`);
+bootLog(`DATA_ROOT: ${DATA_ROOT}`);
+
+const envPath = path.join(DATA_ROOT, '.env');
+bootLog(`.env path: ${envPath} | exists: ${fs.existsSync(envPath)}`);
+require('dotenv').config({ path: envPath });
+bootLog(`env: PORT=${process.env.PORT} DB_HOST=${process.env.DB_HOST} DB_USER=${process.env.DB_USER} DB_PORT=${process.env.DB_PORT} DB_NAME=${process.env.DB_NAME}`);
+
+// Global crash handlers — حتى لا يموت الـ process بصمت
+process.on('uncaughtException', (err) => {
+  bootLog(`FATAL uncaughtException: ${err.stack || err.message}`);
+});
+process.on('unhandledRejection', (reason) => {
+  bootLog(`FATAL unhandledRejection: ${reason && reason.stack ? reason.stack : reason}`);
+});
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -660,6 +690,8 @@ async function start() {
 }
 
 start().catch((e) => {
-  console.error('Failed to start server', e);
-  process.exit(1);
+  bootLog(`FATAL start failed: ${e && e.stack ? e.stack : e}`);
+  // لا نخرج بـ exit 1 — نبقى حيين حتى لا يدخل NSSM في Paused
+  // المستخدم يستطيع قراءة الخطأ من boot.log و service-stderr.log
+  setInterval(() => bootLog('[heartbeat] process alive but start() failed — check above for error'), 60000);
 });
