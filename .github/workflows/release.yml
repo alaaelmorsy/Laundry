@@ -49,7 +49,7 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18.3'
 
       # ── 5. Install dependencies ───────────────────────────────────────────────
       - name: Install dependencies
@@ -63,7 +63,8 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          npx pkg . --compress GZip --output "release\laundry-app-v$version.exe"
+          npm run bundle:baileys
+          npx @yao-pkg/pkg . --compress GZip --output "release\laundry-app-v$version.exe"
           # نسخة بدون رقم للـ installer (laundry.iss يتوقع laundry-app.exe)
           Copy-Item "release\laundry-app-v$version.exe" "release\laundry-app.exe"
           echo "exe size: $([Math]::Round((Get-Item 'release\laundry-app.exe').Length / 1MB, 1)) MB"
