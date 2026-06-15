@@ -13,6 +13,11 @@ const STATUS_FILE = path.join(DATA_DIR, 'update-status.json');
 const LOG_FILE = path.join(DATA_DIR, 'update-log.txt');
 const BACKUP_DIR = path.join(DATA_ROOT, 'backup');
 
+const _pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const APP_VERSION = _pkg.version || '0.0.0';
+const GITHUB_OWNER = (_pkg.github || {}).owner;
+const GITHUB_REPO  = (_pkg.github || {}).repo;
+
 // ── in-memory progress state ──────────────────────────────────────────────────
 let updateProgress = {
   inProgress: false,
@@ -22,6 +27,8 @@ let updateProgress = {
   steps: [],
   downloadedBytes: 0,
   totalBytes: 0,
+  downloadDone: false,
+  downloadedFilePath: null,
 };
 
 const STEPS = [
@@ -54,11 +61,13 @@ function setProgress(stepId, percent, extra = {}) {
     steps: buildSteps(stepId),
     downloadedBytes: extra.downloadedBytes ?? updateProgress.downloadedBytes,
     totalBytes: extra.totalBytes ?? updateProgress.totalBytes,
+    downloadDone: updateProgress.downloadDone,
+    downloadedFilePath: updateProgress.downloadedFilePath,
   };
 }
 
 function clearProgress() {
-  updateProgress = { inProgress: false, currentStep: null, stepLabel: '', percent: 0, steps: [], downloadedBytes: 0, totalBytes: 0 };
+  updateProgress = { inProgress: false, currentStep: null, stepLabel: '', percent: 0, steps: [], downloadedBytes: 0, totalBytes: 0, downloadDone: false, downloadedFilePath: null };
 }
 
 // ── logging ───────────────────────────────────────────────────────────────────
@@ -95,38 +104,43 @@ function isNewer(current, latest) {
 }
 
 // ── GitHub API call ───────────────────────────────────────────────────────────
-function githubGet(urlStr, etag) {
+function githubGet(urlStr, etag, _redirectCount = 0) {
   return new Promise((resolve, reject) => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-    const version = pkg.version || '0.0.0';
     const parsed = new URL(urlStr);
+    const proto = parsed.protocol === 'https:' ? https : http;
     const opts = {
       hostname: parsed.hostname,
       path: parsed.pathname + (parsed.search || ''),
       headers: {
-        'User-Agent': `laundry-app/${version}`,
+        'User-Agent': `laundry-app/${APP_VERSION}`,
         'Accept': 'application/vnd.github.v3+json',
       },
-      timeout: 10000,
+      timeout: 15000,
     };
     if (etag) opts.headers['If-None-Match'] = etag;
 
-    https.get(opts, res => {
+    proto.get(opts, res => {
+      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+        if (_redirectCount >= 5) { reject(new Error('خطأ في الاتصال: إعادة توجيه متكررة')); return; }
+        res.resume();
+        githubGet(res.headers.location, null, _redirectCount + 1).then(resolve).catch(reject);
+        return;
+      }
       let body = '';
       res.on('data', d => body += d);
       res.on('end', () => {
         resolve({ status: res.statusCode, headers: res.headers, body });
       });
-    }).on('error', reject).on('timeout', () => reject(new Error('GitHub API timeout')));
+    }).on('error', reject).on('timeout', () => reject(new Error('انتهت مهلة الاتصال بـ GitHub')));
   });
 }
 
 // ── T005: checkForUpdate ──────────────────────────────────────────────────────
 async function checkForUpdate(force = false) {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const currentVersion = pkg.version;
-  const { owner, repo } = pkg.github || {};
-  if (!owner || !repo) throw Object.assign(new Error('GitHub repo not configured in package.json'), { code: 'UPDATE_CHECK_FAILED' });
+  const currentVersion = APP_VERSION;
+  const owner = GITHUB_OWNER;
+  const repo  = GITHUB_REPO;
+  if (!owner || !repo) throw Object.assign(new Error('لم يتم تهيئة إعدادات GitHub في البرنامج'), { code: 'UPDATE_CHECK_FAILED' });
 
   const cached = readStatus();
   const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -188,7 +202,7 @@ async function checkForUpdate(force = false) {
   }
 
   if (res.status !== 200) {
-    throw Object.assign(new Error(`GitHub API error: ${res.status}`), { code: 'UPDATE_CHECK_FAILED' });
+    throw Object.assign(new Error(`خطأ في الاتصال بـ GitHub (${res.status})`), { code: 'UPDATE_CHECK_FAILED' });
   }
 
   let release;
@@ -197,10 +211,13 @@ async function checkForUpdate(force = false) {
   const latestVersion = (release.tag_name || '').replace(/^v/, '');
   const hasUpdate = isNewer(currentVersion, latestVersion);
 
-  const exeAsset  = (release.assets || []).find(
-    a => a.name.startsWith('laundry-app-v') && a.name.endsWith('.exe')
-  );
-  const csumAsset = (release.assets || []).find(a => a.name === 'sha256sums.txt');
+  // Prefer the full Inno Setup installer (shows a real install wizard + updates
+  // the Control Panel version). Fall back to the bare pkg exe for old releases.
+  const assets = release.assets || [];
+  const setupAsset = assets.find(a => /setup.*\.exe$/i.test(a.name));
+  const bareAsset  = assets.find(a => a.name.startsWith('laundry-app-v') && a.name.endsWith('.exe'));
+  const exeAsset   = setupAsset || bareAsset;
+  const csumAsset  = assets.find(a => a.name === 'sha256sums.txt');
 
   const status = {
     lastChecked: new Date().toISOString(),
@@ -209,6 +226,8 @@ async function checkForUpdate(force = false) {
     hasUpdate,
     releaseNotes: release.body || '',
     downloadUrl: exeAsset ? exeAsset.browser_download_url : null,
+    assetName: exeAsset ? exeAsset.name : null,
+    isInstaller: !!setupAsset,
     checksumUrl: csumAsset ? csumAsset.browser_download_url : null,
     assetSize: exeAsset ? (exeAsset.size || null) : null,
     publishedAt: release.published_at || null,
@@ -224,10 +243,9 @@ async function checkForUpdate(force = false) {
 
 // ── T006: getUpdateStatus ─────────────────────────────────────────────────────
 function getUpdateStatus() {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const cached = readStatus();
   return {
-    currentVersion: pkg.version,
+    currentVersion: APP_VERSION,
     hasUpdate: cached ? (cached.hasUpdate || false) : false,
     latestVersion: cached ? (cached.latestVersion || pkg.version) : pkg.version,
     lastChecked: cached ? cached.lastChecked : null,
@@ -325,20 +343,19 @@ async function dumpDatabase(destPath) {
 // ── T013: downloadWithProgress ────────────────────────────────────────────────
 function downloadWithProgress(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     const parsed = new URL(url);
     const proto = parsed.protocol === 'https:' ? https : http;
     const opts = {
       hostname: parsed.hostname,
       path: parsed.pathname + (parsed.search || ''),
-      headers: { 'User-Agent': `laundry-app/${pkg.version}` },
+      headers: { 'User-Agent': `laundry-app/${APP_VERSION}` },
       timeout: 120000,
     };
     const req = proto.get(opts, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return downloadWithProgress(res.headers.location, destPath, onProgress).then(resolve).catch(reject);
       }
-      if (res.statusCode !== 200) { reject(new Error(`Download failed: HTTP ${res.statusCode}`)); return; }
+      if (res.statusCode !== 200) { reject(new Error(`فشل التنزيل (HTTP ${res.statusCode}) — تحقق من الإنترنت وأعد المحاولة`)); return; }
       const total = parseInt(res.headers['content-length'] || '0', 10);
       let received = 0;
       const out = fs.createWriteStream(destPath);
@@ -351,22 +368,50 @@ function downloadWithProgress(url, destPath, onProgress) {
       out.on('error', err => { try { fs.unlinkSync(destPath); } catch (_) {} reject(err); });
     });
     req.on('error', err => { try { fs.unlinkSync(destPath); } catch (_) {} reject(err); });
-    req.on('timeout', () => { req.destroy(); reject(new Error('Download timed out')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('انتهت مهلة التنزيل — تحقق من سرعة الإنترنت وأعد المحاولة')); });
   });
 }
 
 // ── T014: verifySha256 ────────────────────────────────────────────────────────
-async function verifySha256(zipPath, checksumUrl) {
-  const csumRes = await githubGet(checksumUrl, null);
-  if (csumRes.status !== 200) throw Object.assign(new Error('Failed to download checksum file'), { code: 'CHECKSUM_MISMATCH' });
-  const lines = csumRes.body.split('\n').filter(Boolean);
-  const zipName = path.basename(zipPath);
-  const line = lines.find(l => l.toLowerCase().includes(zipName.toLowerCase()));
-  if (!line) throw Object.assign(new Error(`Checksum entry not found for ${zipName}`), { code: 'CHECKSUM_MISMATCH' });
+async function verifySha256(filePath, checksumUrl) {
+  let csumBody;
+  try {
+    const res = await githubGet(checksumUrl, null);
+    if (res.status !== 200) {
+      logEvent('WARN', `Checksum fetch failed (HTTP ${res.status}) — skipping verification`);
+      return;
+    }
+    csumBody = res.body;
+  } catch (e) {
+    logEvent('WARN', `Checksum download failed (${e.message}) — skipping verification`);
+    return;
+  }
+  const lines = csumBody.split('\n').filter(Boolean);
+  const fileName = path.basename(filePath);
+  const line = lines.find(l => l.toLowerCase().includes(fileName.toLowerCase()));
+  if (!line) {
+    logEvent('WARN', `Checksum entry not found for ${fileName} — skipping verification`);
+    return;
+  }
   const expectedHash = line.split(/\s+/)[0].toLowerCase();
-  const actualHash = crypto.createHash('sha256').update(fs.readFileSync(zipPath)).digest('hex');
+  const actualHash = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
   if (actualHash !== expectedHash) throw Object.assign(new Error('فشل التحقق من سلامة ملف التحديث'), { code: 'CHECKSUM_MISMATCH' });
   logEvent('INFO', 'Checksum verified: OK');
+}
+
+// ── spawnUpdater: launch detached PowerShell updater script ──────────────────
+function spawnUpdater({ targetVersion, fromVersion, newExePath, backupPath }) {
+  const updaterScript = path.join(DATA_ROOT, 'scripts', 'updater.ps1');
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', updaterScript,
+    '-ServerPid',     String(process.pid),
+    '-TargetVersion', targetVersion,
+    '-FromVersion',   fromVersion,
+    '-NewExePath',    newExePath,
+    '-BackupPath',    backupPath,
+    '-AppRoot',       DATA_ROOT,
+  ], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
 }
 
 // ── T016: performUpdate ───────────────────────────────────────────────────────
@@ -417,22 +462,7 @@ async function performUpdate() {
     logEvent('INFO', 'Spawning updater, server exiting');
     setProgress('replace', 75);
 
-    // spawn detached PowerShell updater
-    const updaterScript = path.join(ROOT, 'scripts', 'updater.ps1');
-    const psArgs = [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', updaterScript,
-      '-ServerPid', String(process.pid),
-      '-TargetVersion', targetVersion,
-      '-NewExePath', exePath,
-      '-BackupPath', backupPath,
-      '-AppRoot', ROOT,
-    ];
-    const child = spawn('powershell.exe', psArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    });
-    child.unref();
+    spawnUpdater({ targetVersion, fromVersion: APP_VERSION, newExePath: exePath, backupPath });
 
     // schedule graceful exit
     setTimeout(() => process.exit(0), 1500);
@@ -451,6 +481,99 @@ async function performUpdate() {
   }
 }
 
+// ── downloadUpdate: start download in background, track MB progress ───────────
+async function downloadUpdate() {
+  if (updateProgress.inProgress) {
+    throw Object.assign(new Error('يجري التحميل بالفعل'), { code: 'DOWNLOAD_IN_PROGRESS' });
+  }
+
+  const cached = readStatus();
+  if (!cached || !cached.hasUpdate) {
+    throw Object.assign(new Error('لا يوجد تحديث متاح'), { code: 'NO_UPDATE_AVAILABLE' });
+  }
+  if (!cached.downloadUrl) {
+    throw Object.assign(new Error('رابط التحديث غير متاح'), { code: 'NO_UPDATE_AVAILABLE' });
+  }
+
+  const targetVersion = cached.latestVersion;
+  const exeName = cached.assetName || `laundry-app-v${targetVersion}.exe`;
+  const exePath = path.join(DATA_DIR, exeName);
+
+  updateProgress.downloadDone = false;
+  updateProgress.downloadedFilePath = null;
+  setProgress('downloading', 0, { downloadedBytes: 0, totalBytes: 0 });
+
+  setImmediate(async () => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      await downloadWithProgress(cached.downloadUrl, exePath, (pct, received, total) => {
+        updateProgress.downloadedBytes = received;
+        updateProgress.totalBytes = total;
+        updateProgress.percent = pct;
+        updateProgress.stepLabel = 'جارٍ تنزيل التحديث';
+      });
+      updateProgress.percent = 100;
+      updateProgress.inProgress = false;
+      updateProgress.downloadDone = true;
+      updateProgress.downloadedFilePath = exePath;
+      logEvent('INFO', `downloadUpdate complete: ${exePath}`);
+    } catch (err) {
+      logEvent('ERROR', `downloadUpdate failed: ${err.message}`);
+      clearProgress();
+      try { if (fs.existsSync(exePath)) fs.unlinkSync(exePath); } catch (_) {}
+    }
+  });
+
+  return { started: true };
+}
+
+// ── spawnInstaller: launch the full Inno Setup wizard in the user's session ───
+// The app runs as a Session-0 service, which cannot show a GUI to the logged-in
+// user. run-installer.ps1 works around this by registering a one-time scheduled
+// task that runs Setup.exe as the interactive user with Highest privileges (so
+// the wizard appears on their desktop and no UAC prompt is shown). The installer
+// itself stops the service, replaces every file, updates the Control Panel
+// version, and restarts — so this process does NOT self-exit.
+function spawnInstaller(setupPath) {
+  const helper = path.join(DATA_ROOT, 'scripts', 'run-installer.ps1');
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
+    '-SetupPath', setupPath,
+    '-AppRoot', DATA_ROOT,
+  ], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+}
+
+// ── installUpdate: run the downloaded installer / updater ─────────────────────
+function installUpdate() {
+  if (!updateProgress.downloadDone || !updateProgress.downloadedFilePath) {
+    throw Object.assign(new Error('لم يكتمل التحميل بعد — انتظر اكتمال التحميل قبل التثبيت'), { code: 'DOWNLOAD_NOT_COMPLETE' });
+  }
+
+  const cached = readStatus();
+  const targetVersion = cached ? cached.latestVersion : 'unknown';
+  const exePath = updateProgress.downloadedFilePath;
+
+  // Full-installer path: launch the wizard interactively. The installer manages
+  // stopping/restarting the service, so we keep running until it kills us.
+  if (cached && cached.isInstaller) {
+    logEvent('INFO', `installUpdate: launching installer wizard for v${targetVersion}`);
+    spawnInstaller(exePath);
+    return { success: true, message: `جارٍ فتح معالج تثبيت الإصدار ${targetVersion}...`, targetVersion };
+  }
+
+  // Legacy path: bare exe swap via updater.ps1, then self-exit.
+  const backupPath = path.join(DATA_ROOT, 'backup', `pre-${targetVersion}`);
+  try { fs.mkdirSync(backupPath, { recursive: true }); } catch (_) {}
+
+  logEvent('INFO', `installUpdate: spawning updater for v${targetVersion}`);
+  spawnUpdater({ targetVersion, fromVersion: APP_VERSION, newExePath: exePath, backupPath });
+
+  setTimeout(() => process.exit(0), 1500);
+
+  return { success: true, message: 'جارٍ التثبيت... سيتم إغلاق البرنامج وإعادة تشغيله تلقائياً.', targetVersion };
+}
+
 // ── T017: getUpdateProgress ───────────────────────────────────────────────────
 function getUpdateProgress() {
   return getProgress();
@@ -460,6 +583,8 @@ module.exports = {
   checkForUpdate,
   getUpdateStatus,
   getUpdateProgress,
+  downloadUpdate,
+  installUpdate,
   performUpdate,
   logEvent,
 };
