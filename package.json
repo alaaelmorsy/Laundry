@@ -1,6 +1,6 @@
 {
   "name": "laundry-app",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {
@@ -10,6 +10,7 @@
     "assets": [
       "screens/**/*",
       "assets/**/*",
+      "scripts/**/*",
       "node_modules/@whiskeysockets/baileys/WAProto/**",
       "generated/baileys-bundle.cjs"
     ],

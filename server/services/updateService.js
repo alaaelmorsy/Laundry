@@ -5,7 +5,7 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 
 const { APP_ROOT: ROOT, DATA_ROOT } = require('../paths');
 const DATA_DIR = path.join(DATA_ROOT, 'data');
@@ -531,22 +531,40 @@ async function downloadUpdate() {
   return { started: true };
 }
 
-// ── spawnInstaller: launch the full Inno Setup wizard in the user's session ───
-// The app runs as a Session-0 service, which cannot show a GUI to the logged-in
-// user. run-installer.ps1 works around this by registering a one-time scheduled
-// task that runs Setup.exe as the interactive user with Highest privileges (so
-// the wizard appears on their desktop and no UAC prompt is shown). The installer
-// itself stops the service, replaces every file, updates the Control Panel
-// version, and restarts — so this process does NOT self-exit.
+// ── spawnInstaller: launch the Inno Setup wizard via a one-time scheduled task ─
+// The app runs as a Session-0 NSSM service. Any process spawned directly by this
+// Node server is a member of the service's job object and gets KILLED the instant
+// the server exits — which is exactly why the installer never appeared (the
+// update log showed zero lines from run-installer.ps1). Instead we register a
+// one-time scheduled task that runs in the interactive user's session AFTER the
+// server is gone: Task Scheduler owns it, not the service job object, so it
+// survives, and the wizard appears on the user's desktop (elevated, no UAC).
+//
+// launch-installer.ps1 is run SYNCHRONOUSLY here so the task is registered before
+// this process exits. Both scripts are read from ROOT/scripts/ (bundled in the
+// pkg snapshot) and copied to DATA_DIR so PowerShell — which cannot read paths
+// inside the pkg snapshot — can execute them from real disk.
 function spawnInstaller(setupPath) {
-  const helper = path.join(DATA_ROOT, 'scripts', 'run-installer.ps1');
-  const child = spawn('powershell.exe', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
-    '-SetupPath', setupPath,
-    '-AppRoot',   DATA_ROOT,
-    '-ServerPid', String(process.pid),
-  ], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.unref();
+  const srcRun    = path.join(ROOT, 'scripts', 'run-installer.ps1');
+  const srcLaunch = path.join(ROOT, 'scripts', 'launch-installer.ps1');
+  if (!fs.existsSync(srcRun))    throw new Error(`سكريبت التثبيت غير موجود: ${srcRun}`);
+  if (!fs.existsSync(srcLaunch)) throw new Error(`سكريبت التثبيت غير موجود: ${srcLaunch}`);
+
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  // Always refresh the on-disk copies with the bundled (current) versions.
+  const runScript    = path.join(DATA_DIR, '_run-installer.ps1');
+  const launchScript = path.join(DATA_DIR, '_launch-installer.ps1');
+  fs.copyFileSync(srcRun, runScript);
+  fs.copyFileSync(srcLaunch, launchScript);
+
+  // Synchronous: guarantees the scheduled task is registered before we exit.
+  execFileSync('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launchScript,
+    '-SetupPath',  setupPath,
+    '-RunScript',  runScript,
+    '-AppRoot',    DATA_ROOT,
+    '-ServerPid',  String(process.pid),
+  ], { stdio: 'ignore', windowsHide: true, timeout: 30000 });
 }
 
 // ── installUpdate: run the downloaded installer / updater ─────────────────────
@@ -559,15 +577,18 @@ function installUpdate() {
   const targetVersion = cached ? cached.latestVersion : 'unknown';
   const exePath = updateProgress.downloadedFilePath;
 
-  // Full-installer path: run Inno Setup silently (Session-0 service cannot
-  // display a GUI wizard to the user's desktop — silent install is the only
-  // reliable approach). The PS script waits for this process to exit, then
-  // stops the service, runs Setup /SILENT, and restarts the service.
+  // Full-installer path: register a one-time scheduled task that shows the Inno
+  // Setup wizard in the user's desktop session after this server exits.
   if (cached && cached.isInstaller) {
-    logEvent('INFO', `installUpdate: launching silent installer for v${targetVersion}`);
-    spawnInstaller(exePath);
+    logEvent('INFO', `installUpdate: scheduling installer task for v${targetVersion}`);
+    try {
+      spawnInstaller(exePath);
+    } catch (e) {
+      logEvent('ERROR', `installUpdate: failed to spawn installer — ${e.message}`);
+      return { success: false, message: e.message };
+    }
     setTimeout(() => process.exit(0), 2000);
-    return { success: true, message: `جارٍ تثبيت الإصدار ${targetVersion} بصمت... سيتم إغلاق البرنامج وإعادة تشغيله تلقائياً.`, targetVersion };
+    return { success: true, message: `سيظهر برنامج تثبيت الإصدار ${targetVersion} على سطح المكتب. اتبع التعليمات لإكمال التثبيت.`, targetVersion };
   }
 
   // Legacy path: bare exe swap via updater.ps1, then self-exit.

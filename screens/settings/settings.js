@@ -1049,13 +1049,15 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await window.api.installUpdate();
         if (res && res.success) {
+          window.location.href = '/screens/installing/installing.html';
+        } else {
+          const errMsg = res?.message || 'فشل التثبيت';
           if (resultArea) {
-            resultArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#15803d;font-size:13px">
-              <span>🔄</span><span>${res.message || 'سيتم إغلاق البرنامج وإعادة تشغيله تلقائياً...'}</span>
+            resultArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:13px">
+              <span>⚠️</span><span>${errMsg}</span>
             </div>`;
           }
-        } else {
-          showToast(res?.message || 'فشل التثبيت', 'error');
+          showToast(errMsg, 'error');
           if (btnInst) { btnInst.disabled = false; btnInst.textContent = 'تثبيت الآن'; }
           if (btnCheck) btnCheck.disabled = false;
         }
