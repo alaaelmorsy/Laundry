@@ -57,33 +57,35 @@ if ((Test-Path $NssmPath) -and (Get-Service -Name $ServiceName -ErrorAction Sile
   & $NssmPath set $ServiceName AppExit 0 Exit 2>$null | Out-Null
 }
 
-# ── Find the interactive console user so the wizard shows on their desktop ────
-$consoleUser = $null
+# ── Build & register the one-time task ────────────────────────────────────────
+# Preferred: run as the interactive logged-on user (RunLevel Highest) so the task
+# executes in their desktop session — run-installer.ps1 then shows the wizard via
+# a plain Start-Process (its 4a path). If nobody is logged on, fall back to SYSTEM
+# and let run-installer.ps1 use its WTSQueryUserToken path (4b).
 try {
-  $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-  if ($cs) { $consoleUser = $cs.UserName }   # e.g. "DESKTOP-ABC\Owner"
-} catch {}
-Write-Log 'INFO' "Interactive console user: $consoleUser"
+  $consoleUser = $null
+  try {
+    $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+    if ($cs) { $consoleUser = $cs.UserName }   # e.g. "DESKTOP-ABC\Owner"
+  } catch {}
+  Write-Log 'INFO' "Interactive console user: $consoleUser"
 
-# ── Build the one-time task ───────────────────────────────────────────────────
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-$psArgs   = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`" -SetupPath `"$SetupPath`" -AppRoot `"$AppRoot`""
-$action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-$trigger  = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(6))
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-              -ExecutionTimeLimit (New-TimeSpan -Hours 1) -StartWhenAvailable
+  $psArgs   = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`" -SetupPath `"$SetupPath`" -AppRoot `"$AppRoot`""
+  $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+  $trigger  = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(6))
+  $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                -ExecutionTimeLimit (New-TimeSpan -Hours 1) -StartWhenAvailable
 
-if ($consoleUser) {
-  # Interactive user session → GUI wizard visible, elevated, no UAC prompt.
-  $principal = New-ScheduledTaskPrincipal -UserId $consoleUser -LogonType Interactive -RunLevel Highest
-} else {
-  # No one logged on → run as SYSTEM; run-installer.ps1 will try WTS / silent.
-  Write-Log 'WARN' "No interactive user — task will run as SYSTEM (GUI may be hidden)"
-  $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-}
+  if ($consoleUser) {
+    $principal = New-ScheduledTaskPrincipal -UserId $consoleUser -LogonType Interactive -RunLevel Highest
+  } else {
+    Write-Log 'WARN' "No interactive user — task will run as SYSTEM (run-installer uses WTS)"
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+  }
 
-try {
+  Write-Log 'INFO' "Registering scheduled task '$TaskName'..."
   Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal `
     -Description 'PLUS Laundry update installer (one-time)' -Force -ErrorAction Stop | Out-Null
