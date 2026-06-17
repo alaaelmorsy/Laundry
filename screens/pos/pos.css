@@ -3204,6 +3204,8 @@ html, body {
     padding: 0 !important;
     overflow: visible !important;
     height: auto !important;
+    width: 80mm !important;
+    margin: 0 auto !important;
   }
 
   .inv-dialog {

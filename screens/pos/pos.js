@@ -206,7 +206,7 @@
     invDiscount: document.getElementById('invDiscount'),
     invExtraRow: document.getElementById('invExtraRow'),
     invExtra: document.getElementById('invExtra'),
-    invVatRow: document.getElementById('invVatRow'),
+    invVatRow: document.getElementById('invVatAmountRow'),
     invVatLabel: document.getElementById('invVatLabel'),
     invVat: document.getElementById('invVat'),
     invTotalLabel: document.getElementById('invTotalLabel'),
@@ -315,6 +315,7 @@
     btnCnClose:            document.getElementById('btnCnClose'),
     invoiceProcessRow:     document.getElementById('invoiceProcessRow'),
     invTypeLabel:          document.getElementById('invTypeLabel'),
+    invTypeLabelRow:       document.getElementById('invTypeLabelRow'),
     invCNRefRow:           document.getElementById('invCNRefRow'),
     invCNRefText:          document.getElementById('invCNRefText'),
     invCNRefundRow:        document.getElementById('invCNRefundRow'),
@@ -1982,8 +1983,8 @@
         vatNumber: s.vatNumber,
         commercialRegister: s.commercialRegister,
         logoDataUrl: s.logoDataUrl,
-        titleAr: order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
-        titleEn: order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice',
+        titleAr: (parseFloat(order.vat_rate || 0) === 0) ? '' : (order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة'),
+        titleEn: (parseFloat(order.vat_rate || 0) === 0) ? '' : (order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice'),
         orderNum: order.invoice_seq || order.order_number || '',
         date: formatInvoiceDate(order.created_at),
         payment: paymentLabel(order.payment_method),
@@ -2398,12 +2399,23 @@
       printZone.innerHTML = crPaperEl.outerHTML;
     }
 
+    // حقن @page مؤقت بنفس منطق الفاتورة العادية (توسيط + إزاحة الإعدادات)
+    var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+    var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+    var shift = mLeft - mRight;
+    var thermalPageStyle = document.createElement('style');
+    thermalPageStyle.id = 'thermalPageStyle';
+    thermalPageStyle.textContent = '@page { size: 80mm auto; margin: 0; } @media print { #consumptionPrintZone .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
+    document.head.appendChild(thermalPageStyle);
+
     document.body.classList.add('print-consumption-receipt');
     var currentCopy = 0;
     function printNext() {
       if (currentCopy >= copies) {
         document.body.classList.remove('print-consumption-receipt');
         if (printZone) printZone.innerHTML = '';
+        var ts = document.getElementById('thermalPageStyle');
+        if (ts) ts.remove();
         return;
       }
       currentCopy += 1;
@@ -2417,6 +2429,8 @@
         } else {
           document.body.classList.remove('print-consumption-receipt');
           if (printZone) printZone.innerHTML = '';
+          var ts2 = document.getElementById('thermalPageStyle');
+          if (ts2) ts2.remove();
           // نحفظ بيانات الواتساب قبل مسح السلة
           const _crWaSettings = state.appSettings || {};
           const _crWaPhone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
@@ -2795,7 +2809,13 @@
     state._creditNoteModalMode = false;
     if (els.invTypeLabel) {
       const _cust = state.selectedCustomer;
-      els.invTypeLabel.textContent = (_cust && _cust.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة';
+      if (state.vatRate === 0) {
+        els.invTypeLabel.textContent = '';
+        if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = 'none';
+      } else {
+        els.invTypeLabel.textContent = (_cust && _cust.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة';
+        if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = '';
+      }
     }
     if (els.invCNRefRow)    els.invCNRefRow.style.display = 'none';
     if (els.invCNRefundRow) els.invCNRefundRow.style.display = 'none';
@@ -2930,9 +2950,13 @@
       } else {
         els.invExtraRow.style.display = 'none';
       }
-      els.invVatLabel.textContent = 'ضريبة القيمة المضافة (' + state.vatRate + '%)';
-      els.invVat.innerHTML = sarFmt(totals.vatAmount);
-      els.invVatRow.style.display = '';
+      if (totals.vatAmount > 0) {
+        els.invVatLabel.textContent = 'ضريبة القيمة المضافة (' + state.vatRate + '%)';
+        els.invVat.innerHTML = sarFmt(totals.vatAmount);
+        els.invVatRow.style.display = '';
+      } else {
+        els.invVatRow.style.display = 'none';
+      }
       // Update labels when tax exists
       if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = 'المجموع قبل الضريبة';
       if (els.invTotalLabel) els.invTotalLabel.textContent = 'الإجمالي شامل الضريبة';
@@ -2957,7 +2981,7 @@
       } else {
         els.invExtraRow.style.display = 'none';
       }
-      if (state.vatRate > 0) {
+      if (state.vatRate > 0 && totals.vatAmount > 0) {
         els.invVatLabel.textContent = 'ضريبة القيمة المضافة (' + state.vatRate + '%)';
         els.invVat.innerHTML = sarFmt(totals.vatAmount);
         els.invVatRow.style.display = '';
@@ -3193,8 +3217,8 @@
       orderNum:           invoiceSeq ? String(invoiceSeq) : (orderNumber || '—'),
       date:               formatInvoiceDate(orderDate),
       payment:            pmLabelsA4[state.paymentMethod] || state.paymentMethod,
-      titleAr:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
-      titleEn:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'Tax Invoice' : 'Simplified Tax Invoice',
+      titleAr:            (state.vatRate === 0) ? '' : ((state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة'),
+      titleEn:            (state.vatRate === 0) ? '' : ((state.selectedCustomer && state.selectedCustomer.taxNumber) ? 'Tax Invoice' : 'Simplified Tax Invoice'),
       custName:           state.selectedCustomer ? state.selectedCustomer.name : '',
       custPhone:          state.selectedCustomer ? state.selectedCustomer.phone : '',
       custVat:            (state.selectedCustomer && state.selectedCustomer.taxNumber) ? state.selectedCustomer.taxNumber : '',
@@ -3361,7 +3385,13 @@
 
     if (state._creditNoteModalMode) {
       state._creditNoteModalMode = false;
-      if (els.invTypeLabel)   els.invTypeLabel.textContent = 'فاتورة ضريبية مبسطة';
+      if (state.vatRate === 0) {
+        if (els.invTypeLabel)    els.invTypeLabel.textContent = '';
+        if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = 'none';
+      } else {
+        if (els.invTypeLabel)    els.invTypeLabel.textContent = 'فاتورة ضريبية مبسطة';
+        if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = '';
+      }
       if (els.invCNRefRow)    els.invCNRefRow.style.display = 'none';
       if (els.invOrderNumRow) els.invOrderNumRow.style.display = '';
       if (els.invCustVatRow)  els.invCustVatRow.style.display = 'none';
@@ -3771,12 +3801,17 @@
     if (copies === 0) return;
     var styleEl = null;
 
+    styleEl = document.createElement('style');
+    styleEl.id = 'printPageStyle';
     if (paperType === 'a4') {
-      styleEl = document.createElement('style');
-      styleEl.id = 'a4PageStyle';
       styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
-      document.head.appendChild(styleEl);
+    } else {
+      var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+      var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+      var shift = mLeft - mRight;
+      styleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
     }
+    document.head.appendChild(styleEl);
 
     var currentCopy = 0;
     var cleaned = false;

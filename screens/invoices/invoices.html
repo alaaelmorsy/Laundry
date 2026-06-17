@@ -112,6 +112,7 @@
         </div>
       </div>
 
+
     </main>
 
   </div>
@@ -174,7 +175,7 @@
           <div class="inv-divider-thick inv-sep"></div>
 
           <!-- Invoice meta -->
-          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
+          <div id="invTypeLabelRow" class="inv-meta-row" style="justify-content:center"><span id="invTypeLabel" class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
           <div class="cr-info-grid">
             <div class="cr-info-cell">
               <span class="cr-info-label">رقم الفاتورة</span>
@@ -256,7 +257,7 @@
               <span class="inv-total-label">الإضافي</span>
               <span class="inv-total-val inv-extra-val" id="invExtra" dir="ltr"></span>
             </div>
-            <div class="inv-total-row" id="invVatRow">
+            <div class="inv-total-row" id="invVatAmountRow">
               <span class="inv-total-label" id="invVatLabel">ضريبة القيمة المضافة</span>
               <span class="inv-total-val" id="invVat" dir="ltr"></span>
             </div>
@@ -338,10 +339,10 @@
             </div>
           </header>
 
-          <div class="a4m-title-band">
-            <span>فاتورة ضريبية مبسطة</span>
-            <span class="a4m-title-sep">•</span>
-            <span>Simplified Tax Invoice</span>
+          <div id="a4mTypeLabelRow" class="a4m-title-band">
+            <span id="a4mTitleAr">فاتورة ضريبية مبسطة</span>
+            <span class="a4m-title-sep" id="a4mTitleSep">•</span>
+            <span id="a4mTitleEn">Simplified Tax Invoice</span>
           </div>
 
           <section class="a4m-meta-grid">

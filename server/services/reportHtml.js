@@ -2517,7 +2517,7 @@ ${subscriptions.length ? `<div class="sec">
    تقرير جميع الفواتير — Excel
 ═══════════════════════════════════════════════════════════ */
 function buildAllInvoicesReportExcelSheets(data, filters) {
-  const { allInvoices, creditNotes, paymentMethods, summary } = data;
+  const { allInvoices, creditNotes, paymentMethods, summary, consumptionReceipts } = data;
   const period = (filters.dateFrom || filters.dateTo)
     ? `${filters.dateFrom || '—'} إلى ${filters.dateTo || '—'}`
     : 'جميع الفترات';
@@ -2596,21 +2596,50 @@ function buildAllInvoicesReportExcelSheets(data, filters) {
     ['طرق الدفع'],
     ['طريقة الدفع', 'عدد الفواتير', 'قبل الضريبة', 'الضريبة', 'الإجمالي', 'المدفوع', 'المتبقي'],
   ];
-  (paymentMethods || []).forEach((m) => {
-    sumRows.push([payLabelEx(m.method), m.count, fmt(m.totalBeforeTax), fmt(m.totalTax), fmt(m.totalAfterTax), fmt(m.totalPaid), fmt(m.totalRemaining)]);
+  const crListEx = consumptionReceipts || [];
+  const crTotalEx = crListEx.reduce((s, r) => s + Number(r.amount_consumed || 0), 0);
+  const allPayEx = (paymentMethods || []).filter(m => m.method !== 'subscription');
+  if (crListEx.length > 0) {
+    allPayEx.push({ method: 'subscription', count: crListEx.length, totalBeforeTax: crTotalEx, totalTax: 0, totalAfterTax: crTotalEx });
+  }
+  allPayEx.forEach((m) => {
+    const lbl = m.method === 'subscription' ? 'إيصالات الاستهلاك (لا تدخل في الحساب)' : payLabelEx(m.method);
+    sumRows.push([lbl, m.count, fmt(m.totalBeforeTax), fmt(m.totalTax), fmt(m.totalAfterTax), '', '']);
   });
+
+  const crRows = [
+    ['إيصالات الاستهلاك'],
+    [`الفترة: ${period}`],
+    customerInfoStr ? [customerInfoStr] : [],
+    ['رقم الإيصال', 'العميل', 'الجوال', 'الباقة', 'التاريخ', 'المستهلك', 'الرصيد قبل', 'الرصيد بعد'],
+  ];
+  crListEx.forEach((r) => {
+    crRows.push([
+      'C-' + (Number(r.receipt_seq) || 1),
+      r.customer_name || '—',
+      r.phone || '—',
+      r.package_name || '—',
+      fmtDT(r.created_at),
+      fmt(r.amount_consumed),
+      fmt(r.balance_before),
+      fmt(r.balance_after),
+    ]);
+  });
+  if (crListEx.length) crRows.push([`الإجمالي: ${crListEx.length} إيصال`, '', '', '', '', fmt(crTotalEx), '', '']);
 
   const colsAll = [
     { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 10 },
     { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
   ];
   const colsCn  = [{ wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
-  const colsSum = [{ wch: 32 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+  const colsCr  = [{ wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  const colsSum = [{ wch: 36 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
 
   return [
-    { name: 'جميع الفواتير',    rows: allRows, cols: colsAll, freezeRow: 4 },
-    { name: 'الفواتير الدائنة', rows: cnRows,  cols: colsCn,  freezeRow: 4 },
-    { name: 'الملخص',           rows: sumRows, cols: colsSum, freezeRow: null },
+    { name: 'جميع الفواتير',         rows: allRows, cols: colsAll, freezeRow: 4 },
+    { name: 'الفواتير الدائنة',       rows: cnRows,  cols: colsCn,  freezeRow: 4 },
+    { name: 'إيصالات الاستهلاك',     rows: crRows,  cols: colsCr,  freezeRow: 4 },
+    { name: 'الملخص',                rows: sumRows, cols: colsSum, freezeRow: null },
   ];
 }
 
@@ -2618,7 +2647,7 @@ function buildAllInvoicesReportExcelSheets(data, filters) {
    تقرير جميع الفواتير — PDF
 ═══════════════════════════════════════════════════════════ */
 function buildPdfHtmlForAllInvoicesReport(data, filters, cairoRegularB64, cairoBoldB64, saudiRiyalB64, branding) {
-  const { allInvoices, creditNotes, paymentMethods, summary } = data;
+  const { allInvoices, creditNotes, paymentMethods, summary, consumptionReceipts } = data;
   const br = branding || {};
   const shopName    = br.laundryNameAr || br.laundryNameEn || 'نظام المغسلة';
   const shopAddress = [br.streetNameAr, br.districtAr, br.cityAr].filter(Boolean).join('، ');
@@ -2712,25 +2741,51 @@ function buildPdfHtmlForAllInvoicesReport(data, filters, cairoRegularB64, cairoB
     </tr>`;
   }).join('');
 
+  const crList = consumptionReceipts || [];
+  const crTotalAmt = crList.reduce((s, r) => s + Number(r.amount_consumed || 0), 0);
+  const crHtml = crList.length
+    ? crList.map((r, i) => {
+        const seq = 'C-' + (Number(r.receipt_seq) || 1);
+        const dt = fmtDT(r.created_at);
+        const dtParts = dt.split(' ');
+        const dtLine = dtParts[0] + (dtParts.length > 1 ? '<br>' + dtParts.slice(1).join(' ') : '');
+        return `<tr class="${i % 2 !== 0 ? 'alt' : ''}">
+          <td class="num">${seq}</td>
+          <td>${escHtmlPdf(r.customer_name || '—')}${r.phone ? '<br><span style="font-size:7px;color:#64748b" dir="ltr">' + escHtmlPdf(r.phone) + '</span>' : ''}</td>
+          <td>${escHtmlPdf(r.package_name || '—')}</td>
+          <td class="ctr" dir="ltr">${dtLine}</td>
+          <td class="num">${fmt(r.amount_consumed)}</td>
+          <td class="num">${fmt(r.balance_before)}</td>
+          <td class="num">${fmt(r.balance_after)}</td>
+        </tr>`;
+      }).join('') + `<tr class="tbl-foot"><td colspan="7">${crList.length} إيصال  |  الإجمالي: ${fmt(crTotalAmt)}</td></tr>`
+    : '<tr><td colspan="7" class="empty-msg">لا توجد إيصالات استهلاك</td></tr>';
+
   const payMetaMap = {
     cash:         { label: 'نقداً',  icon: '💵', cls: 'p-cash' },
     card:         { label: 'شبكة',   icon: '💳', cls: 'p-card' },
     transfer:     { label: 'تحويل',  icon: '🏦', cls: 'p-transfer' },
-    subscription: { label: 'اشتراك', icon: '🔄', cls: 'p-sub' },
+    subscription: { label: 'إيصالات الاستهلاك', icon: '🔄', cls: 'p-sub' },
     mixed:        { label: 'مختلط',  icon: '🔀', cls: 'p-mixed' },
     credit:       { label: 'آجل',    icon: '📋', cls: 'p-credit' },
   };
-  const payGridHtml = (paymentMethods || []).length
-    ? (paymentMethods || []).map((m) => {
+  const allPayMethods = (paymentMethods || []).filter(m => m.method !== 'subscription');
+  if (crList.length > 0) {
+    allPayMethods.push({ method: 'subscription', count: crList.length, totalAfterTax: crTotalAmt, totalBeforeTax: crTotalAmt, totalTax: 0 });
+  }
+  const payGridHtml = allPayMethods.length
+    ? allPayMethods.map((m) => {
         const meta = payMetaMap[m.method] || { label: m.method, icon: '💰', cls: 'p-cash' };
+        const isSub = m.method === 'subscription';
         return `<div class="pay-item ${meta.cls}">
           <span class="pay-icon">${meta.icon}</span>
           <div class="pay-details">
             <div class="pay-lbl">${meta.label}</div>
-            <div class="pay-cnt">${m.count} فاتورة</div>
+            <div class="pay-cnt">${m.count} ${isSub ? 'إيصال' : 'فاتورة'}</div>
           </div>
           <div class="pay-right">
             <div class="pay-amt">${Rv(m.totalAfterTax)}</div>
+            ${isSub ? '<div class="pay-note">(لا يدخل في الحساب)</div>' : ''}
           </div>
         </div>`;
       }).join('')
@@ -2812,6 +2867,7 @@ td.tax{color:#000}
 .pay-right{text-align:left;direction:ltr}
 .pay-amt{font-size:10px;font-weight:900;color:#000;white-space:nowrap}
 .pay-rem{font-size:8px;color:#dc2626;white-space:nowrap}
+.pay-note{font-size:7.5px;color:#dc2626;font-weight:700;margin-top:2px}
 .pbadge{display:inline-block;border-radius:10px;padding:1px 7px;font-size:8.5px;font-weight:700;color:#fff;white-space:nowrap}
 .pb-cash{background:#10b981}.pb-card{background:#3b82f6}.pb-bank{background:#8b5cf6}.pb-transfer{background:#8b5cf6}
 .pb-sub{background:#f59e0b}.pb-mixed{background:#6366f1}.pb-credit{background:#ef4444}
@@ -2876,6 +2932,21 @@ ${creditNotes.length ? `<div class="sec">
   </div>
 </div>` : ''}
 <div class="sec">
+  <div class="sec-hdr" style="color:#0f766e;border-bottom-color:#0f766e">
+    <span>إيصالات الاستهلاك</span>
+    <span class="sec-badge" style="background:#0f766e">${crList.length} إيصال &nbsp;·&nbsp; ${Rv(crTotalAmt)}</span>
+  </div>
+  <div class="sec-body">
+    <table>
+      <thead><tr>
+        <th>رقم الإيصال</th><th>العميل</th><th>الباقة</th><th>التاريخ</th>
+        <th class="num">المستهلك</th><th class="num">الرصيد قبل</th><th class="num">الرصيد بعد</th>
+      </tr></thead>
+      <tbody>${crHtml}</tbody>
+    </table>
+  </div>
+</div>
+<div class="sec">
   <div class="sec-hdr"><span>ملخص التقرير</span></div>
   <div class="sec-body">
     <table>
@@ -2891,7 +2962,7 @@ ${creditNotes.length ? `<div class="sec">
 <div class="sec">
   <div class="sec-hdr">
     <span>طرق الدفع</span>
-    <span class="sec-badge">${(paymentMethods || []).length} طريقة</span>
+    <span class="sec-badge">${allPayMethods.length} طريقة</span>
   </div>
   <div class="sec-body">
     <div class="pay-grid">${payGridHtml}</div>

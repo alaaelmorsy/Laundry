@@ -639,11 +639,17 @@ window.addEventListener('DOMContentLoaded', () => {
       } else {
         if (invExtraRow) invExtraRow.style.display = 'none';
       }
-      if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
-      if (invVat) invVat.innerHTML = sarFmtA(vatAmount);
-      if (invVatRow) invVatRow.style.display = '';
-      if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
-      if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-grand-total-tax');
+      if (vatAmount > 0) {
+        if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
+        if (invVat) invVat.innerHTML = sarFmtA(vatAmount);
+        if (invVatRow) invVatRow.style.display = '';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
+        if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-grand-total-tax');
+      } else {
+        if (invVatRow) invVatRow.style.display = 'none';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal');
+        if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-total');
+      }
     } else {
       if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal);
       if (discount > 0) {

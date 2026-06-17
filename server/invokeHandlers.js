@@ -76,6 +76,18 @@ async function _createSubInvoice({
  * @param {object} payload
  * @param {object} _user JWT payload
  */
+async function checkSupportExpiry() {
+  const settings = await db.getAppSettings();
+  if (settings && settings.supportExpiryDate) {
+    const expiry = new Date(settings.supportExpiryDate);
+    expiry.setHours(23, 59, 59, 999);
+    if (expiry < new Date()) {
+      return { success: false, supportExpired: true, message: 'انتهت فترة الدعم الفني — يرجى تجديد الدعم للحصول على التحديثات' };
+    }
+  }
+  return null;
+}
+
 async function invoke(method, payload, reqUser) {
   const _user = reqUser || null;
   const m = String(method || '').trim();
@@ -125,6 +137,8 @@ async function invoke(method, payload, reqUser) {
         logoWidth: data.logoWidth,
         logoHeight: data.logoHeight,
         printCopies: data.printCopies,
+        thermalMarginLeft: data.thermalMarginLeft,
+        thermalMarginRight: data.thermalMarginRight,
         requireHanger: data.requireHanger,
         requireCustomerPhone: data.requireCustomerPhone,
         allowSubscriptionDebt: data.allowSubscriptionDebt,
@@ -1759,6 +1773,8 @@ async function invoke(method, payload, reqUser) {
 
     case 'checkForUpdate': {
       try {
+        const supportErr = await checkSupportExpiry();
+        if (supportErr) return supportErr;
         const force = payload && payload.force === true;
         const result = await updateService.checkForUpdate(force);
         return { success: true, ...result };
@@ -1778,6 +1794,8 @@ async function invoke(method, payload, reqUser) {
 
     case 'performUpdate': {
       try {
+        const supportErr = await checkSupportExpiry();
+        if (supportErr) return supportErr;
         const result = await updateService.performUpdate();
         return result;
       } catch (err) {
@@ -1791,6 +1809,40 @@ async function invoke(method, payload, reqUser) {
         return { success: true, ...result };
       } catch (err) {
         return { success: false, message: err.message };
+      }
+    }
+
+    case 'getSupportStatus': {
+      try {
+        const settings = await db.getAppSettings();
+        const expiryDate = settings ? settings.supportExpiryDate : null;
+        if (!expiryDate) return { success: true, valid: true, daysLeft: null, expiryDate: null };
+        const expiry = new Date(expiryDate);
+        expiry.setHours(23, 59, 59, 999);
+        const daysLeft = Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24));
+        return { success: true, valid: daysLeft > 0, daysLeft, expiryDate };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'downloadUpdate': {
+      try {
+        const supportErr = await checkSupportExpiry();
+        if (supportErr) return supportErr;
+        const result = await updateService.downloadUpdate();
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.code || 'DOWNLOAD_FAILED' };
+      }
+    }
+
+    case 'installUpdate': {
+      try {
+        const result = updateService.installUpdate();
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message, code: err.code || 'INSTALL_FAILED' };
       }
     }
 

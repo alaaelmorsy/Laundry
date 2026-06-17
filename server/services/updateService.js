@@ -147,11 +147,13 @@ async function checkForUpdate(force = false) {
   if (!force && cached && cached.lastChecked) {
     const age = Date.now() - new Date(cached.lastChecked).getTime();
     if (age < CACHE_TTL_MS) {
-      logEvent('INFO', `Update check: using cache (age ${Math.round(age / 60000)}min)`);
+      const latestCached = cached.latestVersion || currentVersion;
+      const hasUpdateNow = isNewer(currentVersion, latestCached);
+      logEvent('INFO', `Update check: using cache (age ${Math.round(age / 60000)}min) hasUpdate=${hasUpdateNow}`);
       return {
-        hasUpdate: cached.hasUpdate || false,
+        hasUpdate: hasUpdateNow,
         currentVersion,
-        latestVersion: cached.latestVersion || currentVersion,
+        latestVersion: latestCached,
         releaseNotes: cached.releaseNotes,
         publishedAt: cached.publishedAt,
         downloadUrl: cached.downloadUrl,
@@ -176,10 +178,12 @@ async function checkForUpdate(force = false) {
   }
 
   if (res.status === 304 && cached) {
-    logEvent('INFO', 'Update check: 304 Not Modified, using cache');
+    const hasUpdate = isNewer(currentVersion, cached.latestVersion);
+    logEvent('INFO', `Update check: 304 Not Modified, using cache hasUpdate=${hasUpdate}`);
     cached.lastChecked = new Date().toISOString();
+    cached.hasUpdate = hasUpdate;
     writeStatus(cached);
-    return { hasUpdate: cached.hasUpdate, currentVersion, latestVersion: cached.latestVersion, releaseNotes: cached.releaseNotes, publishedAt: cached.publishedAt, downloadUrl: cached.downloadUrl, checksumUrl: cached.checksumUrl, lastChecked: cached.lastChecked };
+    return { hasUpdate, currentVersion, latestVersion: cached.latestVersion, releaseNotes: cached.releaseNotes, publishedAt: cached.publishedAt, downloadUrl: cached.downloadUrl, checksumUrl: cached.checksumUrl, lastChecked: cached.lastChecked };
   }
 
   if (res.status === 404) {
@@ -539,7 +543,8 @@ function spawnInstaller(setupPath) {
   const child = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
     '-SetupPath', setupPath,
-    '-AppRoot', DATA_ROOT,
+    '-AppRoot',   DATA_ROOT,
+    '-ServerPid', String(process.pid),
   ], { detached: true, stdio: 'ignore', windowsHide: true });
   child.unref();
 }
@@ -554,12 +559,15 @@ function installUpdate() {
   const targetVersion = cached ? cached.latestVersion : 'unknown';
   const exePath = updateProgress.downloadedFilePath;
 
-  // Full-installer path: launch the wizard interactively. The installer manages
-  // stopping/restarting the service, so we keep running until it kills us.
+  // Full-installer path: run Inno Setup silently (Session-0 service cannot
+  // display a GUI wizard to the user's desktop — silent install is the only
+  // reliable approach). The PS script waits for this process to exit, then
+  // stops the service, runs Setup /SILENT, and restarts the service.
   if (cached && cached.isInstaller) {
-    logEvent('INFO', `installUpdate: launching installer wizard for v${targetVersion}`);
+    logEvent('INFO', `installUpdate: launching silent installer for v${targetVersion}`);
     spawnInstaller(exePath);
-    return { success: true, message: `جارٍ فتح معالج تثبيت الإصدار ${targetVersion}...`, targetVersion };
+    setTimeout(() => process.exit(0), 2000);
+    return { success: true, message: `جارٍ تثبيت الإصدار ${targetVersion} بصمت... سيتم إغلاق البرنامج وإعادة تشغيله تلقائياً.`, targetVersion };
   }
 
   // Legacy path: bare exe swap via updater.ps1, then self-exit.

@@ -332,7 +332,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     card:         { label: I18N.t('payment-card'),      icon: '💳', cls: 'pay-card' },
     bank:         { label: I18N.t('payment-bank'),      icon: '🏦', cls: 'pay-bank' },
     transfer:     { label: I18N.t('payment-bank'),     icon: '🏦', cls: 'pay-transfer' },
-    subscription: { label: I18N.t('payment-subscription'),    icon: '🔄', cls: 'pay-subscription' },
+    subscription: { label: 'ايصالات الاستهلاك',               icon: '🔄', cls: 'pay-subscription' },
     mixed:        { label: I18N.t('payment-mixed'),     icon: '🔀', cls: 'pay-mixed' },
     credit:       { label: I18N.t('payment-credit'),     icon: '📋', cls: 'pay-credit' },
   };
@@ -461,7 +461,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     const invAfterDiscount = document.getElementById('invAfterDiscount');
     const invExtraRow = document.getElementById('invExtraRow');
     const invExtra = document.getElementById('invExtra');
-    const invVatRow = document.getElementById('invVatRow');
+    const invVatAmountRow = document.getElementById('invVatAmountRow');
+    const invTypeLabelRow = document.getElementById('invTypeLabelRow');
+    const invCustVatRow = document.getElementById('invCustVatRow');
+    const invNotesGridRow = document.getElementById('invNotesGridRow');
+    const invNotesGridContent = document.getElementById('invNotesGridContent');
     const invVatLabel = document.getElementById('invVatLabel');
     const invVat = document.getElementById('invVat');
     const invTotalLabel = document.getElementById('invTotalLabel');
@@ -552,6 +556,17 @@ window.addEventListener('DOMContentLoaded', async () => {
       invCreatedByRow.style.display = 'none';
     }
 
+    if (invNotesGridRow) {
+      if (order.notes) {
+        if (invNotesGridContent) invNotesGridContent.textContent = order.notes;
+        invNotesGridRow.style.display = '';
+      } else {
+        invNotesGridRow.style.display = 'none';
+      }
+    }
+
+    if (invCustVatRow) invCustVatRow.style.display = 'none';
+
     if (order.customer_name || order.phone) {
       if (invCustomerSection) invCustomerSection.style.display = '';
       if (order.customer_name && invCustNameRow && invCustName) {
@@ -631,11 +646,19 @@ window.addEventListener('DOMContentLoaded', async () => {
       } else {
         if (invExtraRow) invExtraRow.style.display = 'none';
       }
-      if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
-      if (invVat) invVat.innerHTML = sarFmtA(vatAmount);
-      if (invVatRow) invVatRow.style.display = '';
-      if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
-      if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-grand-total-tax');
+      if (vatAmount > 0) {
+        if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
+        if (invVat) invVat.innerHTML = sarFmtA(vatAmount);
+        if (invVatAmountRow) invVatAmountRow.style.display = '';
+        if (invTypeLabelRow) invTypeLabelRow.style.display = '';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
+        if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-grand-total-tax');
+      } else {
+        if (invVatAmountRow) invVatAmountRow.style.display = 'none';
+        if (invTypeLabelRow) invTypeLabelRow.style.display = 'none';
+        if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal');
+        if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-total');
+      }
     } else {
       if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal);
       if (discount > 0) {
@@ -658,11 +681,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (vatRate > 0 && vatAmount > 0) {
         if (invVatLabel) invVatLabel.textContent = `${I18N.t('invoice-vat-label-short')} (${vatRate}%)`;
         if (invVat) invVat.innerHTML = sarFmtA(vatAmount);
-        if (invVatRow) invVatRow.style.display = '';
+        if (invVatAmountRow) invVatAmountRow.style.display = '';
+        if (invTypeLabelRow) invTypeLabelRow.style.display = '';
         if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal-before-tax');
         if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-grand-total-tax');
       } else {
-        if (invVatRow) invVatRow.style.display = 'none';
+        if (invVatAmountRow) invVatAmountRow.style.display = 'none';
+        if (invTypeLabelRow) invTypeLabelRow.style.display = 'none';
         if (invSubtotalLabel) invSubtotalLabel.textContent = I18N.t('invoice-subtotal');
         if (invTotalLabel) invTotalLabel.textContent = I18N.t('invoice-total');
       }
@@ -856,6 +881,137 @@ window.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
 
+  function buildConsumptionTable(receipts) {
+    if (!receipts.length) return `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">لا توجد ايصالات استهلاك</td></tr>`;
+    return receipts.map((cr) => {
+      const dt = fmtDT(cr.created_at);
+      const dtParts = dt.split(', ');
+      const dateStr = dtParts[0] || dt;
+      const timeStr = dtParts[1] || '';
+      return `
+      <tr>
+        <td class="num-cell">C-${cr.receipt_seq || cr.id}</td>
+        <td>${cr.phone || cr.customer_name || '—'}</td>
+        <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
+        <td class="num-cell">${SAR(cr.total_amount, false)}</td>
+        <td class="no-print"><button class="view-btn" onclick="showConsumptionReceiptModal(${cr.id})">${I18N.t('all-invoices-view')}</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function crFmtDT(dateStr) {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      const p = (x) => String(x).padStart(2, '0');
+      const h = d.getHours(), h12 = h % 12 || 12, ampm = h < 12 ? 'AM' : 'PM';
+      return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(h12)}:${p(d.getMinutes())} ${ampm}`;
+    } catch { return String(dateStr); }
+  }
+
+  function crBuildItems(items) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return '<tr><td class="inv-td-name">—</td><td class="inv-td-num">—</td><td class="inv-td-amt">—</td><td class="inv-td-name">—</td></tr>';
+    return list.map(it => {
+      const nameAr = escHtml(it.productNameAr || it.product_name_ar || '');
+      const nameEn = escHtml(it.productNameEn || it.product_name_en || '');
+      const svcAr  = escHtml(it.serviceNameAr  || it.service_name_ar  || '—');
+      const svcEn  = escHtml(it.serviceNameEn  || it.service_name_en  || '');
+      const nameCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
+      const svcCell  = svcAr  + (svcEn  && svcEn  !== svcAr  ? `<span class="inv-td-en">${svcEn}</span>`  : '');
+      return `<tr>
+        <td class="inv-td-name">${nameCell || '—'}</td>
+        <td class="inv-td-num">${it.quantity || it.qty || 1}</td>
+        <td class="inv-td-amt">${fmtLtr(it.lineTotal || it.line_total || 0)}</td>
+        <td class="inv-td-name">${svcCell}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.showConsumptionReceiptModal = async function(id) {
+    if (!_reportAppSettings) {
+      const sres = await window.api.getAppSettings().catch(() => null);
+      _reportAppSettings = (sres && sres.success && sres.settings) ? sres.settings : {};
+    }
+    try {
+      const res = await window.api.getConsumptionReceiptById({ id });
+      if (!res || !res.success || !res.receipt) { showToast('خطأ في تحميل الإيصال', 'error'); return; }
+      const r = res.receipt;
+      const s = _reportAppSettings;
+
+      const g = (eid) => document.getElementById(eid);
+      const shopName = s.laundryNameAr || s.laundryNameEn || '';
+      if (g('crShopName'))    g('crShopName').textContent    = shopName;
+      if (g('crShopAddress')) g('crShopAddress').textContent = s.locationAr || s.locationEn || '';
+      if (g('crShopPhone'))   g('crShopPhone').textContent   = s.phone ? 'هاتف: ' + s.phone : '';
+      if (g('crShopTax') && g('crShopTaxRow')) {
+        if (s.vatNumber) { g('crShopTax').textContent = 'الرقم الضريبي: ' + s.vatNumber; g('crShopTaxRow').style.display = ''; }
+        else g('crShopTaxRow').style.display = 'none';
+      }
+      if (g('crShopCr') && g('crShopCrRow')) {
+        if (s.commercialRegister) { g('crShopCr').textContent = 'السجل التجاري: ' + s.commercialRegister; g('crShopCrRow').style.display = ''; }
+        else g('crShopCrRow').style.display = 'none';
+      }
+      const logoWrap = g('crLogoWrap'), logo = g('crLogo');
+      if (s.logoDataUrl && logo) { logo.src = s.logoDataUrl; logoWrap.style.display = ''; }
+      else if (logoWrap) logoWrap.style.display = 'none';
+
+      if (g('crReceiptNum')) g('crReceiptNum').textContent = 'C-' + (Number(r.receipt_seq) || r.id);
+      if (g('crDate'))       g('crDate').textContent       = crFmtDT(r.created_at);
+      if (g('crCustomer'))   g('crCustomer').textContent   = r.customer_name || '—';
+      if (g('crPhone'))      g('crPhone').textContent      = r.phone || '—';
+      if (g('crSubRef'))     g('crSubRef').textContent     = r.subscription_number ? String(r.subscription_number).trim() : '—';
+      if (g('crPackage'))    g('crPackage').textContent    = r.package_name || '—';
+      if (g('crAmountLabel'))    g('crAmountLabel').textContent    = 'المبلغ المستهلك';
+      if (g('crBalBeforeLabel')) g('crBalBeforeLabel').textContent = 'الرصيد قبل';
+      if (g('crBalAfterLabel'))  g('crBalAfterLabel').textContent  = 'الرصيد بعد';
+      if (g('crConsumed'))   g('crConsumed').innerHTML   = `<span class="sar">&#xE900;</span> ${fmtLtr(r.amount_consumed)}`;
+      if (g('crBalBefore'))  g('crBalBefore').innerHTML  = `<span class="sar">&#xE900;</span> ${fmtLtr(r.balance_before)}`;
+      if (g('crBalAfter'))   g('crBalAfter').innerHTML   = `<span class="sar">&#xE900;</span> ${fmtLtr(r.balance_after)}`;
+
+      let items = r.items || [];
+      const cleanDate = r.cleaning_date || null;
+      const deliverDate = r.delivery_date || null;
+      if (cleanDate) { if (g('crCleanedAt')) g('crCleanedAt').textContent = crFmtDT(cleanDate); if (g('crCleanedAtRow')) g('crCleanedAtRow').style.display = ''; }
+      else if (g('crCleanedAtRow')) g('crCleanedAtRow').style.display = 'none';
+      if (deliverDate) { if (g('crDeliveredAt')) g('crDeliveredAt').textContent = crFmtDT(deliverDate); if (g('crDeliveredAtRow')) g('crDeliveredAtRow').style.display = ''; }
+      else if (g('crDeliveredAtRow')) g('crDeliveredAtRow').style.display = 'none';
+
+      if (r.order_id) {
+        try {
+          const orderRes = await window.api.getOrderById({ id: r.order_id });
+          if (orderRes && orderRes.success) {
+            if (orderRes.items && orderRes.items.length) items = orderRes.items;
+            const ord = orderRes.order;
+            if (!cleanDate && ord && ord.cleaning_date) { if (g('crCleanedAt')) g('crCleanedAt').textContent = crFmtDT(ord.cleaning_date); if (g('crCleanedAtRow')) g('crCleanedAtRow').style.display = ''; }
+            if (!deliverDate && ord && ord.delivery_date) { if (g('crDeliveredAt')) g('crDeliveredAt').textContent = crFmtDT(ord.delivery_date); if (g('crDeliveredAtRow')) g('crDeliveredAtRow').style.display = ''; }
+          }
+        } catch (_) {}
+      }
+
+      if (g('crItemsBody')) g('crItemsBody').innerHTML = crBuildItems(items);
+
+      const crBarcodeWrap = g('crBarcodeWrap'), crBarcode = g('crBarcode');
+      if (crBarcode && typeof JsBarcode !== 'undefined' && r.receipt_seq) {
+        try {
+          JsBarcode(crBarcode, 'C-' + r.receipt_seq, { format: 'CODE128', displayValue: true, fontSize: 11, height: 40, margin: 4, background: 'transparent' });
+          if (crBarcodeWrap) crBarcodeWrap.style.display = '';
+        } catch (_) { if (crBarcodeWrap) crBarcodeWrap.style.display = 'none'; }
+      } else { if (crBarcodeWrap) crBarcodeWrap.style.display = 'none'; }
+
+      document.getElementById('crViewModal').style.display = 'flex';
+      document.body.classList.add('printing-invoice');
+      const db = document.querySelector('#crViewModal .inv-dialog-body');
+      if (db) db.scrollTop = 0;
+    } catch (e) { showToast('خطأ في تحميل الإيصال', 'error'); }
+  };
+
+  window.closeConsumptionReceiptModal = function() {
+    const m = document.getElementById('crViewModal');
+    if (m) m.style.display = 'none';
+    document.body.classList.remove('printing-invoice');
+  };
+
   function buildSubscriptionsTable(subscriptions) {
     if (!subscriptions.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('daily-report-no-subscriptions')}</td></tr>`;
     return subscriptions.map((sub) => {
@@ -905,7 +1061,18 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('printMeta').textContent = `${I18N.t('period-report-period')}: ${fmtDisplay(periodFrom)} — ${fmtDisplay(periodTo)}`;
 
       document.getElementById('summaryTableBody').innerHTML = buildSummaryTable(res.summary);
-      buildPaymentMethods(res.paymentMethods);
+
+      const consumptionInvoices = res.consumptionReceipts || [];
+      const consTotal = consumptionInvoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+      const payMethodsFixed = (res.paymentMethods || []).map(m =>
+        m.method === 'subscription'
+          ? { ...m, count: consumptionInvoices.length, totalAfterTax: consTotal, totalBeforeTax: consTotal, totalTax: 0 }
+          : m
+      );
+      if (!payMethodsFixed.some(m => m.method === 'subscription') && consumptionInvoices.length > 0) {
+        payMethodsFixed.push({ method: 'subscription', count: consumptionInvoices.length, totalAfterTax: consTotal, totalBeforeTax: consTotal, totalTax: 0 });
+      }
+      buildPaymentMethods(payMethodsFixed);
 
       document.getElementById('badgeExpenses').textContent = res.expenses.length;
       document.getElementById('expensesTableBody').innerHTML = buildExpensesTable(res.expenses);
@@ -937,11 +1104,45 @@ window.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('subscriptionsFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${res.subscriptions.length} &nbsp;|&nbsp; ${SAR(subTotal)}`;
       }
 
+      document.getElementById('badgeConsumption').textContent = consumptionInvoices.length;
+      document.getElementById('consumptionTableBody').innerHTML = buildConsumptionTable(consumptionInvoices);
+      document.getElementById('consumptionFooter').innerHTML = `العدد: ${consumptionInvoices.length} &nbsp;|&nbsp; ${SAR(consTotal)}`;
+
       setupCollapsible('toggleExpenses', 'bodyExpenses');
       setupCollapsible('toggleInvoices', 'bodyInvoices');
       setupCollapsible('toggleDeferredPayments', 'bodyDeferredPayments');
       setupCollapsible('toggleCreditNotes', 'bodyCreditNotes');
       setupCollapsible('toggleSubscriptions', 'bodySubscriptions');
+      setupCollapsible('toggleConsumption', 'bodyConsumption');
+
+      const btnCrClose = document.getElementById('btnCrClose');
+      const btnCrPrint = document.getElementById('btnCrPrint');
+      const crViewModal = document.getElementById('crViewModal');
+      if (btnCrClose) btnCrClose.addEventListener('click', closeConsumptionReceiptModal);
+      if (crViewModal) crViewModal.addEventListener('click', (e) => { if (e.target === crViewModal) closeConsumptionReceiptModal(); });
+      if (btnCrPrint) btnCrPrint.addEventListener('click', () => window.print());
+      const btnCrPdf = document.getElementById('btnCrPdf');
+      if (btnCrPdf) btnCrPdf.addEventListener('click', async () => {
+        const origHTML = btnCrPdf.innerHTML;
+        try {
+          btnCrPdf.disabled = true;
+          btnCrPdf.innerHTML = `<span>${I18N.t('exporting') || 'جاري التصدير...'}</span>`;
+          const paperEl = document.getElementById('crPaper');
+          if (!paperEl) { showToast('خطأ في محتوى الإيصال', 'error'); return; }
+          const receiptNum = document.getElementById('crReceiptNum') ? document.getElementById('crReceiptNum').textContent : '';
+          const result = await window.api.exportInvoicePdfFromHtml({ html: paperEl.outerHTML, paperType: 'thermal', orderNum: receiptNum });
+          if (result && result.success) {
+            showToast(I18N.t('toast-pdf-success') || 'تم التصدير بنجاح', 'success');
+          } else {
+            showToast((result && result.message) || 'خطأ في التصدير', 'error');
+          }
+        } catch (err) {
+          showToast('خطأ في التصدير', 'error');
+        } finally {
+          btnCrPdf.disabled = false;
+          btnCrPdf.innerHTML = origHTML;
+        }
+      });
 
       loadingState.style.display = 'none';
       reportContent.style.display = 'flex';
@@ -971,6 +1172,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (cnBody) cnBody.innerHTML = buildCreditNotesTable(reportData.creditNotes);
     const subBody = document.getElementById('subscriptionsTableBody');
     if (subBody) subBody.innerHTML = buildSubscriptionsTable(reportData.subscriptions);
+    const consInvs = reportData.consumptionReceipts || [];
+    const consBody = document.getElementById('consumptionTableBody');
+    if (consBody) consBody.innerHTML = buildConsumptionTable(consInvs);
+    const consTotal = consInvs.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const consFooter = document.getElementById('consumptionFooter');
+    if (consFooter) consFooter.innerHTML = `العدد: ${consInvs.length} &nbsp;|&nbsp; ${SAR(consTotal)}`;
     const expTotal = reportData.expenses.reduce((s, e) => s + Number(e.total_amount || 0), 0);
     document.getElementById('expensesFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${reportData.expenses.length} &nbsp;|&nbsp; ${SAR(expTotal)}`;
     const invTotal = reportData.invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);

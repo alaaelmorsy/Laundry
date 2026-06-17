@@ -336,6 +336,14 @@
     }
     if (copies > 20) copies = 20;
 
+    var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+    var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+    var pageStyleEl = document.createElement('style');
+    pageStyleEl.id = 'crPrintPageStyle';
+    var shift = mLeft - mRight;
+    pageStyleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { #invPrintZone .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
+    document.head.appendChild(pageStyleEl);
+
     // نسخ محتوى الإيصال لـ print zone للتوافق مع متصفحات الجوال
     var paperEl = document.getElementById('crPaper');
     var printZone = document.getElementById('invPrintZone');
@@ -348,6 +356,7 @@
     function printNext() {
       if (currentCopy >= copies) {
         if (printZone) printZone.innerHTML = '';
+        if (pageStyleEl && pageStyleEl.parentNode) pageStyleEl.parentNode.removeChild(pageStyleEl);
         return;
       }
       currentCopy += 1;
@@ -363,6 +372,7 @@
             printZone.innerHTML = '';
             printZone.style.setProperty('display', 'none', 'important');
           }
+          if (pageStyleEl && pageStyleEl.parentNode) pageStyleEl.parentNode.removeChild(pageStyleEl);
         }
       }
       window.addEventListener('afterprint', afterPrint);

@@ -397,6 +397,7 @@ body.invtype-a4 #cnNotesBox {
   .pay-card-count{font-size:4px;font-weight:900}
   .pay-card-main{font-size:6px;font-weight:900}
   .pay-card-sub,.pay-card-remaining{font-size:5px}
+  .cell-sub{font-size:6px !important}
 }
 
 @media (max-width:520px){
@@ -424,3 +425,5 @@ body.invtype-a4 #cnNotesBox {
   .pagination-controls{justify-content:center;flex-wrap:wrap}
   .page-size-selector{justify-content:center;flex-wrap:wrap;width:100%}
 }
+.action-btn-sm{padding:4px 10px;border:1.5px solid #0d9488;border-radius:6px;background:#f0fdfa;color:#0f766e;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}.action-btn-sm:hover{background:#ccfbf1}
+.cell-sub{font-size:11px;color:#94a3b8}

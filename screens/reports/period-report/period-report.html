@@ -288,6 +288,35 @@
           </div>
         </div>
 
+        <!-- Consumption Receipts Collapsible -->
+        <div class="report-section collapsible" id="sectionConsumption">
+          <div class="section-header toggle-header" id="toggleConsumption">
+            <div class="section-title-wrap">
+              <span class="toggle-arrow">▼</span>
+              <h2 class="section-title">ايصالات الاستهلاك</h2>
+              <span class="section-badge" id="badgeConsumption">0</span>
+            </div>
+            <div class="section-note">فواتير مدفوعة باشتراك — لا تدخل في الحسابات</div>
+          </div>
+          <div class="collapsible-body" id="bodyConsumption">
+            <div class="table-container">
+              <table class="report-table detail-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="all-invoices-num">رقم</th>
+                    <th data-i18n="all-invoices-customer">العميل</th>
+                    <th data-i18n="all-invoices-date">التاريخ</th>
+                    <th data-i18n="all-invoices-total-after-tax">الإجمالي</th>
+                    <th class="no-print" data-i18n="all-invoices-view">عرض</th>
+                  </tr>
+                </thead>
+                <tbody id="consumptionTableBody"></tbody>
+              </table>
+            </div>
+            <div class="section-footer" id="consumptionFooter"></div>
+          </div>
+        </div>
+
       </div>
 
     </main>
@@ -344,7 +373,7 @@
 
           <div class="inv-divider-thick inv-sep"></div>
 
-          <div class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
+          <div id="invTypeLabelRow" class="inv-meta-row" style="justify-content:center"><span class="inv-meta-label" style="color:#000">فاتورة ضريبية مبسطة</span></div>
           <div class="cr-info-grid">
             <div class="cr-info-cell">
               <span class="cr-info-label">رقم الفاتورة</span>
@@ -366,6 +395,10 @@
               <span class="cr-info-label">الجوال</span>
               <span class="cr-info-val" id="invCustPhone" dir="ltr"></span>
             </div>
+            <div class="cr-info-cell" id="invCustVatRow" style="display:none">
+              <span class="cr-info-label">الرقم الضريبي للعميل</span>
+              <span class="cr-info-val" id="invCustVat" dir="ltr"></span>
+            </div>
             <div class="cr-info-cell" id="invSubBalRow" style="display:none">
               <span class="cr-info-label">الرصيد المتبقي</span>
               <span class="cr-info-val" id="invSubBalance" dir="ltr"></span>
@@ -381,6 +414,10 @@
             <div class="cr-info-cell" id="invDeliveredAtRow" style="display:none">
               <span class="cr-info-label">تاريخ التسليم</span>
               <span class="cr-info-val" id="invDeliveredAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="invNotesGridRow" style="display:none">
+              <span class="cr-info-label">ملاحظات</span>
+              <span class="cr-info-val" id="invNotesGridContent"></span>
             </div>
             <div class="cr-info-cell" id="invCreatedByRow" style="display:none">
               <span class="cr-info-label">الكاشير</span>
@@ -419,7 +456,7 @@
               <span class="inv-total-label">الإضافي</span>
               <span class="inv-total-val inv-extra-val" id="invExtra" dir="ltr"></span>
             </div>
-            <div class="inv-total-row" id="invVatRow">
+            <div class="inv-total-row" id="invVatAmountRow">
               <span class="inv-total-label" id="invVatLabel">ضريبة القيمة المضافة</span>
               <span class="inv-total-val" id="invVat" dir="ltr"></span>
             </div>
@@ -744,5 +781,63 @@
   <script src="../../../assets/qrcode-min.js"></script>
   <script src="../../../assets/JsBarcode.min.js"></script>
   <script src="period-report.js"></script>
+
+  <!-- Consumption Receipt View Modal -->
+  <div id="crViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="btnCrClose" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
+        <button id="btnCrPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span>تصدير PDF</span>
+        </button>
+        <button id="btnCrPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="crPaper">
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="crLogoWrap" style="display:none"><img id="crLogo" class="inv-logo" alt="" /></div>
+            <div class="inv-shop-name" id="crShopName"></div>
+            <div class="inv-shop-sub" id="crShopAddress"></div>
+            <div class="inv-shop-contact-row"><span class="inv-shop-sub" id="crShopPhone"></span></div>
+            <div class="inv-shop-contact-row" id="crShopTaxRow" style="display:none"><span class="inv-shop-sub" id="crShopTax" dir="ltr"></span></div>
+            <div class="inv-shop-contact-row" id="crShopCrRow" style="display:none"><span class="inv-shop-sub" id="crShopCr" dir="ltr"></span></div>
+          </div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" style="justify-content:center">
+            <span class="inv-meta-label cr-receipt-title">إيصال استهلاك</span>
+          </div>
+          <div class="cr-info-grid">
+            <div class="cr-info-cell"><span class="cr-info-label">رقم الإيصال</span><span class="cr-info-val" id="crReceiptNum" dir="ltr"></span></div>
+            <div class="cr-info-cell"><span class="cr-info-label">التاريخ</span><span class="cr-info-val" id="crDate" dir="ltr"></span></div>
+            <div class="cr-info-cell"><span class="cr-info-label">العميل</span><span class="cr-info-val" id="crCustomer"></span></div>
+            <div class="cr-info-cell"><span class="cr-info-label">الجوال</span><span class="cr-info-val" id="crPhone" dir="ltr"></span></div>
+            <div class="cr-info-cell"><span class="cr-info-label">رقم الاشتراك</span><span class="cr-info-val" id="crSubRef" dir="ltr"></span></div>
+            <div class="cr-info-cell"><span class="cr-info-label">الباقة</span><span class="cr-info-val" id="crPackage"></span></div>
+            <div class="cr-info-cell" id="crCleanedAtRow" style="display:none"><span class="cr-info-label">تاريخ التنظيف</span><span class="cr-info-val" id="crCleanedAt" dir="ltr"></span></div>
+            <div class="cr-info-cell" id="crDeliveredAtRow" style="display:none"><span class="cr-info-label">تاريخ التسليم</span><span class="cr-info-val" id="crDeliveredAt" dir="ltr"></span></div>
+          </div>
+          <table class="inv-table">
+            <thead><tr><th class="inv-th-name">النوع</th><th class="inv-th-num">عدد</th><th class="inv-th-num">الإجمالي</th><th class="inv-th-name">العملية</th></tr></thead>
+            <tbody id="crItemsBody"></tbody>
+          </table>
+          <div class="inv-totals-box">
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crAmountLabel">المبلغ المستهلك</span><span class="inv-meta-val" id="crConsumed" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalBeforeLabel">الرصيد قبل</span><span class="inv-meta-val" id="crBalBefore" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label" id="crBalAfterLabel">الرصيد بعد</span><span class="inv-meta-val" id="crBalAfter" dir="ltr"></span></div>
+          </div>
+          <div class="inv-barcode-wrap" id="crBarcodeWrap" style="display:none;text-align:center;margin-top:8px"><svg id="crBarcode"></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

@@ -70,9 +70,15 @@
     invDiscount: document.getElementById('invDiscount'),
     invExtraRow: document.getElementById('invExtraRow'),
     invExtra: document.getElementById('invExtra'),
-    invVatRow: document.getElementById('invVatRow'),
+    invVatRow: document.getElementById('invVatAmountRow'),
     invVatLabel: document.getElementById('invVatLabel'),
     invVat: document.getElementById('invVat'),
+    invTypeLabelRow: document.getElementById('invTypeLabelRow'),
+    invTypeLabel: document.getElementById('invTypeLabel'),
+    a4mTypeLabelRow: document.getElementById('a4mTypeLabelRow'),
+    a4mTitleAr: document.getElementById('a4mTitleAr'),
+    a4mTitleEn: document.getElementById('a4mTitleEn'),
+    a4mTitleSep: document.getElementById('a4mTitleSep'),
     invTotalLabel: document.getElementById('invTotalLabel'),
     invTotal: document.getElementById('invTotal'),
     invMixedCashRow: document.getElementById('invMixedCashRow'),
@@ -190,6 +196,12 @@
     function a4mShow(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; }
     const sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
     const sarFmt = n => sarSpan + Number(n || 0).toFixed(2);
+
+    /* Title row — hide when no VAT */
+    a4mShow('a4mTypeLabelRow', !!data.titleAr);
+    a4mText('a4mTitleAr', data.titleAr || '');
+    a4mText('a4mTitleEn', data.titleEn || '');
+    a4mShow('a4mTitleSep', !!(data.titleAr && data.titleEn));
 
     a4mText('a4mShopNameAr',    data.shopNameAr);
     a4mText('a4mShopAddressAr', data.shopAddressAr);
@@ -834,6 +846,13 @@
     }
 
     /* Invoice meta */
+    const _vatRateForTitle = parseFloat(order.vat_rate || 0);
+    if (_vatRateForTitle === 0) {
+      if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = 'none';
+    } else {
+      if (els.invTypeLabel) els.invTypeLabel.textContent = order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة';
+      if (els.invTypeLabelRow) els.invTypeLabelRow.style.display = '';
+    }
     els.invOrderNum.textContent = displaySeq ? String(displaySeq) : (order.order_number || '—');
     els.invDate.textContent = formatInvoiceDate(order.created_at);
     els.invPayment.textContent = paymentLabel(order.payment_method);
@@ -961,12 +980,17 @@
       } else {
         els.invExtraRow.style.display = 'none';
       }
-      els.invVatLabel.textContent = `ضريبة القيمة المضافة (${vatRate}%)`;
-      els.invVat.innerHTML = sarFmt(vatAmount);
-      els.invVatRow.style.display = '';
-      // Update labels when tax exists
-      if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = 'المجموع قبل الضريبة';
-      if (els.invTotalLabel) els.invTotalLabel.textContent = 'الإجمالي شامل الضريبة';
+      if (vatAmount > 0) {
+        els.invVatLabel.textContent = `ضريبة القيمة المضافة (${vatRate}%)`;
+        els.invVat.innerHTML = sarFmt(vatAmount);
+        els.invVatRow.style.display = '';
+        if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = 'المجموع قبل الضريبة';
+        if (els.invTotalLabel) els.invTotalLabel.textContent = 'الإجمالي شامل الضريبة';
+      } else {
+        els.invVatRow.style.display = 'none';
+        if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = 'المجموع';
+        if (els.invTotalLabel) els.invTotalLabel.textContent = 'الإجمالي';
+      }
     } else {
       els.invSubtotal.innerHTML = sarFmt(subtotal);
       if (discount > 0) {
@@ -1101,8 +1125,8 @@
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date:               formatInvoiceDate(order.created_at),
       payment:            paymentLabel(order.payment_method),
-      titleAr:            order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
-      titleEn:            order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice',
+      titleAr:            vatRate === 0 ? '' : (order.customer_vat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة'),
+      titleEn:            vatRate === 0 ? '' : (order.customer_vat ? 'Tax Invoice' : 'Simplified Tax Invoice'),
       custName:           order.customer_name || '',
       custPhone:          order.phone || '',
       custVat:            order.customer_vat || '',
@@ -1212,12 +1236,17 @@
     if (copies === 0) return;
     let styleEl = null;
 
+    styleEl = document.createElement('style');
+    styleEl.id = 'printPageStyle';
     if (paperType === 'a4') {
-      styleEl = document.createElement('style');
-      styleEl.id = 'a4PageStyle';
       styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
-      document.head.appendChild(styleEl);
+    } else {
+      const mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+      const mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+      const shift = mLeft - mRight;
+      styleEl.textContent = `@page { size: 80mm auto; margin: 0; } @media print { .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;${shift !== 0 ? ` transform: translateX(${shift}mm) !important;` : ''} } }`;
     }
+    document.head.appendChild(styleEl);
 
     let currentCopy = 0;
     let cleaned = false;

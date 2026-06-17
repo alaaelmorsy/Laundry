@@ -408,6 +408,9 @@
     getUpdateStatus:   ()        => invoke('getUpdateStatus'),
     performUpdate:     ()        => invoke('performUpdate'),
     getUpdateProgress: ()        => invoke('getUpdateProgress'),
+    getSupportStatus:  ()        => invoke('getSupportStatus'),
+    downloadUpdate:    ()        => invoke('downloadUpdate'),
+    installUpdate:     ()        => invoke('installUpdate'),
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

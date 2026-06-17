@@ -3452,6 +3452,12 @@ async function migrateAppSettings() {
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN day_reset_time VARCHAR(5) DEFAULT NULL COMMENT 'HH:MM format'"
   ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN thermal_margin_left DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER day_reset_time"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN thermal_margin_right DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER thermal_margin_left"
+  ).catch(() => {});
   const [[cnt]] = await pool.query('SELECT COUNT(*) AS c FROM app_settings WHERE id = 1');
   if (Number(cnt.c) === 0) {
     await pool.query(
@@ -3504,6 +3510,8 @@ async function getAppSettings() {
             support_expiry_date,
             day_reset_hour,
             day_reset_time,
+            thermal_margin_left,
+            thermal_margin_right,
             updated_at
      FROM app_settings WHERE id = 1`
   );
@@ -3541,6 +3549,8 @@ async function getAppSettings() {
     logoWidth: Number(row.logo_width) > 0 ? Number(row.logo_width) : 180,
     logoHeight: Number(row.logo_height) > 0 ? Number(row.logo_height) : 70,
     printCopies: Number.isFinite(Number(row.print_copies)) && Number(row.print_copies) >= 0 ? Number(row.print_copies) : 1,
+    thermalMarginLeft: Number.isFinite(Number(row.thermal_margin_left)) ? Number(row.thermal_margin_left) : 0,
+    thermalMarginRight: Number.isFinite(Number(row.thermal_margin_right)) ? Number(row.thermal_margin_right) : 0,
     enabledPaymentMethods: (() => {
       try {
         const parsed = typeof row.enabled_payment_methods === 'string'
@@ -3645,6 +3655,14 @@ async function saveAppSettings(data) {
   if (!Number.isFinite(printCopies) || printCopies < 0) printCopies = 1;
   if (printCopies > 20) printCopies = 20;
 
+  let thermalMarginLeft = data.thermalMarginLeft !== undefined ? Number(data.thermalMarginLeft) : Number(existing.thermal_margin_left || 0);
+  if (!Number.isFinite(thermalMarginLeft) || thermalMarginLeft < 0) thermalMarginLeft = 0;
+  if (thermalMarginLeft > 20) thermalMarginLeft = 20;
+
+  let thermalMarginRight = data.thermalMarginRight !== undefined ? Number(data.thermalMarginRight) : Number(existing.thermal_margin_right || 0);
+  if (!Number.isFinite(thermalMarginRight) || thermalMarginRight < 0) thermalMarginRight = 0;
+  if (thermalMarginRight > 20) thermalMarginRight = 20;
+
   const allMethods = ['cash', 'card', 'credit', 'mixed', 'bank'];
   let enabledPaymentMethods;
   if (data.enabledPaymentMethods !== undefined) {
@@ -3743,7 +3761,7 @@ async function saveAppSettings(data) {
         laundry_name_ar = ?, laundry_name_en = ?, location_ar = ?, location_en = ?, invoice_notes = ?, phone = ?, email = ?,
         custom_fields_json = CAST(? AS JSON), vat_rate = ?, vat_number = ?, commercial_register = ?,
         building_number = ?, street_name_ar = ?, district_ar = ?, city_ar = ?, postal_code = ?, additional_number = ?,
-        price_display_mode = ?, invoice_paper_type = ?, logo_width = ?, logo_height = ?, print_copies = ?,
+        price_display_mode = ?, invoice_paper_type = ?, logo_width = ?, logo_height = ?, print_copies = ?, thermal_margin_left = ?, thermal_margin_right = ?,
         enabled_payment_methods = CAST(? AS JSON), default_payment_method = ?, require_hanger = ?, require_customer_phone = ?, allow_subscription_debt = ?,
         barcode_auto_action = ?, show_barcode_in_invoice = ?,
         report_email_enabled = ?, report_email_from = ?, report_email_app_password_enc = ?, report_email_send_time = ?,
@@ -3776,6 +3794,8 @@ async function saveAppSettings(data) {
         logoWidth,
         logoHeight,
         printCopies,
+        thermalMarginLeft,
+        thermalMarginRight,
         enabledPaymentJson,
         defaultPaymentMethod,
         requireHanger,
@@ -7911,6 +7931,17 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
     ORDER BY ip.payment_date DESC
   `, deferredParams);
 
+  const crDateWhere = dateWhere.replace(/\bcreated_at\b/g, 'cr.created_at');
+  const [consumptionReceipts] = await pool.query(`
+    SELECT cr.id, cr.receipt_seq, cr.order_id, cr.amount_consumed AS total_amount,
+           cr.package_name, cr.balance_before, cr.balance_after, cr.created_at,
+           c.customer_name, c.phone
+    FROM consumption_receipts cr
+    LEFT JOIN customers c ON c.id = cr.customer_id
+    WHERE 1=1${crDateWhere}
+    ORDER BY cr.id DESC
+  `, [...params]);
+
   const salesBeforeTax  = Number(ordersSummary.sales_before_tax);
   const salesTax        = Number(ordersSummary.sales_tax);
   const salesAfterTax   = Number(ordersSummary.sales_after_tax);
@@ -8002,6 +8033,7 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
     creditNotes,
     subscriptions,
     deferredPayments,
+    consumptionReceipts,
     invoiceCount: Number(ordersSummary.invoice_count),
   };
 }
@@ -8346,7 +8378,11 @@ async function getAllInvoicesReport({ dateFrom = '', dateTo = '', customerId = '
   const cnCustomerWhere = customerWhere.replace(/\bo\./g, 'cn.').replace(/o\.customer_id/g, 'cn.customer_id');
   const cnParams = [...params];
 
-  const allOrdersWhere  = `WHERE 1=1${dateWhere}${customerWhere}`;
+  const crDateWhere = dateWhere.replace(/\bo\.created_at\b/g, 'cr.created_at');
+  const crCustomerWhere = customerWhere.replace(/\bo\./g, 'cr.').replace(/o\.customer_id/g, 'cr.customer_id').replace(/c\.customer_name/g, 'cust.customer_name').replace(/c\.phone/g, 'cust.phone').replace(/c\.subscription_number/g, 'cust.subscription_number');
+  const crParams = [...params];
+
+  const allOrdersWhere  = `WHERE COALESCE(o.is_consumption_only, 0) = 0 AND COALESCE(o.payment_method,'cash') != 'subscription'${dateWhere}${customerWhere}`;
   const cnWhere         = `WHERE 1=1${cnDateWhere}${cnCustomerWhere} AND cn.original_order_id NOT IN (SELECT order_id FROM consumption_receipts WHERE order_id IS NOT NULL)`;
 
   const [allInvoices] = await pool.query(`
@@ -8378,6 +8414,19 @@ async function getAllInvoicesReport({ dateFrom = '', dateTo = '', customerId = '
     ${cnWhere}
     ORDER BY cn.id DESC
   `, cnParams);
+
+  const crWhere = `WHERE 1=1${crDateWhere}${crCustomerWhere}`;
+  const [consumptionReceipts] = await pool.query(`
+    SELECT cr.id, cr.receipt_seq, cr.amount_consumed, cr.balance_before, cr.balance_after,
+           cr.created_at, cr.order_id, cr.package_name,
+           cust.customer_name, cust.phone, cust.subscription_number,
+           ref.id AS refund_id
+    FROM consumption_receipts cr
+    LEFT JOIN customers cust ON cust.id = cr.customer_id
+    LEFT JOIN refunds ref ON ref.consumption_receipt_id = cr.id
+    ${crWhere}
+    ORDER BY cr.id DESC
+  `, crParams);
 
   const pmBaseWhere = `WHERE 1=1${dateWhere}${customerWhere}`;
   const [paymentMethods] = await pool.query(`
@@ -8505,6 +8554,7 @@ async function getAllInvoicesReport({ dateFrom = '', dateTo = '', customerId = '
     paidInvoices,
     deferredInvoices,
     creditNotes,
+    consumptionReceipts,
     paymentMethods: mergedPaymentMethods,
     summary: {
       paid:        { count: paidInvoices.length,     beforeTax: paidBeforeTax,     tax: paidTax,     afterTax: paidTotal,     discount: paidDiscount },

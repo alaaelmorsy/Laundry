@@ -107,6 +107,8 @@ window.addEventListener('DOMContentLoaded', () => {
     logoWidth: document.getElementById('logoWidth'),
     logoHeight: document.getElementById('logoHeight'),
     printCopies: document.getElementById('printCopies'),
+    thermalMarginLeft: document.getElementById('thermalMarginLeft'),
+    thermalMarginRight: document.getElementById('thermalMarginRight'),
     requireHanger: document.getElementById('requireHanger'),
     requireCustomerPhone: document.getElementById('requireCustomerPhone'),
     allowSubscriptionDebt: document.getElementById('allowSubscriptionDebt'),
@@ -262,6 +264,8 @@ window.addEventListener('DOMContentLoaded', () => {
     fields.logoWidth.value = s.logoWidth != null ? String(s.logoWidth) : '180';
     fields.logoHeight.value = s.logoHeight != null ? String(s.logoHeight) : '70';
     fields.printCopies.value = s.printCopies != null ? String(s.printCopies) : '1';
+    fields.thermalMarginLeft.value = s.thermalMarginLeft != null ? String(s.thermalMarginLeft) : '0';
+    fields.thermalMarginRight.value = s.thermalMarginRight != null ? String(s.thermalMarginRight) : '0';
     if (fields.requireHanger) fields.requireHanger.checked = s.requireHanger === true;
     if (fields.requireCustomerPhone) fields.requireCustomerPhone.checked = s.requireCustomerPhone === true;
     if (fields.allowSubscriptionDebt) fields.allowSubscriptionDebt.checked = s.allowSubscriptionDebt === true;
@@ -391,6 +395,8 @@ window.addEventListener('DOMContentLoaded', () => {
       logoWidth: fields.logoWidth.value,
       logoHeight: fields.logoHeight.value,
       printCopies: fields.printCopies.value,
+      thermalMarginLeft: fields.thermalMarginLeft.value,
+      thermalMarginRight: fields.thermalMarginRight.value,
       requireHanger: fields.requireHanger ? fields.requireHanger.checked : false,
       requireCustomerPhone: fields.requireCustomerPhone ? fields.requireCustomerPhone.checked : false,
       allowSubscriptionDebt: fields.allowSubscriptionDebt ? fields.allowSubscriptionDebt.checked : false,
@@ -814,12 +820,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // ── UPDATE PANEL LOGIC ────────────────────────────────────────────────────
   let updatePanelReady = false;
   let progressPollTimer = null;
-  let reconnectPollTimer = null;
 
   function initUpdatePanel() {
     if (updatePanelReady) return;
     updatePanelReady = true;
-    // fix corrupted lang key if previous I18N.apply(DOMElement) call damaged it
+
     const storedLang = localStorage.getItem('app_lang');
     if (storedLang && storedLang !== 'ar' && storedLang !== 'en') {
       localStorage.setItem('app_lang', 'ar');
@@ -831,46 +836,76 @@ window.addEventListener('DOMContentLoaded', () => {
     const progressPanel = document.getElementById('updateProgressPanel');
     const progressBar   = document.getElementById('updateProgressBar');
     const progressTitle = document.getElementById('updateProgressTitle');
-    const stepsList     = document.getElementById('updateStepsList');
+    const downloadSizeEl = document.getElementById('updateDownloadSize');
+    const pctEl         = document.getElementById('updateProgressPercent');
 
-    function fmtBytes(b) {
-      if (!b) return '';
+    function fmtMB(b) {
+      if (!b) return '0.0 MB';
       if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
       if (b >= 1024) return (b / 1024).toFixed(0) + ' KB';
       return b + ' B';
     }
 
-    // show current version + auto-show update result if cached
+    // show current version + support status on load
     try {
       window.api.getUpdateStatus().then(r => {
         if (r && r.currentVersion && elVersion) elVersion.textContent = r.currentVersion;
-        if (r && r.hasUpdate) renderUpdateResult(r);
+      }).catch(() => {});
+    } catch (_) {}
+    try {
+      window.api.getSupportStatus().then(r => {
+        const el = document.getElementById('updateSupportStatus');
+        if (!el || !r) return;
+        if (r.valid) {
+          const txt = r.daysLeft !== null
+            ? `الدعم الفني سارٍ (${r.daysLeft} يوم متبقٍ)`
+            : 'الدعم الفني سارٍ';
+          el.innerHTML = `<span style="color:#16a34a">✅ ${txt}</span>`;
+        } else {
+          el.innerHTML = `<span style="color:#dc2626">⚠️ انتهى الدعم الفني — التحديثات معطَّلة</span>`;
+        }
       }).catch(() => {});
     } catch (_) {}
 
     if (btnCheck) btnCheck.addEventListener('click', handleCheckUpdate);
 
+    // ── US1: Check support + GitHub ───────────────────────────────────────────
+
     async function handleCheckUpdate() {
       if (!btnCheck) return;
       btnCheck.disabled = true;
       const origContent = btnCheck.innerHTML;
-      btnCheck.innerHTML = `<span data-i18n="settings-update-checking">جارٍ الفحص...</span>`;
+      btnCheck.innerHTML = `<span>جارٍ الفحص...</span>`;
       if (resultArea) resultArea.style.display = 'none';
+      hideProgressPanel();
 
       try {
         const res = await window.api.checkForUpdate({ force: true });
         if (!res || !res.success) {
-          showToast(res?.message || I18N.t('settings-update-error-generic'), 'error');
+          if (res && res.supportExpired) {
+            showSupportExpiredMsg(res.message);
+          } else {
+            showToast(res?.message || 'حدث خطأ أثناء الفحص', 'error');
+          }
           return;
         }
         if (elVersion && res.currentVersion) elVersion.textContent = res.currentVersion;
         renderUpdateResult(res);
       } catch (e) {
-        showToast(e.message || I18N.t('settings-update-error-generic'), 'error');
+        showToast(e.message || 'حدث خطأ أثناء الفحص', 'error');
       } finally {
         btnCheck.disabled = false;
         btnCheck.innerHTML = origContent;
       }
+    }
+
+    function showSupportExpiredMsg(msg) {
+      if (!resultArea) return;
+      resultArea.style.display = 'block';
+      resultArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#fffbeb;border:1px solid #f59e0b;border-radius:12px;color:#92400e;font-size:13px;direction:rtl">
+        <span style="font-size:20px">⚠️</span>
+        <span>${msg || 'انتهت فترة الدعم الفني — يرجى تجديد الدعم للحصول على التحديثات'}</span>
+      </div>`;
     }
 
     function renderUpdateResult(res) {
@@ -879,153 +914,176 @@ window.addEventListener('DOMContentLoaded', () => {
         resultArea.innerHTML = `
           <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border-radius:10px;border:1px solid var(--bdr)">
             <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg>
-            <span style="font-size:14px;color:var(--tx1)">${I18N.t('settings-update-up-to-date')}</span>
+            <span style="font-size:14px;color:var(--tx1)">البرنامج محدَّث — لا يوجد تحديث جديد</span>
           </div>`;
         resultArea.style.display = 'block';
         return;
       }
       const notes = (res.releaseNotes || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-      const pubDate = res.publishedAt ? new Date(res.publishedAt).toLocaleDateString() : '';
-      const sizeLabel = res.assetSize ? `&nbsp;·&nbsp;<strong>الحجم:</strong> ${fmtBytes(res.assetSize)}` : '';
+      const pubDate = res.publishedAt ? new Date(res.publishedAt).toLocaleDateString('ar-SA') : '';
+      const sizeLabel = res.assetSize ? `&nbsp;·&nbsp;<strong>الحجم:</strong> ${fmtMB(res.assetSize)}` : '';
       resultArea.innerHTML = `
         <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
           <div style="display:flex;align-items:center;gap:8px">
             <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style="font-size:14px;font-weight:700;color:#1d4ed8">${I18N.t('settings-update-available')}</span>
+            <span style="font-size:14px;font-weight:700;color:#1d4ed8">يوجد تحديث جديد</span>
           </div>
           <div style="font-size:13px;color:var(--tx2)">
-            <strong>${I18N.t('settings-update-version-label')}:</strong> ${res.latestVersion || ''}
-            ${pubDate ? `&nbsp;·&nbsp;<strong>${I18N.t('settings-update-published')}:</strong> ${pubDate}` : ''}
+            <strong>الإصدار:</strong> ${res.latestVersion || ''}
+            ${pubDate ? `&nbsp;·&nbsp;<strong>تاريخ الإصدار:</strong> ${pubDate}` : ''}
             ${sizeLabel}
           </div>
           ${notes ? `<div style="font-size:12px;color:var(--tx3);max-height:120px;overflow-y:auto;line-height:1.6;padding:8px;background:rgba(255,255,255,.6);border-radius:8px">${notes}</div>` : ''}
-          <button type="button" id="btnUpdateNow" style="align-self:flex-start;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px">
+          <button type="button" id="btnDownloadUpdate" style="align-self:flex-start;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            ${I18N.t('settings-update-now-btn')}
+            تحميل التحديث
           </button>
         </div>`;
       resultArea.style.display = 'block';
-      const btnNow = document.getElementById('btnUpdateNow');
-      if (btnNow) btnNow.addEventListener('click', handleUpdateNow);
+      const btnDl = document.getElementById('btnDownloadUpdate');
+      if (btnDl) btnDl.addEventListener('click', handleDownload);
     }
 
-    async function handleUpdateNow() {
-      const btnNow = document.getElementById('btnUpdateNow');
-      if (btnNow) btnNow.disabled = true;
+    // ── US2: Download with MB progress bar ───────────────────────────────────
+
+    async function handleDownload() {
+      const btnDl = document.getElementById('btnDownloadUpdate');
+      if (btnDl) btnDl.disabled = true;
       if (btnCheck) btnCheck.disabled = true;
 
-      showProgressPanel();
+      showProgressPanel('جارٍ التحميل...');
 
       try {
-        const res = await window.api.performUpdate();
+        const res = await window.api.downloadUpdate();
         if (!res || !res.success) {
-          hideProgressPanel();
-          showToast(res?.message || I18N.t('settings-update-error-generic'), 'error');
-          if (btnNow) btnNow.disabled = false;
+          showDownloadError(res?.message || 'فشل بدء التحميل');
+          if (btnDl) btnDl.disabled = false;
           if (btnCheck) btnCheck.disabled = false;
           return;
         }
-        // Server will exit — start polling progress then reconnect
-        startProgressPolling();
+        startDownloadPolling();
       } catch (e) {
-        hideProgressPanel();
-        showToast(e.message || I18N.t('settings-update-error-generic'), 'error');
-        if (btnNow) btnNow.disabled = false;
+        showDownloadError(e.message || 'فشل بدء التحميل');
+        if (btnDl) btnDl.disabled = false;
         if (btnCheck) btnCheck.disabled = false;
       }
     }
 
-    const downloadSizeEl = document.getElementById('updateDownloadSize');
-
-    function showProgressPanel() {
-      if (progressPanel) progressPanel.style.display = 'block';
-      if (resultArea) resultArea.style.display = 'none';
-      if (downloadSizeEl) downloadSizeEl.textContent = '';
-    }
-
-    function hideProgressPanel() {
-      if (progressPanel) progressPanel.style.display = 'none';
-      if (downloadSizeEl) downloadSizeEl.textContent = '';
-    }
-
-    function renderSteps(steps) {
-      if (!stepsList) return;
-      const icons = {
-        done:    `<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>`,
-        active:  `<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg>`,
-        pending: `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg>`,
-      };
-      stepsList.innerHTML = (steps || []).map(s => `
-        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:${s.status === 'pending' ? 'var(--tx4)' : s.status === 'done' ? 'var(--tx2)' : 'var(--tx1)'}">
-          ${icons[s.status] || icons.pending}
-          <span>${s.label || ''}</span>
-        </div>`).join('');
-    }
-
-    function startProgressPolling() {
+    function startDownloadPolling() {
       clearInterval(progressPollTimer);
-      let serverGone = false;
-
       progressPollTimer = setInterval(async () => {
         try {
           const res = await window.api.getUpdateProgress();
-          if (res && res.inProgress) {
-            if (progressBar) progressBar.style.width = (res.percent || 0) + '%';
-            if (progressTitle) progressTitle.textContent = res.stepLabel || I18N.t('settings-update-restarting');
-            renderSteps(res.steps);
-            // عرض حجم الملف أثناء التحميل فقط
-            if (downloadSizeEl) {
-              if (res.currentStep === 'downloading' && res.totalBytes > 0) {
-                const dlText = fmtBytes(res.downloadedBytes || 0);
-                const totText = fmtBytes(res.totalBytes);
-                const pct = res.percent > 15 ? Math.round((res.percent - 15) / 0.5) : 0;
-                downloadSizeEl.textContent = `${dlText} / ${totText} (${pct}%)`;
-              } else {
-                downloadSizeEl.textContent = '';
-              }
-            }
+          if (!res || !res.success) return;
+
+          const pct = res.percent || 0;
+          if (progressBar) progressBar.style.width = pct + '%';
+          if (pctEl) pctEl.textContent = pct + '%';
+
+          if (res.totalBytes > 0 && downloadSizeEl) {
+            downloadSizeEl.textContent = `${fmtMB(res.downloadedBytes || 0)} / ${fmtMB(res.totalBytes)}`;
           }
-        } catch (_) {
-          // Server went offline — switch to reconnect mode
-          if (!serverGone) {
-            serverGone = true;
+
+          if (res.downloadDone) {
             clearInterval(progressPollTimer);
-            if (progressTitle) progressTitle.textContent = I18N.t('settings-update-restarting');
-            if (progressBar) progressBar.style.width = '90%';
-            startReconnectPolling();
+            onDownloadComplete();
           }
+        } catch (e) {
+          clearInterval(progressPollTimer);
+          showDownloadError(e.message || 'انقطع الاتصال أثناء التحميل');
+          const btnDl = document.getElementById('btnDownloadUpdate');
+          if (btnDl) btnDl.disabled = false;
+          if (btnCheck) btnCheck.disabled = false;
         }
       }, 1000);
     }
 
-    function startReconnectPolling() {
-      clearInterval(reconnectPollTimer);
-      reconnectPollTimer = setInterval(async () => {
-        try {
-          const res = await window.api.getUpdateStatus();
-          if (res && res.success !== false) {
-            clearInterval(reconnectPollTimer);
-            if (progressBar) progressBar.style.width = '100%';
-            hideProgressPanel();
-            handleUpdateResult(res);
-          }
-        } catch (_) {}
-      }, 3000);
+    function showDownloadError(msg) {
+      hideProgressPanel();
+      if (resultArea) {
+        resultArea.style.display = 'block';
+        const existing = resultArea.querySelector('[data-dl-error]');
+        if (existing) existing.remove();
+        const errDiv = document.createElement('div');
+        errDiv.setAttribute('data-dl-error', '1');
+        errDiv.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#dc2626;margin-top:10px;direction:rtl';
+        errDiv.innerHTML = `<span>❌</span><span>${msg}</span>`;
+        resultArea.appendChild(errDiv);
+      }
     }
 
-    function handleUpdateResult(statusRes) {
-      const result = statusRes && statusRes.lastUpdateResult;
-      if (!result) return;
-      if (result.status === 'success') {
-        showToast(`${I18N.t('settings-update-success')} ${result.toVersion || ''}`, 'success');
-        if (document.getElementById('updateCurrentVersion')) {
-          document.getElementById('updateCurrentVersion').textContent = result.toVersion || '';
+    // ── US3: Install Now ──────────────────────────────────────────────────────
+
+    function onDownloadComplete() {
+      if (progressBar) { progressBar.style.transition = 'width .3s ease'; progressBar.style.width = '100%'; }
+      if (pctEl) pctEl.textContent = '100%';
+      if (progressTitle) progressTitle.textContent = 'اكتمل التحميل ✓';
+      if (downloadSizeEl) downloadSizeEl.textContent = '';
+
+      setTimeout(() => {
+        hideProgressPanel();
+        if (resultArea) {
+          resultArea.style.display = 'block';
+          resultArea.innerHTML = `
+            <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style="font-size:14px;font-weight:700;color:#15803d">اكتمل التحميل — جاهز للتثبيت</span>
+              </div>
+              <button type="button" id="btnInstallUpdate" style="align-self:flex-start;padding:10px 24px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M12 2v14"/><path d="M5 15l7 7 7-7"/><path d="M3 21h18"/></svg>
+                تثبيت الآن
+              </button>
+            </div>`;
         }
-        if (resultArea) resultArea.style.display = 'none';
-      } else {
-        showToast(I18N.t('settings-update-rollback'), 'error');
+        const btnInst = document.getElementById('btnInstallUpdate');
+        if (btnInst) btnInst.addEventListener('click', handleInstall);
+        if (btnCheck) btnCheck.disabled = false;
+      }, 800);
+    }
+
+    async function handleInstall() {
+      const btnInst = document.getElementById('btnInstallUpdate');
+      if (btnInst) { btnInst.disabled = true; btnInst.textContent = 'جارٍ التثبيت...'; }
+      if (btnCheck) btnCheck.disabled = true;
+      try {
+        const res = await window.api.installUpdate();
+        if (res && res.success) {
+          if (resultArea) {
+            resultArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#15803d;font-size:13px">
+              <span>🔄</span><span>${res.message || 'سيتم إغلاق البرنامج وإعادة تشغيله تلقائياً...'}</span>
+            </div>`;
+          }
+        } else {
+          showToast(res?.message || 'فشل التثبيت', 'error');
+          if (btnInst) { btnInst.disabled = false; btnInst.textContent = 'تثبيت الآن'; }
+          if (btnCheck) btnCheck.disabled = false;
+        }
+      } catch (e) {
+        showToast(e.message || 'فشل التثبيت', 'error');
+        if (btnInst) { btnInst.disabled = false; btnInst.textContent = 'تثبيت الآن'; }
         if (btnCheck) btnCheck.disabled = false;
       }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    function showProgressPanel(title) {
+      if (progressPanel) progressPanel.style.display = 'block';
+      if (resultArea) resultArea.style.display = 'none';
+      if (downloadSizeEl) downloadSizeEl.textContent = '';
+      if (progressBar) { progressBar.style.transition = 'none'; progressBar.style.width = '0%'; }
+      if (pctEl) pctEl.textContent = '0%';
+      if (progressTitle) progressTitle.textContent = title || 'جارٍ التحميل...';
+      const errEl = document.getElementById('updateErrorMsg');
+      if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+      setTimeout(() => { if (progressBar) progressBar.style.transition = 'width .6s cubic-bezier(.4,0,.2,1)'; }, 50);
+    }
+
+    function hideProgressPanel() {
+      clearInterval(progressPollTimer);
+      if (progressPanel) progressPanel.style.display = 'none';
+      if (downloadSizeEl) downloadSizeEl.textContent = '';
     }
   }
 
