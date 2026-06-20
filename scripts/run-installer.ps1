@@ -1,11 +1,11 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$SetupPath,
   [string]$AppRoot   = '',
   [int]$ServerPid    = 0
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Installer launcher — GUI-first strategy.
+# ------------------------------------------------------------------------------
+# Installer launcher -- GUI-first strategy.
 #
 # Root causes addressed:
 #   1. NSSM race condition: NSSM restarts the service ~14 s after Node exits,
@@ -26,9 +26,9 @@ param(
 #   4b. Session-0 (service): WTSQueryUserToken + CreateProcessAsUser → GUI in user session.
 #   4c. Fallback: silent install if API fails.
 #   5. If silent install ran: safety-net service start + restore NSSM restart setting.
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 
-# ── Derive AppRoot ────────────────────────────────────────────────────────────
+# -- Derive AppRoot ------------------------------------------------------------
 if (-not $AppRoot -or -not (Test-Path $AppRoot)) {
   if ($PSScriptRoot) { $AppRoot = Split-Path $PSScriptRoot -Parent }
 }
@@ -65,7 +65,7 @@ if (-not (Test-Path $SetupPath)) {
   exit 1
 }
 
-# ── 0. Prevent NSSM from restarting the service on clean exit ─────────────────
+# -- 0. Prevent NSSM from restarting the service on clean exit -----------------
 # CRITICAL: Without this, NSSM restarts Node within seconds of process.exit(0),
 # causing file-lock conflicts that prevent the installer from replacing files.
 if ((Test-Path $NssmPath) -and (Test-ServiceExists)) {
@@ -74,7 +74,7 @@ if ((Test-Path $NssmPath) -and (Test-ServiceExists)) {
   Write-Log 'INFO' "NSSM AppExit set to Exit for code 0"
 }
 
-# ── 1. Wait for Node server to exit ──────────────────────────────────────────
+# -- 1. Wait for Node server to exit ------------------------------------------
 if ($ServerPid -gt 0) {
   Write-Log 'INFO' "Waiting for Node server PID $ServerPid to exit..."
   $elapsed = 0
@@ -84,20 +84,20 @@ if ($ServerPid -gt 0) {
     $elapsed += 0.5
   }
   if (Get-Process -Id $ServerPid -ErrorAction SilentlyContinue) {
-    Write-Log 'WARN' "PID $ServerPid still alive after $elapsed s — forcing kill"
+    Write-Log 'WARN' "PID $ServerPid still alive after $elapsed s -- forcing kill"
     try { Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue } catch {}
     Start-Sleep -Seconds 2
   } else {
     Write-Log 'INFO' "Node server exited after ${elapsed}s"
   }
 } else {
-  Write-Log 'WARN' "ServerPid is 0 — skipping PID wait (falling back to time-based wait)"
+  Write-Log 'WARN' "ServerPid is 0 -- skipping PID wait (falling back to time-based wait)"
 }
 
 # Small extra wait to ensure NSSM does not race-restart the service
 Start-Sleep -Seconds 3
 
-# ── 2. Stop the Windows service ───────────────────────────────────────────────
+# -- 2. Stop the Windows service -----------------------------------------------
 if (Test-ServiceExists) {
   Write-Log 'INFO' "Stopping service $ServiceName..."
   if (Test-Path $NssmPath) { & $NssmPath stop $ServiceName confirm 2>$null | Out-Null }
@@ -107,34 +107,34 @@ if (Test-ServiceExists) {
   # Verify the service actually stopped
   $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
   if ($svc -and $svc.Status -ne 'Stopped') {
-    Write-Log 'WARN' "Service still running ($($svc.Status)) — forcing stop"
+    Write-Log 'WARN' "Service still running ($($svc.Status)) -- forcing stop"
     & sc.exe stop $ServiceName 2>$null | Out-Null
     Start-Sleep -Seconds 5
   }
   Write-Log 'INFO' "Service stopped"
 }
 
-# ── 3. Kill any remaining laundry-app processes ───────────────────────────────
+# -- 3. Kill any remaining laundry-app processes -------------------------------
 Get-Process -Name 'laundry-app' -ErrorAction SilentlyContinue | ForEach-Object {
   Write-Log 'INFO' "Killing stray laundry-app PID $($_.Id)"
   try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
 }
 Start-Sleep -Seconds 2
 
-# ── 4. Launch installer ───────────────────────────────────────────────────────
+# -- 4. Launch installer -------------------------------------------------------
 $currentSessionId = try { (Get-Process -Id $PID).SessionId } catch { -1 }
 Write-Log 'INFO' "PowerShell session ID: $currentSessionId"
 
-# ── 4a. Interactive session (dev/direct run): launch GUI directly ─────────────
+# -- 4a. Interactive session (dev/direct run): launch GUI directly -------------
 if ($currentSessionId -ne 0) {
-  Write-Log 'INFO' "Interactive session — launching installer GUI directly"
+  Write-Log 'INFO' "Interactive session -- launching installer GUI directly"
   $guiDone = $false
   try {
     Start-Process -FilePath $SetupPath -Wait -ErrorAction Stop
     Write-Log 'INFO' "Installer GUI completed"
     $guiDone = $true
   } catch {
-    Write-Log 'WARN' "Direct launch failed: $_ — falling back to API approach"
+    Write-Log 'WARN' "Direct launch failed: $_ -- falling back to API approach"
   }
 
   if ($guiDone) {
@@ -148,15 +148,15 @@ if ($currentSessionId -ne 0) {
     Remove-SelfTask
     exit 0
   }
-  # GUI launch failed — fall through to 4b (CreateProcessAsUser) then 4c
+  # GUI launch failed -- fall through to 4b (CreateProcessAsUser) then 4c
   # (silent install). Both downstream paths restore NSSM AppExit themselves
   # before exiting, so the service is never left permanently dead.
 }
 
-# ── 4b. Session-0: WTSQueryUserToken + CreateProcessAsUser ───────────────────
+# -- 4b. Session-0: WTSQueryUserToken + CreateProcessAsUser -------------------
 # This is the official Windows API method for launching a GUI app from a
 # Windows Service into the interactive user's desktop session.
-Write-Log 'INFO' "Session-0 — attempting WTSQueryUserToken + CreateProcessAsUser..."
+Write-Log 'INFO' "Session-0 -- attempting WTSQueryUserToken + CreateProcessAsUser..."
 $guiLaunched = $false
 
 try {
@@ -216,7 +216,7 @@ public class UserSessionLauncher {
   $userToken = [IntPtr]::Zero
   if (-not [UserSessionLauncher]::WTSQueryUserToken($sid, [ref]$userToken)) {
     $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    throw "WTSQueryUserToken failed (error $err) — no interactive user logged in?"
+    throw "WTSQueryUserToken failed (error $err) -- no interactive user logged in?"
   }
 
   $dupToken = [IntPtr]::Zero
@@ -256,7 +256,7 @@ public class UserSessionLauncher {
   $guiLaunched = $true
 
 } catch {
-  Write-Log 'WARN' "CreateProcessAsUser failed: $_ — falling back to silent install"
+  Write-Log 'WARN' "CreateProcessAsUser failed: $_ -- falling back to silent install"
 }
 
 if ($guiLaunched) {
@@ -268,7 +268,7 @@ if ($guiLaunched) {
   exit 0
 }
 
-# ── 4c. Fallback: silent install ──────────────────────────────────────────────
+# -- 4c. Fallback: silent install ----------------------------------------------
 Write-Log 'INFO' "Running installer silently (fallback): $SetupPath"
 $exitCode = -1
 try {
@@ -300,7 +300,7 @@ if ($exitCode -ne 0) {
   exit 1
 }
 
-# ── 5. Post-silent-install: restore NSSM + safety-net service start ───────────
+# -- 5. Post-silent-install: restore NSSM + safety-net service start -----------
 Start-Sleep -Seconds 2
 if (Test-Path $NssmPath) {
   Write-Log 'INFO' "Restoring NSSM AppExit 0 to Restart..."

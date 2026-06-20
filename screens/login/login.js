@@ -38,18 +38,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   const savedUsersDropdown = document.getElementById('savedUsersDropdown');
 
   // ── Update badge ──────────────────────────────────────────────────────────
-  const updateBadge     = document.getElementById('updateBadge');
-  const updateBadgeText = document.getElementById('updateBadgeText');
-  const updateBadgeLink = document.getElementById('updateBadgeLink');
+  const updateBadge = document.getElementById('updateBadge');
 
   (async () => {
     try {
       const res = await fetch('/api/update-status');
       const status = await res.json();
       if (status && status.hasUpdate && status.latestVersion) {
-        if (updateBadgeText) updateBadgeText.textContent = `تحديث جديد متاح — الإصدار ${status.latestVersion}`;
-        if (updateBadgeLink) updateBadgeLink.textContent = 'انتقل إلى الإعدادات بعد تسجيل الدخول';
-        if (updateBadge) updateBadge.style.display = 'flex';
+        if (!updateBadge) return;
+        updateBadge.title = `تحديث متاح — الإصدار ${status.latestVersion}`;
+        updateBadge.style.display = 'flex';
+        updateBadge.style.opacity = '1';
+        updateBadge.style.transform = 'scale(1)';
+        setTimeout(() => {
+          updateBadge.style.opacity = '0';
+          updateBadge.style.transform = 'scale(.7)';
+          setTimeout(() => { updateBadge.style.display = 'none'; }, 400);
+        }, 5000);
       }
     } catch (_) {}
   })();

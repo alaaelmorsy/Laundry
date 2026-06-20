@@ -18,11 +18,9 @@
           <div class="panel-bg"></div>
           <div class="login-panel">
 
-            <!-- ── إشعار التحديث ── -->
-            <div id="updateBadge" dir="rtl" style="display:none;margin-bottom:12px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;display:none;align-items:center;gap:10px;font-size:13px;color:#1d4ed8">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span id="updateBadgeText" style="flex:1"></span>
-              <a id="updateBadgeLink" href="/screens/settings/settings.html#update" style="white-space:nowrap;font-size:12px;color:#3b82f6;text-decoration:underline;cursor:pointer"></a>
+            <!-- ── إشعار التحديث (أعلى يمين الشاشة) ── -->
+            <div id="updateBadge" title="تحديث متاح" style="display:none;position:fixed;top:18px;right:18px;z-index:9999;width:44px;height:44px;border-radius:50%;background:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.45);align-items:center;justify-content:center;cursor:pointer;transition:opacity .4s,transform .4s">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" width="22" height="22"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </div>
 
             <!-- ── شاشة تسجيل الدخول ── -->

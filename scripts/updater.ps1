@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][int]$ServerPid,
   [Parameter(Mandatory=$true)][string]$TargetVersion,
   [Parameter(Mandatory=$true)][string]$FromVersion,
@@ -7,7 +7,7 @@ param(
   [Parameter(Mandatory=$true)][string]$AppRoot
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Robust self-updater for laundry-app.exe.
 #
 # Root-cause-proof design:
@@ -19,9 +19,9 @@ param(
 #      duration of the update so it cannot re-lock the exe mid-replace, then
 #      re-enable it afterwards.
 #   3. We never assume a single restart mechanism: we try the service, then the
-#      scheduled task(s), then a direct launch — and we VERIFY the app is back by
+#      scheduled task(s), then a direct launch -- and we VERIFY the app is back by
 #      probing its HTTPS port before declaring success.
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 
 $StatusFile   = Join-Path $AppRoot "data\update-status.json"
 $LogFile      = Join-Path $AppRoot "data\update-log.txt"
@@ -107,7 +107,7 @@ function Test-AppListening {
   return $false
 }
 
-# ── Stop everything that runs or resurrects the app ───────────────────────────
+# -- Stop everything that runs or resurrects the app ---------------------------
 function Stop-App {
   # 1. Disable the watchdog task so it can't `sc continue`/restart mid-update.
   if (Test-TaskExists $WatchdogTask) {
@@ -144,7 +144,7 @@ function Stop-App {
   Start-Sleep -Seconds 2
 }
 
-# ── Restart the app by whatever mechanism exists, then verify ─────────────────
+# -- Restart the app by whatever mechanism exists, then verify -----------------
 function Start-App {
   $started = $false
 
@@ -169,7 +169,7 @@ function Start-App {
   # Verify the app is actually listening; if not, fall back to a direct launch.
   if (Wait-AppUp 25) { return $true }
 
-  Write-Log 'WARN' 'App not listening after service/task start — launching directly'
+  Write-Log 'WARN' 'App not listening after service/task start -- launching directly'
   try {
     if (Test-Path $LauncherVbs) {
       Start-Process -FilePath 'wscript.exe' -ArgumentList "/nologo `"$LauncherVbs`"" -WorkingDirectory $AppRoot
@@ -192,7 +192,7 @@ function Wait-AppUp {
   return $false
 }
 
-# ── Replace the exe (rename-aside strategy, lock-proof) ───────────────────────
+# -- Replace the exe (rename-aside strategy, lock-proof) -----------------------
 function Replace-Exe {
   $oldExeBackup = Join-Path $BackupPath 'laundry-app.exe.bak'
   try { if (-not (Test-Path $BackupPath)) { New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null } } catch {}
@@ -227,7 +227,7 @@ function Replace-Exe {
   }
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 Write-Log 'INFO' "Updater started: from=$FromVersion to=$TargetVersion pid=$ServerPid"
 
 Stop-App
@@ -240,7 +240,7 @@ if (-not (Replace-Exe)) {
 
 # Clean up the temp download.
 try { Remove-Item -Path $NewExePath -Force -ErrorAction SilentlyContinue } catch {}
-# NOTE: لا حاجة لتشغيل migrate.js — db.initialize() يعمل تلقائياً عند بدء الـ exe الجديد
+# NOTE: لا حاجة لتشغيل migrate.js -- db.initialize() يعمل تلقائياً عند بدء الـ exe الجديد
 
 Write-Log 'INFO' 'Restarting app...'
 $up = Start-App
