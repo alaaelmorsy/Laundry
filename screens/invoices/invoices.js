@@ -239,8 +239,15 @@
 
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
-      else { logoEl.style.display = 'none'; }
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoEl.style.display = '';
+      } else { logoEl.style.display = 'none'; }
     }
 
     a4mText('a4mOrderNum', data.orderNum);
@@ -753,7 +760,7 @@
         refundData.shopAddressAr = s.locationAr || '';
         refundData.shopAddressEn = s.locationEn || '';
         refundData.shopPhone = s.phone || '';
-        refundData.shopEmail = s.email || '';
+        refundData.shopEmail = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
         refundData.vatNumber = s.vatNumber || '';
         refundData.commercialRegister = s.commercialRegister || '';
         refundData.logoDataUrl = s.logoDataUrl || '';
@@ -810,7 +817,7 @@
     if (s.postalCode)     addressParts.push(s.postalCode);
     els.invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || '');
     els.invShopPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
-    els.invShopEmail.textContent = s.email || '';
+    els.invShopEmail.textContent = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
     els.invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     if (s.commercialRegister) {
@@ -822,6 +829,11 @@
 
     if (s.logoDataUrl) {
       els.invLogo.src = s.logoDataUrl;
+      els.invLogo.style.width = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.height = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.objectFit = 'contain';
       els.invLogoWrap.style.display = '';
     } else {
       els.invLogoWrap.style.display = 'none';
@@ -1119,9 +1131,11 @@
       shopAddressAr:      addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
       shopAddressEn:      s.locationEn || '',
       shopPhone:          s.phone || '',
-      shopEmail:          s.email || '',
+      shopEmail:          (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       invoiceNotes:       s.invoiceNotes || '',
       logoDataUrl:        s.logoDataUrl || '',
+      logoWidth:          s.logoWidth || 180,
+      logoHeight:         s.logoHeight || 70,
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date:               formatInvoiceDate(order.created_at),
       payment:            paymentLabel(order.payment_method),

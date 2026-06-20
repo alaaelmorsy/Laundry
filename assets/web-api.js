@@ -253,6 +253,8 @@
     resumeSubscription: (data) => invoke('resumeSubscription', data),
     updateActiveSubscriptionPeriod: (data) => invoke('updateActiveSubscriptionPeriod', data),
     deleteSubscription: (data) => invoke('deleteSubscription', data),
+    getCustomerUnpaidInvoices: (data) => invoke('getCustomerUnpaidInvoices', data),
+    settleInvoicesFromSubscription: (data) => invoke('settleInvoicesFromSubscription', data),
 
     printSubscriptionReceipt: async (data) => {
       const r = await jsonFetch('/api/subscriptions/receipt-print-html', {

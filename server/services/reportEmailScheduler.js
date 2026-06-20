@@ -66,9 +66,11 @@ async function trySendOnce() {
 
   try {
     const filters = { dateFrom: reportDateLabel, dateTo: reportDateLabel };
-    const pdf = await exportsService.exportReport('pdf', filters);
+    const [pdf, branding] = await Promise.all([
+      exportsService.exportReport('pdf', filters),
+      loadAppBrandingForReceipts().catch(() => ({})),
+    ]);
 
-    const branding = await loadAppBrandingForReceipts().catch(() => ({}));
     const sentAtLabel = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()} ${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
     const html = buildProfessionalEmailHtml({ branding, reportDateLabel, sentAtLabel });
     const subject = `التقرير اليومي — ${reportDateLabel} — ${branding.laundryNameAr || branding.laundryNameEn || 'نظام المغسلة'}`;

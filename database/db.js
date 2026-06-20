@@ -1152,6 +1152,12 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS idx_customers_search ON customers (customer_name, phone, subscription_number)
   `).catch(() => {});
 
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ppl_product_id ON product_price_lines (product_id)`).catch(() => {});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_sort_order ON products (sort_order)`).catch(() => {});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_search ON products (name_ar, name_en)`).catch(() => {});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_services_sort_order ON laundry_services (sort_order)`).catch(() => {});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_services_search ON laundry_services (name_ar, name_en)`).catch(() => {});
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS laundry_services (
       id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -1933,7 +1939,7 @@ const PRODUCT_SORT_FRAGMENTS = {
   name_en: 'p.name_en',
   is_active: 'p.is_active',
   created_at: 'p.created_at',
-  lines: '(SELECT COUNT(*) FROM product_price_lines ppl WHERE ppl.product_id = p.id)',
+  lines: 'COUNT(ppl.id)',
   sort_order: 'p.sort_order'
 };
 
@@ -1962,9 +1968,11 @@ async function getAllLaundryServices(filters = {}) {
   const baseFrom = `FROM laundry_services WHERE 1=1${whereClauses}`;
   const orderSql = buildLaundryServicesOrderBy(filters);
 
+  const cols = 'id, name_ar, name_en, is_active, sort_order, created_at';
+
   if (page && pageSize) {
     const countSql = `SELECT COUNT(*) as total ${baseFrom}`;
-    const dataSql  = `SELECT * ${baseFrom} ${orderSql} LIMIT ? OFFSET ?`;
+    const dataSql  = `SELECT ${cols} ${baseFrom} ${orderSql} LIMIT ? OFFSET ?`;
     const offset   = (page - 1) * pageSize;
 
     const [[countRow], [rows]] = await Promise.all([
@@ -1981,7 +1989,7 @@ async function getAllLaundryServices(filters = {}) {
     };
   }
 
-  const [rows] = await pool.query(`SELECT * ${baseFrom} ${orderSql}`, params);
+  const [rows] = await pool.query(`SELECT ${cols} ${baseFrom} ${orderSql}`, params);
   return { services: rows, total: rows.length };
 }
 
@@ -2106,16 +2114,18 @@ async function getProducts(filters = {}) {
     params.push(q, q);
   }
 
-  const baseFrom = `FROM products p WHERE 1=1${whereClauses}`;
   const orderSql = buildProductsOrderBy(filters);
 
   if (page && pageSize) {
-    const countSql = `SELECT COUNT(*) as total ${baseFrom}`;
+    const countSql = `SELECT COUNT(*) as total FROM products p WHERE 1=1${whereClauses}`;
     const dataSql = `
       SELECT p.id, p.name_ar, p.name_en, p.is_active, p.created_at, p.sort_order,
         (p.image_blob IS NOT NULL) AS has_image,
-        (SELECT COUNT(*) FROM product_price_lines ppl WHERE ppl.product_id = p.id) AS price_line_count
-      ${baseFrom}
+        COUNT(ppl.id) AS price_line_count
+      FROM products p
+      LEFT JOIN product_price_lines ppl ON ppl.product_id = p.id
+      WHERE 1=1${whereClauses}
+      GROUP BY p.id
       ${orderSql}
       LIMIT ? OFFSET ?`;
     const offset = (page - 1) * pageSize;
@@ -2136,9 +2146,13 @@ async function getProducts(filters = {}) {
 
   const [rows] = await pool.query(
     `SELECT p.id, p.name_ar, p.name_en, p.is_active, p.created_at, p.sort_order,
-      (p.image_blob IS NOT NULL) AS has_image,
-      (SELECT COUNT(*) FROM product_price_lines ppl WHERE ppl.product_id = p.id) AS price_line_count
-     ${baseFrom} ${orderSql}`,
+       (p.image_blob IS NOT NULL) AS has_image,
+       COUNT(ppl.id) AS price_line_count
+     FROM products p
+     LEFT JOIN product_price_lines ppl ON ppl.product_id = p.id
+     WHERE 1=1${whereClauses}
+     GROUP BY p.id
+     ${orderSql}`,
     params
   );
   return { products: rows, total: rows.length };
@@ -2620,14 +2634,37 @@ async function getSubscriptionsReport(filters = {}) {
     ORDER BY sp.id DESC
   `;
 
-  const [[summaryRows], [periods]] = await Promise.all([
+  // جلب إيصالات الاستهلاك بنفس فلاتر العميل والتاريخ
+  const crWhere = ['1=1'];
+  const crParams = [];
+  if (customerId) { crWhere.push('cr.customer_id = ?'); crParams.push(Number(customerId)); }
+  if (dfVal) { crWhere.push('cr.created_at >= ?'); crParams.push(dfVal); }
+  if (dtVal) { crWhere.push('cr.created_at <= ?'); crParams.push(dtVal); }
+  if (search && !customerId) {
+    crWhere.push('(c.customer_name LIKE ? OR c.phone LIKE ?)');
+    crParams.push(`%${search}%`, `%${search}%`);
+  }
+
+  const [[summaryRows], [periods], [consumptionReceipts]] = await Promise.all([
     pool.query(summarySql, params),
     pool.query(detailSql, params),
+    pool.query(
+      `SELECT cr.id, cr.receipt_seq, cr.created_at,
+              cr.amount_consumed, cr.balance_before, cr.balance_after,
+              cr.package_name,
+              c.customer_name, c.phone
+       FROM consumption_receipts cr
+       JOIN customers c ON c.id = cr.customer_id
+       WHERE ${crWhere.join(' AND ')}
+       ORDER BY cr.created_at DESC`,
+      crParams
+    ),
   ]);
 
   const s = summaryRows[0] || {};
   return {
     periods,
+    consumptionReceipts,
     summary: {
       totalPeriods:         Number(s.total_periods         || 0),
       activeCount:          Number(s.active_count          || 0),
@@ -3241,6 +3278,94 @@ async function deleteSubscription(subscriptionId) {
   await pool.query('DELETE FROM customer_subscriptions WHERE id = ?', [sid]);
 }
 
+async function getCustomerUnpaidInvoices(customerId) {
+  const cid = Number(customerId);
+  if (!cid) throw new Error('معرّف العميل مطلوب');
+  const [rows] = await pool.query(
+    `SELECT id, invoice_seq, total_amount, created_at
+     FROM orders
+     WHERE customer_id = ?
+       AND payment_status = 'pending'
+       AND COALESCE(is_refund, 0) = 0
+       AND COALESCE(is_consumption_only, 0) = 0
+       AND settled_by_subscription_period_id IS NULL
+     ORDER BY created_at ASC`,
+    [cid]
+  );
+  return rows;
+}
+
+async function settleInvoicesFromSubscription({ subscriptionPeriodId, invoiceIds, createdBy }) {
+  const periodId = Number(subscriptionPeriodId);
+  if (!periodId) throw new Error('معرّف فترة الاشتراك مطلوب');
+  if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) throw new Error('يجب اختيار فاتورة واحدة على الأقل');
+  const ids = invoiceIds.map(Number).filter(Boolean);
+  if (ids.length === 0) throw new Error('معرّفات الفواتير غير صالحة');
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[period]] = await conn.query(
+      'SELECT id, status, credit_remaining, customer_subscription_id FROM subscription_periods WHERE id = ? FOR UPDATE',
+      [periodId]
+    );
+    if (!period) throw new Error('فترة الاشتراك غير موجودة');
+    if (period.status !== 'active') throw new Error('فترة الاشتراك غير نشطة');
+
+    const [[subRow]] = await conn.query(
+      'SELECT customer_id FROM customer_subscriptions WHERE id = ?',
+      [period.customer_subscription_id]
+    );
+    if (!subRow) throw new Error('الاشتراك غير موجود');
+    const customerId = subRow.customer_id;
+
+    const [invoices] = await conn.query(
+      'SELECT id, total_amount, customer_id, payment_status, is_refund, is_consumption_only, settled_by_subscription_period_id FROM orders WHERE id IN (?)',
+      [ids]
+    );
+    if (invoices.length !== ids.length) throw new Error('بعض الفواتير المختارة غير موجودة');
+    for (const inv of invoices) {
+      if (inv.customer_id !== customerId) throw new Error('بعض الفواتير لا تخص هذا العميل');
+      if (inv.payment_status !== 'pending') throw new Error('بعض الفواتير المختارة غير مؤهلة للتسوية');
+      if (inv.is_refund == 1) throw new Error('بعض الفواتير المختارة غير مؤهلة للتسوية');
+      if (inv.is_consumption_only == 1) throw new Error('بعض الفواتير المختارة غير مؤهلة للتسوية');
+      if (inv.settled_by_subscription_period_id) throw new Error('بعض الفواتير مسوّاة مسبقاً');
+    }
+
+    const totalSettled = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const creditRemaining = Number(period.credit_remaining);
+    if (totalSettled > creditRemaining + 0.001) {
+      throw new Error(`إجمالي الفواتير المختارة (${totalSettled.toFixed(2)}) يتجاوز رصيد الاشتراك (${creditRemaining.toFixed(2)})`);
+    }
+
+    await conn.query(
+      'UPDATE orders SET payment_status = ?, payment_method = ?, paid_at = NOW(), paid_amount = total_amount, remaining_amount = 0, settled_by_subscription_period_id = ? WHERE id IN (?)',
+      ['paid', 'cash', periodId, ids]
+    );
+
+    const newBalance = Math.round((creditRemaining - totalSettled) * 100) / 100;
+    await conn.query(
+      'UPDATE subscription_periods SET credit_remaining = ? WHERE id = ?',
+      [newBalance, periodId]
+    );
+
+    await conn.query(
+      `INSERT INTO subscription_ledger (subscription_period_id, entry_type, amount, balance_after, notes, created_by, created_at)
+       VALUES (?, 'adjustment', ?, ?, ?, ?, NOW())`,
+      [periodId, -totalSettled, newBalance, `تسوية فواتير — عدد الفواتير: ${ids.length}`, createdBy || null]
+    );
+
+    await conn.commit();
+    return { success: true, settledCount: ids.length, totalSettled: totalSettled.toFixed(2), creditRemainingAfter: newBalance.toFixed(2) };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 async function getSubscriptionCustomerReportRows(customerId, subscriptionId) {
   await refreshExpiredSubscriptionPeriods();
   const cid = Number(customerId);
@@ -3308,7 +3433,25 @@ async function getSubscriptionCustomerReportRows(customerId, subscriptionId) {
     invoices = invRows;
   }
 
-  return { customer, subscriptions: subs, periods, ledger, invoices };
+  // جلب إيصالات الاستهلاك المرتبطة بالاشتراك
+  let consumptionReceipts = [];
+  if (subIds.length) {
+    const ph4 = subIds.map(() => '?').join(',');
+    const [crRows] = await pool.query(
+      `SELECT cr.id, cr.receipt_seq, cr.created_at,
+              cr.amount_consumed, cr.balance_before, cr.balance_after,
+              cr.package_name, cr.items_json,
+              c.customer_name, c.phone
+       FROM consumption_receipts cr
+       LEFT JOIN customers c ON c.id = cr.customer_id
+       WHERE cr.subscription_id IN (${ph4})
+       ORDER BY cr.created_at ASC`,
+      subIds
+    );
+    consumptionReceipts = crRows;
+  }
+
+  return { customer, subscriptions: subs, periods, ledger, invoices, consumptionReceipts };
 }
 
 async function query(sql, params = []) {
@@ -3458,6 +3601,9 @@ async function migrateAppSettings() {
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN thermal_margin_right DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER thermal_margin_left"
   ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN show_email_in_invoice TINYINT(1) NOT NULL DEFAULT 1 AFTER thermal_margin_right"
+  ).catch(() => {});
   const [[cnt]] = await pool.query('SELECT COUNT(*) AS c FROM app_settings WHERE id = 1');
   if (Number(cnt.c) === 0) {
     await pool.query(
@@ -3512,6 +3658,7 @@ async function getAppSettings() {
             day_reset_time,
             thermal_margin_left,
             thermal_margin_right,
+            show_email_in_invoice,
             updated_at
      FROM app_settings WHERE id = 1`
   );
@@ -3551,6 +3698,7 @@ async function getAppSettings() {
     printCopies: Number.isFinite(Number(row.print_copies)) && Number(row.print_copies) >= 0 ? Number(row.print_copies) : 1,
     thermalMarginLeft: Number.isFinite(Number(row.thermal_margin_left)) ? Number(row.thermal_margin_left) : 0,
     thermalMarginRight: Number.isFinite(Number(row.thermal_margin_right)) ? Number(row.thermal_margin_right) : 0,
+    showEmailInInvoice: row.show_email_in_invoice !== 0,
     enabledPaymentMethods: (() => {
       try {
         const parsed = typeof row.enabled_payment_methods === 'string'
@@ -3701,6 +3849,10 @@ async function saveAppSettings(data) {
     ? (data.showBarcodeInInvoice ? 1 : 0)
     : (existing.show_barcode_in_invoice != null ? existing.show_barcode_in_invoice : 1);
 
+  const showEmailInInvoice = data.showEmailInInvoice !== undefined
+    ? (data.showEmailInInvoice ? 1 : 0)
+    : (existing.show_email_in_invoice != null ? existing.show_email_in_invoice : 1);
+
   const reportEmailEnabled = data.reportEmailEnabled !== undefined
     ? (data.reportEmailEnabled === true ? 1 : 0)
     : (existing.report_email_enabled || 0);
@@ -3763,7 +3915,7 @@ async function saveAppSettings(data) {
         building_number = ?, street_name_ar = ?, district_ar = ?, city_ar = ?, postal_code = ?, additional_number = ?,
         price_display_mode = ?, invoice_paper_type = ?, logo_width = ?, logo_height = ?, print_copies = ?, thermal_margin_left = ?, thermal_margin_right = ?,
         enabled_payment_methods = CAST(? AS JSON), default_payment_method = ?, require_hanger = ?, require_customer_phone = ?, allow_subscription_debt = ?,
-        barcode_auto_action = ?, show_barcode_in_invoice = ?,
+        barcode_auto_action = ?, show_barcode_in_invoice = ?, show_email_in_invoice = ?,
         report_email_enabled = ?, report_email_from = ?, report_email_app_password_enc = ?, report_email_send_time = ?,
         zatca_enabled = ?,
         whatsapp_send_on_print = ?, whatsapp_send_on_clean = ?, whatsapp_send_on_deliver = ?,
@@ -3803,6 +3955,7 @@ async function saveAppSettings(data) {
         allowSubscriptionDebt,
         barcodeAutoAction,
         showBarcodeInInvoice,
+        showEmailInInvoice,
         reportEmailEnabled,
         reportEmailFrom || null,
         reportEmailAppPasswordEnc,
@@ -4646,6 +4799,7 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
     const pdm = priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive';
     const orderType = arguments[0].orderType || 'pos';
     const subscriptionPeriodId = arguments[0].subscriptionPeriodId || null;
+    const skipSubscription = arguments[0].skipSubscription === true;
 
     const numTotal = Number(totalAmount) || 0;
     let consumptionAmount = 0;
@@ -4654,7 +4808,7 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
     let pendingConsumption = null;
     const isSubscriptionInvoice = orderType === 'subscription_new' || orderType === 'subscription_renewal';
 
-    if (customerId && !isSubscriptionInvoice && numTotal > 0) {
+    if (customerId && !isSubscriptionInvoice && !skipSubscription && numTotal > 0) {
       const [[activeSub]] = await conn.query(`
         SELECT cs.id AS sub_id, sp.id AS period_id, sp.credit_remaining,
                pp.name_ar AS package_name, cs.subscription_ref
@@ -4671,8 +4825,17 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
 
         if (allowDebt) {
           consumptionAmount = numTotal;
-        } else if (creditRemaining > 0) {
-          consumptionAmount = Math.min(numTotal, creditRemaining);
+        } else if (creditRemaining >= numTotal) {
+          consumptionAmount = numTotal;
+        }
+        // إذا الرصيد لا يكفي الطلب كاملاً ولا مديونية → لا خصم ولا إيصال استهلاك
+
+        if (consumptionAmount === 0 && !allowDebt) {
+          const subErr = new Error('رصيد الاشتراك غير كافٍ لتغطية هذا الطلب');
+          subErr.code = 'INSUFFICIENT_SUBSCRIPTION_CREDIT';
+          subErr.creditRemaining = creditRemaining;
+          subErr.orderTotal = numTotal;
+          throw subErr;
         }
 
         consumptionAmount = Math.round(consumptionAmount * 100) / 100;
@@ -7077,6 +7240,8 @@ async function migrateLoyalty() {
   await pool.query('ALTER TABLE orders ADD COLUMN loyalty_points_earned INT NOT NULL DEFAULT 0').catch(() => {});
   await pool.query('ALTER TABLE orders ADD COLUMN loyalty_points_redeemed INT NOT NULL DEFAULT 0').catch(() => {});
   await pool.query('ALTER TABLE orders ADD COLUMN loyalty_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0').catch(() => {});
+  await pool.query('ALTER TABLE orders ADD COLUMN settled_by_subscription_period_id INT DEFAULT NULL').catch(() => {});
+  await pool.query('CREATE INDEX idx_orders_settled_by_sub ON orders(settled_by_subscription_period_id)').catch(() => {});
 }
 
 async function getLoyaltySettings() {
@@ -7546,6 +7711,7 @@ module.exports = {
   getCustomerSubscriptionsList, getSubscriptionDetail, getSubscriptionPeriods,
   getSubscriptionLedgerBySubscription, createSubscription, renewSubscription, stopSubscription,
   resumeSubscription, updateActiveSubscriptionPeriod, deleteSubscription,
+  getCustomerUnpaidInvoices, settleInvoicesFromSubscription,
   getSubscriptionReceiptData, getSubscriptionsExportRows, getSubscriptionCustomerReportRows,
   get pool() { return pool; },
   createSubscriptionInvoice, getSubscriptionInvoice,
@@ -7599,19 +7765,21 @@ module.exports = {
 
 // ── System Restore ───────────────────────────────────────────────────────────
 
-async function systemRestore({ invoices, customers, services, expenses, garments } = {}) {
-  const invoiceTables  = ['credit_note_items','credit_notes','refunds','subscription_invoices','order_items','invoice_payments','orders'];
-  const customerTables = ['loyalty_transactions','consumption_receipts','subscription_ledger','subscription_periods','customer_subscriptions','customers'];
-  const serviceTables  = ['product_price_lines','products','offers','prepaid_packages','laundry_services'];
-  const expenseTables  = ['expenses'];
-  const garmentTables  = ['hangers'];
+async function systemRestore({ invoices, subscriptions, customers, services, expenses, garments } = {}) {
+  const invoiceTables      = ['credit_note_items','credit_notes','refunds','subscription_invoices','order_items','invoice_payments','orders'];
+  const subscriptionTables = ['loyalty_transactions','consumption_receipts','subscription_ledger','subscription_periods','customer_subscriptions'];
+  const customerTables     = ['customers'];
+  const serviceTables      = ['product_price_lines','products','offers','prepaid_packages','laundry_services'];
+  const expenseTables      = ['expenses'];
+  const garmentTables      = ['hangers'];
 
   const selected = [];
-  if (invoices)  invoiceTables.forEach(t  => selected.push(t));
-  if (customers) customerTables.forEach(t => selected.push(t));
-  if (services)  serviceTables.forEach(t  => selected.push(t));
-  if (expenses)  expenseTables.forEach(t  => selected.push(t));
-  if (garments)  garmentTables.forEach(t  => selected.push(t));
+  if (invoices)      invoiceTables.forEach(t      => selected.push(t));
+  if (subscriptions) subscriptionTables.forEach(t => selected.push(t));
+  if (customers)     customerTables.forEach(t     => selected.push(t));
+  if (services)      serviceTables.forEach(t      => selected.push(t));
+  if (expenses)      expenseTables.forEach(t      => selected.push(t));
+  if (garments)      garmentTables.forEach(t      => selected.push(t));
 
   if (selected.length === 0) return { success: true, deleted: [] };
 
@@ -8253,6 +8421,19 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
     ORDER BY ip.payment_date DESC
   `, partialParams);
 
+  const crDateWhere = dateWhere.replace(/\bcreated_at\b/g, 'cr.created_at');
+  const crParams = [...params];
+  if (userId) crParams.push(userId);
+  const [consumptionReceipts] = await pool.query(`
+    SELECT cr.id, cr.receipt_seq, cr.order_id, cr.amount_consumed AS total_amount,
+           cr.package_name, cr.balance_before, cr.balance_after, cr.created_at,
+           c.customer_name, c.phone
+    FROM consumption_receipts cr
+    LEFT JOIN customers c ON c.id = cr.customer_id
+    WHERE 1=1${crDateWhere}${userId ? ' AND cr.created_by = ?' : ''}
+    ORDER BY cr.id DESC
+  `, crParams);
+
   const salesBeforeTax  = Number(ordersSummary.sales_before_tax);
   const salesTax        = Number(ordersSummary.sales_tax);
   const salesAfterTax   = Number(ordersSummary.sales_after_tax);
@@ -8342,6 +8523,7 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
     creditNotes,
     subscriptions,
     deferredPayments,
+    consumptionReceipts,
     invoiceCount: Number(ordersSummary.invoice_count),
   };
 }

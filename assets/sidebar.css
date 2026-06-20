@@ -1,0 +1,314 @@
+/* ═══════════════════════════════════════════════════
+   Global Sidebar Navigation — sidebar.css
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  --gsb-w: 248px;
+  --gsb-w-col: 64px;
+  --gsb-accent: #4b5563;
+  --gsb-accent2: #6b7280;
+  --gsb-grad: linear-gradient(135deg, #4b5563, #6b7280);
+  --gsb-surf: #ffffff;
+  --gsb-bg: #f1f5f9;
+  --gsb-bdr: #e2e8f0;
+  --gsb-bdr2: #f1f5f9;
+  --gsb-tx1: #1e293b;
+  --gsb-tx2: #475569;
+  --gsb-tx3: #64748b;
+  --gsb-tx4: #94a3b8;
+  --gsb-radius: 12px;
+  --gsb-ease: cubic-bezier(.4, 0, .2, 1);
+  --gsb-dur: .26s;
+}
+
+/* ── LAYOUT WRAPPER ──────────────────────────────── */
+html, body {
+  height: 100%;
+  max-height: 100dvh;
+}
+
+.gsb-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100dvh;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  flex: 1 1 0%;
+}
+
+/* Content area pushed by sidebar */
+.gsb-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+#globalSidebar {
+  width: var(--gsb-w);
+  flex-shrink: 0;
+  background: var(--gsb-surf);
+  border-left: 1px solid var(--gsb-bdr);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--gsb-dur) var(--gsb-ease);
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  box-shadow: inset -1px 0 0 var(--gsb-bdr2);
+}
+
+html[dir="ltr"] #globalSidebar {
+  border-left: none;
+  border-right: 1px solid var(--gsb-bdr);
+}
+
+#globalSidebar.gsb-collapsed {
+  width: var(--gsb-w-col);
+}
+
+/* ── SIDEBAR HEADER ──────────────────────────────── */
+.gsb-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gsb-bdr);
+  min-height: 46px;
+  flex-shrink: 0;
+}
+
+.gsb-label {
+  font-size: 10px;
+  color: var(--gsb-tx4);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--gsb-dur) var(--gsb-ease), max-width var(--gsb-dur) var(--gsb-ease);
+  max-width: 200px;
+}
+
+#globalSidebar.gsb-collapsed .gsb-label {
+  opacity: 0;
+  max-width: 0;
+}
+
+.gsb-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--gsb-bdr);
+  background: var(--gsb-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+  color: var(--gsb-tx3);
+}
+
+.gsb-toggle:hover {
+  background: var(--gsb-bdr);
+}
+
+.gsb-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--gsb-dur) var(--gsb-ease);
+}
+
+#globalSidebar.gsb-collapsed .gsb-toggle svg {
+  transform: rotate(180deg);
+}
+
+html[dir="ltr"] #globalSidebar .gsb-toggle svg {
+  transform: rotate(180deg);
+}
+
+html[dir="ltr"] #globalSidebar.gsb-collapsed .gsb-toggle svg {
+  transform: rotate(0deg);
+}
+
+/* ── NAV AREA ────────────────────────────────────── */
+.gsb-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gsb-nav::-webkit-scrollbar { width: 0; }
+
+.gsb-sec {
+  font-size: 9px;
+  color: var(--gsb-tx4);
+  letter-spacing: .1em;
+  padding: 10px 8px 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--gsb-dur) var(--gsb-ease),
+              height var(--gsb-dur) var(--gsb-ease),
+              padding var(--gsb-dur) var(--gsb-ease);
+}
+
+#globalSidebar.gsb-collapsed .gsb-sec {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+}
+
+/* ── NAV ITEM ────────────────────────────────────── */
+.gsb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 8px;
+  border: none;
+  background: transparent;
+  color: var(--gsb-tx3);
+  font-size: 13px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  text-align: right;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background .15s, color .15s;
+  position: relative;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+html[dir="ltr"] .gsb-item {
+  text-align: left;
+}
+
+.gsb-item:hover {
+  background: #f8fafc;
+  color: var(--gsb-tx2);
+}
+
+.gsb-item.active {
+  background: linear-gradient(135deg, rgba(75, 85, 99, .11), rgba(107, 114, 128, .05));
+  color: var(--gsb-accent);
+}
+
+.gsb-item.active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px 0 0 2px;
+  background: var(--gsb-grad);
+}
+
+html[dir="ltr"] .gsb-item.active::after {
+  right: auto;
+  left: 0;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── ITEM ICON ───────────────────────────────────── */
+.gsb-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(107, 114, 128, .08);
+  transition: background .15s;
+}
+
+.gsb-item.active .gsb-ico {
+  background: rgba(75, 85, 99, .14);
+}
+
+.gsb-ico svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* ── ITEM LABEL ──────────────────────────────────── */
+.gsb-lbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity var(--gsb-dur) var(--gsb-ease), max-width var(--gsb-dur) var(--gsb-ease);
+  max-width: 200px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+}
+
+#globalSidebar.gsb-collapsed .gsb-lbl {
+  opacity: 0;
+  max-width: 0;
+}
+
+/* ── TOOLTIP (when collapsed) ────────────────────── */
+#globalSidebar.gsb-collapsed .gsb-item {
+  position: relative;
+}
+
+#globalSidebar.gsb-collapsed .gsb-item:hover::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e293b;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+}
+
+html[dir="ltr"] #globalSidebar.gsb-collapsed .gsb-item:hover::before {
+  right: auto;
+  left: calc(100% + 8px);
+}
+
+/* ── MOBILE: HIDE SIDEBAR ────────────────────────── */
+@media (max-width: 767px) {
+  #globalSidebar {
+    display: none !important;
+  }
+}
+
+/* ── PRINT: HIDE SIDEBAR & RESET LAYOUT ─────────── */
+@media print {
+  #globalSidebar {
+    display: none !important;
+  }
+  .gsb-layout {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .gsb-content {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

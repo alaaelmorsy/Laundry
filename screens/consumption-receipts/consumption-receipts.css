@@ -514,6 +514,8 @@ body {
 ══════════════════════════════ */
 @page { size: 80mm auto; margin: 0; }
 @media print {
+  html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; width: 80mm !important; margin: 0 auto !important; padding: 0 !important; }
   body > *:not(#invPrintZone) { display: none !important; }
   body > #invPrintZone, #invPrintZone {

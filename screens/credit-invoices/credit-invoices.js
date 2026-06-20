@@ -255,8 +255,15 @@
 
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
-      else logoEl.style.display = 'none';
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoEl.style.display = '';
+      } else logoEl.style.display = 'none';
     }
 
     a4t('a4mOrderNum', data.orderNum);
@@ -415,8 +422,15 @@
 
     const logoEl = document.getElementById('cnA4mLogo');
     if (logoEl) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
-      else logoEl.style.display = 'none';
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoEl.style.display = '';
+      } else logoEl.style.display = 'none';
     }
 
     a4t('NoteNum', data.orderNum);
@@ -836,7 +850,7 @@
     if (s.postalCode)     addressParts.push(s.postalCode);
     els.invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || '');
     els.invShopPhone.textContent  = s.phone ? 'هاتف: ' + s.phone : '';
-    els.invShopEmail.textContent  = s.email || '';
+    els.invShopEmail.textContent  = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
     els.invVatNumber.textContent  = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     /* Custom fields */
@@ -860,8 +874,15 @@
     if (s.commercialRegister) { els.invCR.textContent = 'السجل التجاري: ' + s.commercialRegister; els.invCR.style.display = ''; }
     else els.invCR.style.display = 'none';
 
-    if (s.logoDataUrl) { els.invLogo.src = s.logoDataUrl; els.invLogoWrap.style.display = ''; }
-    else els.invLogoWrap.style.display = 'none';
+    if (s.logoDataUrl) {
+      els.invLogo.src = s.logoDataUrl;
+      els.invLogo.style.width = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.height = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.objectFit = 'contain';
+      els.invLogoWrap.style.display = '';
+    } else els.invLogoWrap.style.display = 'none';
 
     els.invOrderNum.textContent = displaySeq ? String(displaySeq) : (order.order_number || '—');
     els.invDate.textContent     = formatDate(order.created_at);
@@ -1009,8 +1030,9 @@
     state.lastA4Data = {
       shopNameAr: s.laundryNameAr || '', shopNameEn: s.laundryNameEn || '',
       shopAddressAr: addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
-      shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: s.email || '',
+      shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       invoiceNotes: s.invoiceNotes || '', logoDataUrl: s.logoDataUrl || '',
+      logoWidth: s.logoWidth || 180, logoHeight: s.logoHeight || 70,
       orderNum: displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date: formatDate(order.created_at), payment: paymentLabel(order.payment_method),
       custName: order.customer_name || '', custPhone: order.phone || '',
@@ -1084,7 +1106,7 @@
     if (s.postalCode)     addressParts.push(s.postalCode);
     els.cnShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || '');
     els.cnShopPhone.textContent   = s.phone ? 'هاتف: ' + s.phone : '';
-    els.cnShopEmail.textContent   = s.email || '';
+    els.cnShopEmail.textContent   = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
     els.cnVatNumber.textContent   = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     /* Custom fields (credit note) */
@@ -1108,8 +1130,15 @@
     if (s.commercialRegister) { els.cnCR.textContent = 'السجل التجاري: ' + s.commercialRegister; els.cnCR.style.display = ''; }
     else els.cnCR.style.display = 'none';
 
-    if (s.logoDataUrl) { els.cnLogo.src = s.logoDataUrl; els.cnLogoWrap.style.display = ''; }
-    else els.cnLogoWrap.style.display = 'none';
+    if (s.logoDataUrl) {
+      els.cnLogo.src = s.logoDataUrl;
+      els.cnLogo.style.width = (s.logoWidth || 180) + 'px';
+      els.cnLogo.style.height = (s.logoHeight || 70) + 'px';
+      els.cnLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      els.cnLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      els.cnLogo.style.objectFit = 'contain';
+      els.cnLogoWrap.style.display = '';
+    } else els.cnLogoWrap.style.display = 'none';
 
     els.cnNoteNum.textContent = cn.credit_note_number || '';
     els.cnOrigInv.textContent = cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || '—');
@@ -1266,8 +1295,9 @@
     state.lastA4Data = {
       shopNameAr: s.laundryNameAr || '', shopNameEn: s.laundryNameEn || '',
       shopAddressAr: addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
-      shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: s.email || '',
+      shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       invoiceNotes: s.invoiceNotes || '', logoDataUrl: s.logoDataUrl || '',
+      logoWidth: s.logoWidth || 180, logoHeight: s.logoHeight || 70,
       orderNum: cn.credit_note_number || '',
       originalInvoiceSeq: cn.original_invoice_seq ? String(cn.original_invoice_seq) : (cn.original_order_number || ''),
       createdBy: cn.cashier_name || cn.created_by || (order && (order.cashier_name || order.created_by)) || '',

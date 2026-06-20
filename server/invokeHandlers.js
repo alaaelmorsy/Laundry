@@ -144,6 +144,7 @@ async function invoke(method, payload, reqUser) {
         allowSubscriptionDebt: data.allowSubscriptionDebt,
         barcodeAutoAction: data.barcodeAutoAction,
         showBarcodeInInvoice: data.showBarcodeInInvoice,
+        showEmailInInvoice: data.showEmailInInvoice,
         reportEmailEnabled: data.reportEmailEnabled,
         reportEmailFrom: data.reportEmailFrom,
         reportEmailSendTime: data.reportEmailSendTime,
@@ -215,8 +216,10 @@ async function invoke(method, payload, reqUser) {
         const p2 = (x) => String(x).padStart(2, '0');
         const dateKey = `${today.getFullYear()}-${p2(today.getMonth() + 1)}-${p2(today.getDate())}`;
         const filters = { dateFrom: dateKey, dateTo: dateKey };
-        const pdf = await exportsService.exportReport('pdf', filters);
-        const branding = await loadAppBrandingForReceipts().catch(() => ({}));
+        const [pdf, branding] = await Promise.all([
+          exportsService.exportReport('pdf', filters),
+          loadAppBrandingForReceipts().catch(() => ({})),
+        ]);
         const sentAtLabel = `${p2(today.getDate())}-${p2(today.getMonth() + 1)}-${today.getFullYear()} ${p2(today.getHours())}:${p2(today.getMinutes())}`;
         const html = buildProfessionalEmailHtml({ branding, reportDateLabel: dateKey, sentAtLabel });
         const subject = `التقرير اليومي — ${dateKey} — ${branding.laundryNameAr || branding.laundryNameEn || 'نظام المغسلة'} (تجريبي)`;
@@ -772,6 +775,24 @@ async function invoke(method, payload, reqUser) {
       }
     }
 
+    case 'getCustomerUnpaidInvoices': {
+      try {
+        const invoices = await db.getCustomerUnpaidInvoices(payload.customerId);
+        return { success: true, invoices };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'settleInvoicesFromSubscription': {
+      try {
+        const result = await db.settleInvoicesFromSubscription(payload);
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'stopSubscription': {
       try {
         await db.stopSubscription(payload.subscriptionId);
@@ -918,7 +939,11 @@ async function invoke(method, payload, reqUser) {
           invoiceAmount: result.invoiceAmount || 0
         };
       } catch (err) {
-        return { success: false, message: err.message };
+        const errRes = { success: false, message: err.message };
+        if (err.code) errRes.code = err.code;
+        if (err.creditRemaining !== undefined) errRes.creditRemaining = err.creditRemaining;
+        if (err.orderTotal !== undefined) errRes.orderTotal = err.orderTotal;
+        return errRes;
       }
     }
 
@@ -1549,7 +1574,7 @@ async function invoke(method, payload, reqUser) {
           shopAddressAr: settings.locationAr || '',
           shopAddressEn: settings.locationEn || '',
           shopPhone: settings.phone || '',
-          shopEmail: settings.email || '',
+          shopEmail: (settings.showEmailInInvoice !== false) ? (settings.email || '') : '',
           vatNumber: settings.vatNumber || '',
           commercialRegister: settings.commercialRegister || '',
           logoDataUrl,

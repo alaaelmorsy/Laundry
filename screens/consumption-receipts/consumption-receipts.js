@@ -190,6 +190,11 @@
     const logo = document.getElementById('crLogo');
     if (s.logoDataUrl && logo) {
       logo.src = s.logoDataUrl;
+      logo.style.width = (s.logoWidth || 180) + 'px';
+      logo.style.height = (s.logoHeight || 70) + 'px';
+      logo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      logo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      logo.style.objectFit = 'contain';
       logoWrap.style.display = '';
     } else if (logoWrap) logoWrap.style.display = 'none';
 

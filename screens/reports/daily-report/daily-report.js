@@ -491,7 +491,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (s.postalCode)     addressParts.push(s.postalCode);
     if (invShopAddress) invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || '');
     if (invShopPhone) invShopPhone.textContent = s.phone ? I18N.t('all-invoices-phone') + ': ' + s.phone : '';
-    if (invShopEmail) invShopEmail.textContent = s.email || '';
+    if (invShopEmail) invShopEmail.textContent = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
     if (invVatNumber) invVatNumber.textContent = s.vatNumber ? 'الرقم الضريبي: ' + s.vatNumber : '';
 
     /* Custom fields */
@@ -521,6 +521,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (s.logoDataUrl && invLogoWrap && invLogo) {
       invLogo.src = s.logoDataUrl;
+      invLogo.style.width     = (s.logoWidth  || 180) + 'px';
+      invLogo.style.height    = (s.logoHeight || 70)  + 'px';
+      invLogo.style.maxWidth  = (s.logoWidth  || 180) + 'px';
+      invLogo.style.maxHeight = (s.logoHeight || 70)  + 'px';
+      invLogo.style.objectFit = 'contain';
       invLogoWrap.style.display = '';
     } else if (invLogoWrap) {
       invLogoWrap.style.display = 'none';
@@ -779,7 +784,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       shopAddressAr:      addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
       shopAddressEn:      s.locationEn || '',
       shopPhone:          s.phone || '',
-      shopEmail:          s.email || '',
+      shopEmail:          (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       invoiceNotes:       s.invoiceNotes || '',
       logoDataUrl:        s.logoDataUrl || '',
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
@@ -953,8 +958,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         else g('crShopCrRow').style.display = 'none';
       }
       const logoWrap = g('crLogoWrap'), logo = g('crLogo');
-      if (s.logoDataUrl && logo) { logo.src = s.logoDataUrl; logoWrap.style.display = ''; }
-      else if (logoWrap) logoWrap.style.display = 'none';
+      if (s.logoDataUrl && logo) {
+        logo.src = s.logoDataUrl;
+        logo.style.width    = (s.logoWidth  || 180) + 'px';
+        logo.style.height   = (s.logoHeight || 70)  + 'px';
+        logo.style.maxWidth  = (s.logoWidth  || 180) + 'px';
+        logo.style.maxHeight = (s.logoHeight || 70)  + 'px';
+        logo.style.objectFit = 'contain';
+        logoWrap.style.display = '';
+      } else if (logoWrap) logoWrap.style.display = 'none';
 
       if (g('crReceiptNum')) g('crReceiptNum').textContent = 'C-' + (Number(r.receipt_seq) || r.id);
       if (g('crDate'))       g('crDate').textContent       = crFmtDT(r.created_at);
@@ -1000,7 +1012,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       } else { if (crBarcodeWrap) crBarcodeWrap.style.display = 'none'; }
 
       document.getElementById('crViewModal').style.display = 'flex';
-      document.body.classList.add('printing-invoice');
+      document.body.classList.add('printing-cr');
       const db = document.querySelector('#crViewModal .inv-dialog-body');
       if (db) db.scrollTop = 0;
     } catch (e) { showToast('خطأ في تحميل الإيصال', 'error'); }
@@ -1009,7 +1021,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.closeConsumptionReceiptModal = function() {
     const m = document.getElementById('crViewModal');
     if (m) m.style.display = 'none';
-    document.body.classList.remove('printing-invoice');
+    document.body.classList.remove('printing-cr');
   };
 
   function buildSubscriptionsTable(subscriptions) {
@@ -1120,7 +1132,22 @@ window.addEventListener('DOMContentLoaded', async () => {
       const crViewModal = document.getElementById('crViewModal');
       if (btnCrClose) btnCrClose.addEventListener('click', closeConsumptionReceiptModal);
       if (crViewModal) crViewModal.addEventListener('click', (e) => { if (e.target === crViewModal) closeConsumptionReceiptModal(); });
-      if (btnCrPrint) btnCrPrint.addEventListener('click', () => window.print());
+      if (btnCrPrint) btnCrPrint.addEventListener('click', () => {
+        const s = _reportAppSettings || {};
+        const mLeft  = parseFloat(s.thermalMarginLeft  || 0) || 0;
+        const mRight = parseFloat(s.thermalMarginRight || 0) || 0;
+        const shift  = mLeft - mRight;
+        const styleEl = document.createElement('style');
+        styleEl.textContent = '@page { size: 80mm auto; margin: 0; }' + (shift !== 0 ? ' @media print { body.printing-cr .inv-paper { transform: translateX(' + shift + 'mm) !important; } }' : '');
+        document.head.appendChild(styleEl);
+        function afterPrint() {
+          window.removeEventListener('afterprint', afterPrint);
+          if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+        }
+        window.addEventListener('afterprint', afterPrint);
+        window.print();
+        setTimeout(afterPrint, 2500);
+      });
       const btnCrPdf = document.getElementById('btnCrPdf');
       if (btnCrPdf) btnCrPdf.addEventListener('click', async () => {
         const origHTML = btnCrPdf.innerHTML;
@@ -1262,7 +1289,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (el('cnShopAddress')) el('cnShopAddress').textContent = addressParts.join('، ') || s.locationAr || '';
     if (el('cnShopPhone'))   el('cnShopPhone').textContent   = s.phone ? (I18N.t('all-invoices-phone') || 'هاتف') + ': ' + s.phone : '';
     if (el('cnVatNumber'))   el('cnVatNumber').textContent   = s.vatNumber ? (I18N.t('all-invoices-vat') || 'الرقم الضريبي') + ': ' + s.vatNumber : '';
-    if (el('cnShopEmail'))   el('cnShopEmail').textContent   = s.email || '';
+    if (el('cnShopEmail'))   el('cnShopEmail').textContent   = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
 
     const cnLogoWrap = el('cnLogoWrap');
     const cnLogo = el('cnLogo');
@@ -1518,13 +1545,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     const copies = Number(_reportAppSettings && _reportAppSettings.printCopies);
     const intCopies = (!Number.isFinite(copies) || copies < 1) ? 1 : (copies > 20 ? 20 : Math.floor(copies));
     if (intCopies === 0) return;
-    let styleEl = null;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'a4PageStyle';
     if (paperType === 'a4') {
-      styleEl = document.createElement('style');
-      styleEl.id = 'a4PageStyle';
       styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
-      document.head.appendChild(styleEl);
+    } else {
+      const mLeft = parseFloat((_reportAppSettings && _reportAppSettings.thermalMarginLeft) || 0) || 0;
+      const mRight = parseFloat((_reportAppSettings && _reportAppSettings.thermalMarginRight) || 0) || 0;
+      const shift = mLeft - mRight;
+      styleEl.textContent = `@page { size: 80mm auto; margin: 0; } @media print { .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;${shift !== 0 ? ` transform: translateX(${shift}mm) !important;` : ''} } }`;
     }
+    document.head.appendChild(styleEl);
     let currentCopy = 0;
     let cleaned = false;
     function cleanupPrintArtifacts() {

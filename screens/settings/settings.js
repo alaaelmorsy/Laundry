@@ -117,6 +117,7 @@ window.addEventListener('DOMContentLoaded', () => {
     barcodeAutoClean: document.getElementById('barcodeAutoClean'),
     barcodeAutoDeliver: document.getElementById('barcodeAutoDeliver'),
     showBarcodeInInvoice: document.getElementById('showBarcodeInInvoice'),
+    showEmailInInvoice: document.getElementById('showEmailInInvoice'),
     zatcaEnabled,
     whatsappSendOnPrint:        document.getElementById('whatsappSendOnPrint'),
     whatsappSendOnClean:        document.getElementById('whatsappSendOnClean'),
@@ -224,7 +225,17 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function openReportEmailModal() {
-    if (reportEmailModal) reportEmailModal.style.display = 'flex';
+    if (!reportEmailModal) { alert('DEBUG: modal element not found!'); return; }
+    document.body.appendChild(reportEmailModal);
+    Object.assign(reportEmailModal.style, {
+      display: 'flex', position: 'fixed',
+      top: '0', left: '0', right: '0', bottom: '0',
+      width: '100%', height: '100%',
+      zIndex: '99999',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '16px', boxSizing: 'border-box',
+      background: 'rgba(0,0,0,0.5)',
+    });
   }
 
   function closeReportEmailModal() {
@@ -270,6 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (fields.requireCustomerPhone) fields.requireCustomerPhone.checked = s.requireCustomerPhone === true;
     if (fields.allowSubscriptionDebt) fields.allowSubscriptionDebt.checked = s.allowSubscriptionDebt === true;
     if (fields.showBarcodeInInvoice) fields.showBarcodeInInvoice.checked = s.showBarcodeInInvoice !== false;
+    if (fields.showEmailInInvoice) fields.showEmailInInvoice.checked = s.showEmailInInvoice !== false;
     if (fields.zatcaEnabled) fields.zatcaEnabled.checked = s.zatcaEnabled === true;
     if (fields.whatsappSendOnPrint)        fields.whatsappSendOnPrint.checked        = s.whatsappSendOnPrint === true;
     if (fields.whatsappSendOnClean)        fields.whatsappSendOnClean.checked        = s.whatsappSendOnClean === true;
@@ -401,6 +413,7 @@ window.addEventListener('DOMContentLoaded', () => {
       requireCustomerPhone: fields.requireCustomerPhone ? fields.requireCustomerPhone.checked : false,
       allowSubscriptionDebt: fields.allowSubscriptionDebt ? fields.allowSubscriptionDebt.checked : false,
       showBarcodeInInvoice: fields.showBarcodeInInvoice ? fields.showBarcodeInInvoice.checked : true,
+      showEmailInInvoice: fields.showEmailInInvoice ? fields.showEmailInInvoice.checked : true,
       barcodeAutoAction: (() => {
         const parts = [];
         if (fields.barcodeAutoPay && fields.barcodeAutoPay.checked) parts.push('pay');
@@ -605,7 +618,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function updateLoyaltyLabel() {
     if (!loyaltyEnabledLabel) return;
-    loyaltyEnabledLabel.textContent = (loyaltyEnabledCb && loyaltyEnabledCb.checked) ? 'مفعّل' : 'معطّل';
+    loyaltyEnabledLabel.textContent = (loyaltyEnabledCb && loyaltyEnabledCb.checked)
+      ? window.I18N.t('settings-loyalty-enabled')
+      : window.I18N.t('settings-loyalty-disabled');
   }
 
   if (loyaltyEnabledCb) {
@@ -648,12 +663,12 @@ window.addEventListener('DOMContentLoaded', () => {
           loyaltyExpiryDate: expDate
         });
         if (!res || !res.success) {
-          showToast(res?.message || 'خطأ في حفظ إعدادات النقاط', 'error');
+          showToast(res?.message || window.I18N.t('settings-loyalty-err-save'), 'error');
           return;
         }
-        showToast('تم حفظ إعدادات نقاط الولاء', 'success');
+        showToast(window.I18N.t('settings-loyalty-success-save'), 'success');
       } catch (e) {
-        showToast(e.message || 'خطأ في حفظ إعدادات النقاط', 'error');
+        showToast(e.message || window.I18N.t('settings-loyalty-err-save'), 'error');
       } finally {
         btnSaveLoyalty.disabled = false;
       }
@@ -695,9 +710,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const fmt = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${timeLabel(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`)}`;
     closingPreview.style.display = 'block';
     closingPreview.innerHTML = `
-      <strong>📅 فترة التقرير اليومي الحالية:</strong><br/>
-      من: ${fmt(periodStart)}<br/>
-      إلى: ${fmt(periodEnd)}
+      <strong>📅 ${window.I18N.t('settings-closing-preview-title')}</strong><br/>
+      ${window.I18N.t('settings-closing-preview-from')}: ${fmt(periodStart)}<br/>
+      ${window.I18N.t('settings-closing-preview-to')}: ${fmt(periodEnd)}
     `;
   }
 
@@ -730,7 +745,7 @@ window.addEventListener('DOMContentLoaded', () => {
           showToast(res?.message || 'خطأ في الحفظ', 'error');
           return;
         }
-        showToast('تم حفظ وقت الإقفال', 'success');
+        showToast(window.I18N.t('settings-closing-success-save'), 'success');
       } catch (e) {
         showToast(e.message || 'خطأ في الحفظ', 'error');
       } finally {
@@ -755,12 +770,14 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnCloseSystemRestoreModal = document.getElementById('btnCloseSystemRestoreModal');
   const btnCancelSystemRestore     = document.getElementById('btnCancelSystemRestore');
   const btnConfirmSystemRestore    = document.getElementById('btnConfirmSystemRestore');
-  const rcInvoices  = document.getElementById('rcInvoices');
-  const rcCustomers = document.getElementById('rcCustomers');
-  const rcServices  = document.getElementById('rcServices');
-  const rcExpenses  = document.getElementById('rcExpenses');
-  const rcGarments  = document.getElementById('rcGarments');
-  const rcCheckboxes = [rcInvoices, rcCustomers, rcServices, rcExpenses, rcGarments].filter(Boolean);
+  const rcInvoices      = document.getElementById('rcInvoices');
+  const rcSubscriptions = document.getElementById('rcSubscriptions');
+  const rcCustomers     = document.getElementById('rcCustomers');
+  const rcCustomersOption = document.getElementById('rcCustomersOption');
+  const rcServices      = document.getElementById('rcServices');
+  const rcExpenses      = document.getElementById('rcExpenses');
+  const rcGarments      = document.getElementById('rcGarments');
+  const rcCheckboxes = [rcInvoices, rcSubscriptions, rcCustomers, rcServices, rcExpenses, rcGarments].filter(Boolean);
 
   function updateRestoreConfirmBtn() {
     const anyChecked = rcCheckboxes.some(cb => cb.checked);
@@ -769,8 +786,21 @@ window.addEventListener('DOMContentLoaded', () => {
     btnConfirmSystemRestore.style.cursor  = anyChecked ? 'pointer' : 'not-allowed';
   }
 
+  function syncCustomersOption() {
+    const subChecked = rcSubscriptions && rcSubscriptions.checked;
+    if (rcCustomers) {
+      rcCustomers.disabled = !subChecked;
+      if (!subChecked) rcCustomers.checked = false;
+    }
+    if (rcCustomersOption) {
+      rcCustomersOption.style.opacity = subChecked ? '1' : '.5';
+      rcCustomersOption.style.cursor  = subChecked ? 'pointer' : 'not-allowed';
+    }
+  }
+
   function openSystemRestoreModal() {
     rcCheckboxes.forEach(cb => { cb.checked = false; });
+    syncCustomersOption();
     updateRestoreConfirmBtn();
     systemRestoreModal.style.display = 'flex';
   }
@@ -780,6 +810,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   rcCheckboxes.forEach(cb => cb.addEventListener('change', updateRestoreConfirmBtn));
+  if (rcSubscriptions) rcSubscriptions.addEventListener('change', () => { syncCustomersOption(); updateRestoreConfirmBtn(); });
 
   if (btnOpenSystemRestoreModal)    btnOpenSystemRestoreModal.addEventListener('click', openSystemRestoreModal);
   if (btnCloseSystemRestoreModal)   btnCloseSystemRestoreModal.addEventListener('click', closeSystemRestoreModal);
@@ -792,24 +823,25 @@ window.addEventListener('DOMContentLoaded', () => {
       btnConfirmSystemRestore.disabled = true;
       btnConfirmSystemRestore.style.opacity = '.5';
       const origText = btnConfirmSystemRestore.innerHTML;
-      btnConfirmSystemRestore.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> جاري الحذف...';
+      btnConfirmSystemRestore.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${window.I18N.t('settings-restore-running')}`;
       try {
         const res = await window.api.systemRestore({
-          invoices:  rcInvoices  ? rcInvoices.checked  : false,
-          customers: rcCustomers ? rcCustomers.checked : false,
-          services:  rcServices  ? rcServices.checked  : false,
-          expenses:  rcExpenses  ? rcExpenses.checked  : false,
-          garments:  rcGarments  ? rcGarments.checked  : false,
+          invoices:      rcInvoices      ? rcInvoices.checked      : false,
+          subscriptions: rcSubscriptions ? rcSubscriptions.checked : false,
+          customers:     rcCustomers     ? rcCustomers.checked     : false,
+          services:      rcServices      ? rcServices.checked      : false,
+          expenses:      rcExpenses      ? rcExpenses.checked      : false,
+          garments:      rcGarments      ? rcGarments.checked      : false,
         });
         closeSystemRestoreModal();
         if (!res || !res.success) {
-          showToast(res?.message || 'حدث خطأ أثناء الاستعادة', 'error');
+          showToast(res?.message || window.I18N.t('settings-restore-err'), 'error');
         } else {
-          showToast(`تم الحذف بنجاح (${(res.deleted || []).length} جدول)`, 'success');
+          showToast(`${window.I18N.t('settings-restore-success')} (${(res.deleted || []).length})`, 'success');
         }
       } catch (e) {
         closeSystemRestoreModal();
-        showToast(e.message || 'حدث خطأ أثناء الاستعادة', 'error');
+        showToast(e.message || window.I18N.t('settings-restore-err'), 'error');
       } finally {
         btnConfirmSystemRestore.innerHTML = origText;
         updateRestoreConfirmBtn();

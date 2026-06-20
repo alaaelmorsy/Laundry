@@ -1,1 +1,3 @@
-{"feature_directory":"specs/016-fix-installer-launch"}
+{
+  "feature_directory": "specs/024-fix-update-completion-bugs"
+}

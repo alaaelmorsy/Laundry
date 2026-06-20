@@ -132,9 +132,9 @@ input[type="date"]::-webkit-datetime-edit{font-family:'Segoe UI',Arial,Tahoma,sa
 input[type="date"]::-webkit-datetime-edit-fields-wrapper{direction:ltr}
 input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-datetime-edit-month-field,input[type="date"]::-webkit-datetime-edit-year-field{font-family:'Segoe UI',Arial,Tahoma,sans-serif!important}
 .field-textarea{width:100%;min-height:72px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;resize:vertical}.error-msg{background:#fef2f2;color:#b91c1c;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
-.toast-container{position:fixed;top:max(12px,env(safe-area-inset-top,0));left:max(12px,env(safe-area-inset-left,0));right:max(12px,env(safe-area-inset-right,0));z-index:9999;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:100%;box-sizing:border-box}
-.toast{padding:12px 16px;border-radius:10px;font-size:13px;animation:toastIn .3s ease}
-@keyframes toastIn{from{opacity:0;transform:translateX(-20px)}}
+.toast-container{position:fixed;top:12px;left:12px;right:12px;z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;box-sizing:border-box}
+.toast{padding:12px 16px;border-radius:10px;font-size:13px;animation:toastIn .3s ease;text-align:center}
+@keyframes toastIn{from{opacity:0;transform:translateY(-12px)}}
 .toast-success{background:#ecfdf5;border:1px solid #6ee7b7;color:#047857}
 .toast-error{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
 .modal-confirm{z-index:120}
@@ -957,6 +957,15 @@ body { background: #eef2f7 !important; }
   box-shadow: 0 4px 16px rgba(0,0,0,.1) !important;
   font-size: 13px !important;
   padding: 13px 18px !important;
+}
+/* إلغاء تأثير pos.css الذي يضع .toast في أسفل الشاشة */
+.toast-container .toast {
+  position: static;
+  bottom: auto;
+  inset-inline-start: auto;
+  transform: none;
+  z-index: auto;
+  white-space: normal;
 }
 .toast-success {
   background: linear-gradient(135deg, #f0fdf4, #ecfdf5) !important;
@@ -2301,6 +2310,7 @@ body { background: #eef2f7 !important; }
 }
   </style>
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
+  <link rel="stylesheet" href="../../assets/sidebar.css" />
 </head>
 <body class="bg-[#f8fafc]" data-page-title="page-title-subscriptions">
   <div class="page-wrapper">
@@ -2769,6 +2779,55 @@ body { background: #eef2f7 !important; }
     </div>
   </div>
 
+  <!-- مودال تسوية الفواتير من رصيد الاشتراك -->
+  <div id="modalSettleInvoices" class="modal-overlay" role="dialog" aria-modal="true" style="display:none">
+    <div class="modal-box" style="width:580px">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="subscriptions-settle-modal-title">تسوية فواتير من رصيد الاشتراك</h2>
+        <button type="button" class="modal-close" id="btnCloseSettleModal" aria-label="✕">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="settle-balance-row" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;color:#15803d" data-i18n="subscriptions-settle-current-balance">رصيد الاشتراك الحالي:</span>
+          <span id="settleInvCurrentBalance" style="font-weight:800;font-size:15px;color:#15803d"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table id="settleInvTable" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+                <th style="padding:8px 10px;text-align:center;width:36px">
+                  <input type="checkbox" id="settleInvSelectAll" title="اختيار الكل" style="width:16px;height:16px;cursor:pointer">
+                </th>
+                <th style="padding:8px 10px;text-align:right" data-i18n="subscriptions-settle-col-invoice">رقم الفاتورة</th>
+                <th style="padding:8px 10px;text-align:right" data-i18n="subscriptions-settle-col-date">التاريخ</th>
+                <th style="padding:8px 10px;text-align:left" data-i18n="subscriptions-settle-col-amount">القيمة</th>
+                <th style="padding:8px 10px;text-align:center;width:36px"></th>
+              </tr>
+            </thead>
+            <tbody id="settleInvTableBody"></tbody>
+          </table>
+        </div>
+        <div id="settleInvWarning" style="display:none;color:#dc2626;font-size:12px;margin-top:8px;padding:6px 10px;background:#fef2f2;border-radius:6px;border:1px solid #fecaca" data-i18n="subscriptions-settle-warning-exceeds">
+          إجمالي الفواتير المختارة يتجاوز رصيد الاشتراك
+        </div>
+        <div id="settleInvSummary" style="margin-top:12px;padding:10px 14px;background:#f8fafc;border-radius:8px;font-size:13px;display:none">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span data-i18n="subscriptions-settle-total-selected">إجمالي المختار:</span>
+            <span id="settleInvTotalSelected" style="font-weight:700"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span data-i18n="subscriptions-settle-balance-after">الرصيد المتبقي بعد التسوية:</span>
+            <span id="settleInvBalanceAfter" style="font-weight:800"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="btnSettleInvConfirm" disabled data-i18n="subscriptions-settle-confirm-btn">تأكيد التسوية</button>
+        <button type="button" class="btn-secondary" id="btnSettleInvCancel" data-i18n="subscriptions-settle-cancel-btn">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modalConfirm" class="modal-overlay modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
     <div class="modal-box modal-confirm-box">
       <div class="modal-header">
@@ -2791,7 +2850,7 @@ body { background: #eef2f7 !important; }
   </div>
 
   <!-- مودال معاينة الفاتورة — نفس تصميم POS -->
-  <div id="subInvoiceModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+  <div id="subInvoiceModal" class="modal-overlay inv-overlay" data-print-root="true" style="display:none" role="dialog" aria-modal="true">
     <div class="inv-dialog">
       <div class="inv-dialog-footer no-print">
         <button id="btnSubInvClose" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
@@ -2885,5 +2944,6 @@ body { background: #eef2f7 !important; }
   <script src="../../assets/i18n.js"></script>
   <script src="../invoiceRenderer.js"></script>
     <script src="subscriptions.js"></script>
+  <script src="../../assets/sidebar.js"></script>
 </body>
 </html>

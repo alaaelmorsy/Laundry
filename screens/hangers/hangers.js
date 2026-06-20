@@ -258,11 +258,13 @@
       shopAddressAr:      addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
       shopAddressEn:      s.locationEn || '',
       shopPhone:          s.phone || '',
-      shopEmail:          s.email || '',
+      shopEmail:          (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       vatNumber:          s.vatNumber || '',
       commercialRegister: s.commercialRegister || '',
       invoiceNotes:       s.invoiceNotes || '',
       logoDataUrl:        s.logoDataUrl || '',
+      logoWidth:          s.logoWidth || 180,
+      logoHeight:         s.logoHeight || 70,
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date:               formatInvoiceDate(order.created_at),
       payment:            paymentLabel(order.payment_method),
@@ -495,8 +497,15 @@
     const logoEl = document.getElementById('invLogo');
     const logoWrap = document.getElementById('invLogoWrap');
     if (logoEl && logoWrap) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoWrap.style.display = ''; }
-      else { logoWrap.style.display = 'none'; }
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoWrap.style.display = '';
+      } else { logoWrap.style.display = 'none'; }
     }
 
     setText('invOrderNum', data.orderNum);
@@ -708,8 +717,15 @@
 
     const logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
-      else { logoEl.style.display = 'none'; }
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoEl.style.display = '';
+      } else { logoEl.style.display = 'none'; }
     }
 
     a4mText('a4mOrderNum', data.orderNum);

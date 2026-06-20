@@ -6,6 +6,7 @@
   <title>نقطة البيع - نظام المغسلة</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
   <link rel="stylesheet" href="pos.css?v=2" />
+  <link rel="stylesheet" href="../../assets/sidebar.css" />
 </head>
 <body data-page-title="page-title-pos">
 
@@ -188,6 +189,12 @@
               <path d="M16 2v4M8 2v4M3 10h18"/>
               <line x1="12" y1="14" x2="12" y2="18"/>
               <line x1="10" y1="16" x2="14" y2="16"/>
+            </svg>
+          </button>
+          <button id="btnSkipSubscription" type="button" class="btn-skip-subscription" style="display:none" title="إيقاف الاشتراك لهذه الفاتورة فقط">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <rect x="6" y="4" width="4" height="16" rx="1"/>
+              <rect x="14" y="4" width="4" height="16" rx="1"/>
             </svg>
           </button>
           <select id="hangerSelect" class="hanger-select-inline">
@@ -1218,10 +1225,10 @@
 </div>
 
 <!-- ===== CONSUMPTION RECEIPT PRINT ZONE (outside modal for mobile compatibility) ===== -->
-<div id="consumptionPrintZone" style="display:none"></div>
+<div id="consumptionPrintZone" data-print-root="true" style="display:none"></div>
 
 <!-- ===== INVOICE PREVIEW MODAL ===== -->
-<div id="invoiceModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+<div id="invoiceModal" class="modal-overlay inv-overlay" data-print-root="true" style="display:none" role="dialog" aria-modal="true">
 
   <div class="inv-dialog">
 
@@ -1615,5 +1622,6 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="../invoiceRenderer.js"></script>
   <script src="pos.js"></script>
+  <script src="../../assets/sidebar.js"></script>
 </body>
 </html>

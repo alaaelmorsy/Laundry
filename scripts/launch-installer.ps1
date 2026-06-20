@@ -72,7 +72,7 @@ try {
 
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-  $psArgs   = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`" -SetupPath `"$SetupPath`" -AppRoot `"$AppRoot`""
+  $psArgs   = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`" -SetupPath `"$SetupPath`" -AppRoot `"$AppRoot`" -ServerPid $ServerPid"
   $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
   $trigger  = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(6))
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `

@@ -291,23 +291,23 @@ window.addEventListener('DOMContentLoaded', () => {
     summaryGrid.innerHTML = `
       <div class="summary-card prior">
         <div class="summary-card-label">الرصيد السابق</div>
-        <div class="summary-card-value">${sarHtml(s.priorBalance)}</div>
+        <div class="summary-card-value">${sarHtml(s.priorBalance, false)}</div>
       </div>
       <div class="summary-card debit">
         <div class="summary-card-label">إجمالي المدين (على العميل)</div>
-        <div class="summary-card-value">${sarHtml(s.totalDebit)}</div>
+        <div class="summary-card-value">${sarHtml(s.totalDebit, false)}</div>
       </div>
       <div class="summary-card credit">
         <div class="summary-card-label">إجمالي الدائن (للعميل)</div>
-        <div class="summary-card-value">${sarHtml(s.totalCredit)}</div>
+        <div class="summary-card-value">${sarHtml(s.totalCredit, false)}</div>
       </div>
       <div class="summary-card deferred">
         <div class="summary-card-label">المديونية الآجلة الحالية</div>
-        <div class="summary-card-value">${sarHtml(s.deferredOutstanding)}</div>
+        <div class="summary-card-value">${sarHtml(s.deferredOutstanding, false)}</div>
       </div>
       <div class="summary-card closing ${isDebt ? 'debt' : 'clear'}">
         <div class="summary-card-label">الرصيد الختامي</div>
-        <div class="summary-card-value">${sarHtml(s.closingBalance)}</div>
+        <div class="summary-card-value">${sarHtml(s.closingBalance, false)}</div>
         <div class="summary-card-label" style="font-size:10px;margin-top:2px">${isDebt ? '⚠ مديونية' : '✓ لا يوجد مديونية'}</div>
       </div>
     `;
@@ -328,9 +328,9 @@ window.addEventListener('DOMContentLoaded', () => {
           <td><span class="sub-badge ${statusCls}">${statusTxt}</span></td>
           <td>${fmtDate(sp.period_from)}</td>
           <td>${sp.period_to ? fmtDate(sp.period_to) : '—'}</td>
-          <td class="num-cell">${sarHtml(sp.total_value)}</td>
-          <td class="num-cell">${sarHtml(sp.total_consumed)}</td>
-          <td class="num-cell">${sarHtml(sp.credit_remaining)}</td>
+          <td class="num-cell">${sarHtml(sp.total_value, false)}</td>
+          <td class="num-cell">${sarHtml(sp.total_consumed, false)}</td>
+          <td class="num-cell">${sarHtml(sp.credit_remaining, false)}</td>
         </tr>`;
     }).join('');
   }
@@ -372,9 +372,9 @@ window.addEventListener('DOMContentLoaded', () => {
           <td style="white-space:nowrap">${fmtDT(m.mv_date)}</td>
           <td>${typeLabel(m.mv_type)}</td>
           <td class="desc-cell" title="${escHtml(m.description)}">${escHtml(m.description)}</td>
-          <td class="num-cell">${debit  > 0 ? sarHtml(debit)  : '<span style="color:#cbd5e1">—</span>'}</td>
-          <td class="num-cell">${credit > 0 ? sarHtml(credit) : '<span style="color:#cbd5e1">—</span>'}</td>
-          <td class="balance-cell ${balCls}">${sarHtml(running)}</td>
+          <td class="num-cell">${debit  > 0 ? sarHtml(debit,  false) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <td class="num-cell">${credit > 0 ? sarHtml(credit, false) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <td class="balance-cell ${balCls}">${sarHtml(running, false)}</td>
           <td class="status-cell">${paidCell}</td>
           <td class="status-cell">${cleaningCell}</td>
           <td class="status-cell">${deliveryCell}</td>
@@ -390,11 +390,11 @@ window.addEventListener('DOMContentLoaded', () => {
     totalD = Math.round(totalD * 100) / 100;
     totalC = Math.round(totalC * 100) / 100;
     movementsFooter.innerHTML = `
-      إجمالي المدين: <strong>${sarHtml(totalD)}</strong>
+      إجمالي المدين: <strong>${sarHtml(totalD, false)}</strong>
       &nbsp;|&nbsp;
-      إجمالي الدائن: <strong>${sarHtml(totalC)}</strong>
+      إجمالي الدائن: <strong>${sarHtml(totalC, false)}</strong>
       &nbsp;|&nbsp;
-      الرصيد الختامي: <strong>${sarHtml(running)}</strong>
+      الرصيد الختامي: <strong>${sarHtml(running, false)}</strong>
     `;
   }
 

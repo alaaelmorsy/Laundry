@@ -186,11 +186,18 @@ window.addEventListener('DOMContentLoaded', () => {
       else { $('subInvShopPhoneRow').style.display = 'none'; }
       if (s.vatNumber) { $('subInvVatNumber').textContent = 'الرقم الضريبي: ' + s.vatNumber; $('subInvVatHeaderRow').style.display = ''; }
       else { $('subInvVatHeaderRow').style.display = 'none'; }
-      if (s.email) { $('subInvShopEmail').textContent = s.email; $('subInvEmailRow').style.display = ''; }
+      if (s.email && s.showEmailInInvoice !== false) { $('subInvShopEmail').textContent = s.email; $('subInvEmailRow').style.display = ''; }
       else { $('subInvEmailRow').style.display = 'none'; }
 
       if (s.logoDataUrl) {
-        $('subInvLogo').src = s.logoDataUrl;
+        const logoEl = $('subInvLogo');
+        logoEl.src = s.logoDataUrl;
+        const lw = s.logoWidth || 80;
+        const lh = s.logoHeight || 60;
+        logoEl.style.width = lw + 'px';
+        logoEl.style.height = lh + 'px';
+        logoEl.style.maxWidth = lw + 'px';
+        logoEl.style.maxHeight = lh + 'px';
         $('subInvLogoWrap').style.display = '';
       } else {
         $('subInvLogoWrap').style.display = 'none';
@@ -232,7 +239,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (subscription && subscription.credit_remaining != null) {
         const bal = parseFloat(subscription.credit_remaining);
         if (!isNaN(bal)) {
-          $('subInvSubBalance').innerHTML = '<span class="sar">&#xE900;</span> ' + fmtLtr(bal);
+          $('subInvSubBalance').innerHTML = fmtLtr(bal) + ' <span class="sar">&#xE900;</span>';
           $('subInvSubBalRow').style.display = '';
         } else { $('subInvSubBalRow').style.display = 'none'; }
       } else { $('subInvSubBalRow').style.display = 'none'; }
@@ -286,8 +293,9 @@ window.addEventListener('DOMContentLoaded', () => {
         renderSubQR(shopN, s.vatNumber, iso, totalStr, vatStr, order.zatca_qr || null);
       } else { $('subInvQR').innerHTML = ''; }
 
-      // حفظ orderId للاستخدام في PDF
+      // حفظ orderId والإعدادات للاستخدام في الطباعة وPDF
       _subViewingOrderId = orderId;
+      _subInvSettings = s;
 
       // عرض المودال
       $('subInvoiceModal').style.display = 'flex';
@@ -310,7 +318,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function sarFmt(amount) {
-    return '<span class="sar">&#xE900;</span> ' + fmtLtr(amount);
+    return fmtLtr(amount) + ' <span class="sar">&#xE900;</span>';
   }
 
   function renderSubQR(sellerName, vatNumber, timestamp, totalAmount, vatAmount, storedQr) {
@@ -335,6 +343,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   let confirmResolver = null;
   let _subViewingOrderId = null;
+  let _subInvSettings = {};
 
   function finishConfirm(value) {
     if (modalConfirm._onKey) {
@@ -1058,6 +1067,14 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function bindSubscriptionRowActions() {
+    subscriptionsTableBody.querySelectorAll('[data-sub-settle]').forEach((btn) => {
+      btn.addEventListener('click', () => openSettleInvoicesModal(
+        Number(btn.dataset.subSettle),
+        Number(btn.dataset.subSettleCustomer),
+        Number(btn.dataset.subSettlePeriod),
+        Number(btn.dataset.subSettleBalance)
+      ));
+    });
     subscriptionsTableBody.querySelectorAll('[data-sub-detail]').forEach((btn) => {
       btn.addEventListener('click', () => openDetailModal(Number(btn.dataset.subDetail)));
     });
@@ -1153,6 +1170,192 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── تسوية الفواتير من رصيد الاشتراك ─────────────────────────────────────────
+
+  const modalSettleInvoices = document.getElementById('modalSettleInvoices');
+  const settleInvCurrentBalance = document.getElementById('settleInvCurrentBalance');
+  const settleInvTableBody = document.getElementById('settleInvTableBody');
+  const settleInvWarning = document.getElementById('settleInvWarning');
+  const settleInvSummary = document.getElementById('settleInvSummary');
+  const settleInvTotalSelected = document.getElementById('settleInvTotalSelected');
+  const settleInvBalanceAfter = document.getElementById('settleInvBalanceAfter');
+  const btnSettleInvConfirm = document.getElementById('btnSettleInvConfirm');
+  const btnSettleInvCancel = document.getElementById('btnSettleInvCancel');
+  const btnCloseSettleModal = document.getElementById('btnCloseSettleModal');
+  const settleInvSelectAll = document.getElementById('settleInvSelectAll');
+
+  let _settlePeriodId = null;
+  let _settleCustomerId = null;
+  let _settleCreditRemaining = 0;
+  let _settleCreatedBy = '';
+
+  function sarHtmlSettle(val) {
+    return `${Number(val).toFixed(2)} <span class="sar">&#xE900;</span>`;
+  }
+
+  function closeSettleModal() {
+    modalSettleInvoices.style.display = 'none';
+    _settlePeriodId = null;
+    _settleCustomerId = null;
+    _settleCreditRemaining = 0;
+    settleInvTableBody.innerHTML = '';
+    settleInvWarning.style.display = 'none';
+    settleInvSummary.style.display = 'none';
+    btnSettleInvConfirm.disabled = true;
+    if (settleInvSelectAll) { settleInvSelectAll.checked = false; settleInvSelectAll.indeterminate = false; }
+  }
+
+  function updateSettleSummary() {
+    const checked = settleInvTableBody.querySelectorAll('.settle-inv-check:checked');
+    const total = Array.from(checked).reduce((s, cb) => s + Number(cb.dataset.amount), 0);
+    const balAfter = _settleCreditRemaining - total;
+
+    if (total > 0) {
+      settleInvSummary.style.display = 'block';
+      settleInvTotalSelected.innerHTML = sarHtmlSettle(total);
+      settleInvBalanceAfter.innerHTML = sarHtmlSettle(balAfter);
+      settleInvBalanceAfter.style.color = balAfter < 0 ? '#dc2626' : '#0f172a';
+    } else {
+      settleInvSummary.style.display = 'none';
+    }
+
+    const exceeded = total > _settleCreditRemaining + 0.001;
+    settleInvWarning.style.display = exceeded ? 'block' : 'none';
+    btnSettleInvConfirm.disabled = total <= 0 || exceeded;
+
+    // تظليل الصفوف غير المختارة
+    settleInvTableBody.querySelectorAll('tr').forEach((tr) => {
+      const cb = tr.querySelector('.settle-inv-check');
+      if (cb) tr.style.opacity = cb.checked ? '1' : '0.5';
+    });
+
+    // مزامنة checkbox اختيار الكل
+    if (settleInvSelectAll) {
+      const allBoxes = settleInvTableBody.querySelectorAll('.settle-inv-check');
+      const cnt = checked.length;
+      settleInvSelectAll.indeterminate = cnt > 0 && cnt < allBoxes.length;
+      settleInvSelectAll.checked = allBoxes.length > 0 && cnt === allBoxes.length;
+    }
+  }
+
+  async function openSettleInvoicesModal(subscriptionId, customerId, periodId, creditRemaining) {
+    _settlePeriodId = Number(periodId);
+    _settleCustomerId = Number(customerId);
+    _settleCreditRemaining = Number(creditRemaining) || 0;
+
+    if (!_settlePeriodId) {
+      showToast('لا توجد فترة اشتراك نشطة', 'error');
+      return;
+    }
+
+    settleInvCurrentBalance.innerHTML = sarHtmlSettle(_settleCreditRemaining);
+    settleInvTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:16px"><span class="spinner"></span></td></tr>`;
+    settleInvWarning.style.display = 'none';
+    settleInvSummary.style.display = 'none';
+    btnSettleInvConfirm.disabled = true;
+    modalSettleInvoices.style.display = 'flex';
+
+    const res = await window.api.getCustomerUnpaidInvoices({ customerId: _settleCustomerId });
+    if (!res.success) {
+      closeSettleModal();
+      showToast(res.message || 'حدث خطأ', 'error');
+      return;
+    }
+    if (!res.invoices || res.invoices.length === 0) {
+      closeSettleModal();
+      showToast(I18N.t('subscriptions-settle-no-invoices'), 'info');
+      return;
+    }
+
+    settleInvTableBody.innerHTML = res.invoices.map((inv) => `
+      <tr style="border-bottom:1px solid #f1f5f9;transition:opacity .15s">
+        <td style="padding:8px 10px;text-align:center">
+          <input type="checkbox" class="settle-inv-check" data-inv-id="${inv.id}" data-amount="${inv.total_amount}" style="width:16px;height:16px;cursor:pointer">
+        </td>
+        <td style="padding:8px 10px;font-weight:600">${escHtml(String(inv.invoice_seq || inv.id))}</td>
+        <td style="padding:8px 10px;color:#64748b;font-size:12px">${escHtml(formatDateNumeric(inv.created_at))}</td>
+        <td style="padding:8px 10px;text-align:left">${sarHtmlSettle(inv.total_amount)}</td>
+        <td style="padding:8px 10px;text-align:center">
+          <button type="button" class="settle-view-btn" data-order-id="${inv.id}" title="عرض الفاتورة" style="background:rgba(59,130,246,.1);color:#2563eb;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    settleInvTableBody.querySelectorAll('.settle-inv-check').forEach((cb) => {
+      cb.addEventListener('change', updateSettleSummary);
+    });
+
+    settleInvTableBody.querySelectorAll('.settle-view-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const orderId = Number(btn.dataset.orderId);
+        if (orderId) await openSubscriptionInvoice(orderId);
+      });
+    });
+
+    // جلب اسم المستخدم الحالي للـ ledger
+    try {
+      const userEl = document.querySelector('[data-current-user]');
+      _settleCreatedBy = userEl ? userEl.dataset.currentUser : '';
+    } catch (_) {}
+  }
+
+  async function handleSettleInvoicesConfirm() {
+    const checked = settleInvTableBody.querySelectorAll('.settle-inv-check:checked');
+    const invoiceIds = Array.from(checked).map((cb) => Number(cb.dataset.invId));
+    if (invoiceIds.length === 0) return;
+
+    btnSettleInvConfirm.disabled = true;
+    btnSettleInvConfirm.textContent = '...';
+
+    const res = await window.api.settleInvoicesFromSubscription({
+      subscriptionPeriodId: _settlePeriodId,
+      invoiceIds,
+      createdBy: _settleCreatedBy
+    });
+
+    btnSettleInvConfirm.textContent = I18N.t('subscriptions-settle-confirm-btn');
+
+    if (!res.success) {
+      showToast(res.message || 'حدث خطأ أثناء التسوية', 'error');
+      btnSettleInvConfirm.disabled = false;
+      return;
+    }
+
+    showToast(I18N.t('subscriptions-settle-success'), 'success');
+    closeSettleModal();
+
+    // تحديث خلية الرصيد في الصف بدون reload
+    const row = subscriptionsTableBody.querySelector(`tr[data-sub-id="${_settlePeriodId}"]`)
+      || subscriptionsTableBody.querySelector(`[data-sub-settle-period="${_settlePeriodId}"]`)?.closest('tr');
+    if (row) {
+      const balCell = row.querySelector('td:nth-child(4)');
+      if (balCell) {
+        const newBal = Number(res.creditRemainingAfter);
+        balCell.style = newBal <= 0 ? 'color:#dc2626;font-weight:800' : '';
+        balCell.innerHTML = sarHtmlSettle(newBal);
+      }
+    }
+
+    loadSubscriptions();
+  }
+
+  btnCloseSettleModal && btnCloseSettleModal.addEventListener('click', closeSettleModal);
+  btnSettleInvCancel && btnSettleInvCancel.addEventListener('click', closeSettleModal);
+  btnSettleInvConfirm && btnSettleInvConfirm.addEventListener('click', handleSettleInvoicesConfirm);
+  modalSettleInvoices && modalSettleInvoices.addEventListener('click', (e) => {
+    if (e.target === modalSettleInvoices) closeSettleModal();
+  });
+  settleInvSelectAll && settleInvSelectAll.addEventListener('change', () => {
+    settleInvTableBody.querySelectorAll('.settle-inv-check').forEach((cb) => {
+      cb.checked = settleInvSelectAll.checked;
+    });
+    updateSettleSummary();
+  });
+
+  // ── نهاية دوال تسوية الفواتير ─────────────────────────────────────────────
+
   async function loadSubscriptions() {
     subscriptionsTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell"><span class="spinner"></span> ${I18N.t('subscriptions-loading')}</td></tr>`;
     emptySubscriptions.style.display = 'none';
@@ -1244,6 +1447,13 @@ window.addEventListener('DOMContentLoaded', () => {
             </button>`
           : '';
 
+        const settleBtnHtml = s.display_status === 'active'
+          ? `<button type="button" class="sub-action-btn sub-action-btn--detail" data-sub-settle="${s.id}" data-sub-settle-customer="${s.customer_id}" data-sub-settle-period="${s.current_period_id || ''}" data-sub-settle-balance="${s.credit_remaining != null ? s.credit_remaining : 0}" title="${I18N.t('subscriptions-settle-invoices-btn')}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+              <span>${I18N.t('subscriptions-settle-invoices-btn')}</span>
+            </button>`
+          : '';
+
         const detailBtnHtml = `<button type="button" class="sub-action-btn sub-action-btn--detail" data-sub-detail="${s.id}" title="${I18N.t('subscriptions-btn-detail-title')}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
           <span>${I18N.t('subscriptions-btn-detail')}</span>
@@ -1296,6 +1506,7 @@ window.addEventListener('DOMContentLoaded', () => {
           <td>
             <div class="subs-actions-compact">
               ${detailBtnHtml}
+              ${settleBtnHtml}
               ${mainActionHtml}
               ${menuBtnHtml}
             </div>
@@ -2216,17 +2427,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (btnSubInvPrint) btnSubInvPrint.addEventListener('click', () => {
     try {
-      // طباعة بنفس طريقة POS
-      var paperType = 'thermal';  // الاشتراكات دائماً حراري
-      var styleEl = null;
-      if (paperType === 'a4') {
-        styleEl = document.createElement('style');
-        styleEl.id = 'a4PageStyle';
-        styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
-        document.head.appendChild(styleEl);
-      }
+      var mLeft = parseFloat((_subInvSettings && _subInvSettings.thermalMarginLeft) || 0) || 0;
+      var mRight = parseFloat((_subInvSettings && _subInvSettings.thermalMarginRight) || 0) || 0;
+      var shift = mLeft - mRight;
+      var styleEl = document.createElement('style');
+      styleEl.id = 'subInvPrintPageStyle';
+      styleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { #subInvoiceModal .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
+      document.head.appendChild(styleEl);
       window.print();
-      if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+      if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
     } catch (e) { console.error('print error:', e); }
   });
 
@@ -2246,4 +2455,5 @@ window.addEventListener('DOMContentLoaded', () => {
       showToast('حدث خطأ أثناء التصدير', 'error');
     }
   });
+
 });

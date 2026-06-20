@@ -78,46 +78,46 @@
             </label>
           </div>
 
-          <!-- Movement type filter -->
-          <label class="filter-field" id="typeFilterWrap" style="display:none">
-            <span class="filter-label">النوع:</span>
-            <select id="filterMovementType" class="filter-input filter-select">
-              <option value="all">الكل</option>
-              <option value="paid_invoice">فاتورة مدفوعة</option>
-              <option value="deferred_invoice">فاتورة آجلة</option>
-              <option value="deferred_payment">سداد آجل</option>
-              <option value="subscription">اشتراك</option>
-              <option value="consumption">إيصال استهلاك</option>
-              <option value="consumption_refund">مرتجع إيصال</option>
-              <option value="credit_note">فاتورة دائنة</option>
-            </select>
-          </label>
-
-          <!-- Status filters -->
-          <label class="filter-field" id="filterPaidWrap" style="display:none">
-            <span class="filter-label">الدفع:</span>
-            <select id="filterPaid" class="filter-input filter-select">
-              <option value="all">الكل</option>
-              <option value="yes">تم الدفع</option>
-              <option value="no">لم يُدفع</option>
-            </select>
-          </label>
-          <label class="filter-field" id="filterCleaningWrap" style="display:none">
-            <span class="filter-label">التنظيف:</span>
-            <select id="filterCleaning" class="filter-input filter-select">
-              <option value="all">الكل</option>
-              <option value="yes">تم التنظيف</option>
-              <option value="no">لم يُنظَّف</option>
-            </select>
-          </label>
-          <label class="filter-field" id="filterDeliveryWrap" style="display:none">
-            <span class="filter-label">التسليم:</span>
-            <select id="filterDelivery" class="filter-input filter-select">
-              <option value="all">الكل</option>
-              <option value="yes">تم التسليم</option>
-              <option value="no">لم يُسلَّم</option>
-            </select>
-          </label>
+          <!-- Movement type + status filters -->
+          <div class="status-filters-wrap">
+            <label class="filter-field" id="typeFilterWrap" style="display:none">
+              <span class="filter-label">النوع:</span>
+              <select id="filterMovementType" class="filter-input filter-select">
+                <option value="all">الكل</option>
+                <option value="paid_invoice">فاتورة مدفوعة</option>
+                <option value="deferred_invoice">فاتورة آجلة</option>
+                <option value="deferred_payment">سداد آجل</option>
+                <option value="subscription">اشتراك</option>
+                <option value="consumption">إيصال استهلاك</option>
+                <option value="consumption_refund">مرتجع إيصال</option>
+                <option value="credit_note">فاتورة دائنة</option>
+              </select>
+            </label>
+            <label class="filter-field" id="filterPaidWrap" style="display:none">
+              <span class="filter-label">الدفع:</span>
+              <select id="filterPaid" class="filter-input filter-select">
+                <option value="all">الكل</option>
+                <option value="yes">تم الدفع</option>
+                <option value="no">لم يُدفع</option>
+              </select>
+            </label>
+            <label class="filter-field" id="filterCleaningWrap" style="display:none">
+              <span class="filter-label">التنظيف:</span>
+              <select id="filterCleaning" class="filter-input filter-select">
+                <option value="all">الكل</option>
+                <option value="yes">تم التنظيف</option>
+                <option value="no">لم يُنظَّف</option>
+              </select>
+            </label>
+            <label class="filter-field" id="filterDeliveryWrap" style="display:none">
+              <span class="filter-label">التسليم:</span>
+              <select id="filterDelivery" class="filter-input filter-select">
+                <option value="all">الكل</option>
+                <option value="yes">تم التسليم</option>
+                <option value="no">لم يُسلَّم</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <button id="btnApplyFilter" class="btn-apply">

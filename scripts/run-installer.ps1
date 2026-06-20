@@ -90,6 +90,8 @@ if ($ServerPid -gt 0) {
   } else {
     Write-Log 'INFO' "Node server exited after ${elapsed}s"
   }
+} else {
+  Write-Log 'WARN' "ServerPid is 0 — skipping PID wait (falling back to time-based wait)"
 }
 
 # Small extra wait to ensure NSSM does not race-restart the service
@@ -126,15 +128,29 @@ Write-Log 'INFO' "PowerShell session ID: $currentSessionId"
 # ── 4a. Interactive session (dev/direct run): launch GUI directly ─────────────
 if ($currentSessionId -ne 0) {
   Write-Log 'INFO' "Interactive session — launching installer GUI directly"
+  $guiDone = $false
   try {
     Start-Process -FilePath $SetupPath -Wait -ErrorAction Stop
     Write-Log 'INFO' "Installer GUI completed"
-    Write-Log 'INFO' "run-installer: done (direct GUI). Inno Setup restarted the service."
+    $guiDone = $true
+  } catch {
+    Write-Log 'WARN' "Direct launch failed: $_ — falling back to API approach"
+  }
+
+  if ($guiDone) {
+    if ((Test-Path $NssmPath) -and (Test-ServiceExists)) {
+      Write-Log 'INFO' "Restoring NSSM AppExit 0 to Restart (path 4a)..."
+      & $NssmPath set $ServiceName AppExit 0 Restart 2>$null | Out-Null
+      Write-Log 'INFO' "Starting service $ServiceName (path 4a)..."
+      & $NssmPath start $ServiceName 2>$null | Out-Null
+      & sc.exe start $ServiceName 2>$null | Out-Null
+    }
     Remove-SelfTask
     exit 0
-  } catch {
-    Write-Log 'WARN' "Direct launch failed: $_ — trying API approach"
   }
+  # GUI launch failed — fall through to 4b (CreateProcessAsUser) then 4c
+  # (silent install). Both downstream paths restore NSSM AppExit themselves
+  # before exiting, so the service is never left permanently dead.
 }
 
 # ── 4b. Session-0: WTSQueryUserToken + CreateProcessAsUser ───────────────────
@@ -243,7 +259,14 @@ public class UserSessionLauncher {
   Write-Log 'WARN' "CreateProcessAsUser failed: $_ — falling back to silent install"
 }
 
-if ($guiLaunched) { Remove-SelfTask; exit 0 }
+if ($guiLaunched) {
+  if ((Test-Path $NssmPath) -and (Test-ServiceExists)) {
+    Write-Log 'INFO' "Restoring NSSM AppExit 0 to Restart (path 4b safety net)..."
+    & $NssmPath set $ServiceName AppExit 0 Restart 2>$null | Out-Null
+  }
+  Remove-SelfTask
+  exit 0
+}
 
 # ── 4c. Fallback: silent install ──────────────────────────────────────────────
 Write-Log 'INFO' "Running installer silently (fallback): $SetupPath"

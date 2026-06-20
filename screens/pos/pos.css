@@ -1535,6 +1535,35 @@ html, body {
   background: rgba(255,255,255,0.25);
   color: #fff;
 }
+.btn-skip-subscription {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid #fb923c;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  touch-action: manipulation;
+}
+.btn-skip-subscription svg {
+  width: 18px;
+  height: 18px;
+}
+.btn-skip-subscription:hover {
+  background: #ffedd5;
+  border-color: #f97316;
+}
+.btn-skip-subscription.skip-sub-active {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(234,88,12,0.35);
+}
 
 .loyalty-popup {
   position: absolute;
@@ -3181,6 +3210,8 @@ html, body {
 
 /* Print media — show only the paper, hide dialog chrome */
 @media print {
+  html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
 
   /* --- طباعة الفاتورة العادية --- */

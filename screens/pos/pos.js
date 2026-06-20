@@ -53,6 +53,7 @@
     loyaltyDiscount: 0,
     loyaltyPointsToRedeem: 0,
     customerLoyaltyBalance: 0,
+    skipSubscription: false,
   };
 
   /* ========== DOM REFS ========== */
@@ -93,6 +94,7 @@
     btnClearLoyaltySheet: document.getElementById('btnClearLoyaltySheet'),
     btnRemoveCustomer: document.getElementById('btnRemoveCustomer'),
     btnAddCustomer: document.getElementById('btnAddCustomer'),
+    btnSkipSubscription: document.getElementById('btnSkipSubscription'),
     btnAddSubscription: document.getElementById('btnAddSubscription'),
     addSubscriptionModal: document.getElementById('addSubscriptionModal'),
     btnAddSubClose: document.getElementById('btnAddSubClose'),
@@ -1452,6 +1454,7 @@
         }
       } catch (_) {}
     }
+    updateSkipSubscriptionBtn();
   }
 
   function clearCustomer() {
@@ -1464,6 +1467,11 @@
     els.customerDropdown.style.display = 'none';
     if (els.chipLoyaltyBadge) els.chipLoyaltyBadge.style.display = 'none';
     clearLoyaltyDiscount(true);
+    if (els.btnSkipSubscription) {
+      els.btnSkipSubscription.style.display = 'none';
+      els.btnSkipSubscription.classList.remove('skip-sub-active');
+    }
+    state.skipSubscription = false;
   }
 
   function clearLoyaltyDiscount(hideRow = false) {
@@ -1479,6 +1487,20 @@
     if (els.btnLoyaltyToggle) els.btnLoyaltyToggle.classList.remove('loyalty-active');
     if (els.loyaltyBtnLabel) els.loyaltyBtnLabel.textContent = 'النقاط';
     updateSummary();
+  }
+
+  function updateSkipSubscriptionBtn() {
+    if (!els.btnSkipSubscription) return;
+    const hasActiveSubscription = els.chipSubscription &&
+      els.chipSubscription.classList.contains('chip-sub-active') &&
+      els.chipSubscription.style.display !== 'none';
+    if (hasActiveSubscription) {
+      els.btnSkipSubscription.style.display = '';
+    } else {
+      els.btnSkipSubscription.style.display = 'none';
+      state.skipSubscription = false;
+      els.btnSkipSubscription.classList.remove('skip-sub-active');
+    }
   }
 
   function isMobile() { return window.innerWidth < 480; }
@@ -1979,7 +2001,7 @@
         shopAddressAr: s.locationAr,
         shopAddressEn: s.locationEn,
         shopPhone: s.phone,
-        shopEmail: s.email,
+        shopEmail: (s.showEmailInInvoice !== false) ? s.email : '',
         vatNumber: s.vatNumber,
         commercialRegister: s.commercialRegister,
         logoDataUrl: s.logoDataUrl,
@@ -2086,8 +2108,15 @@
 
     var logoEl = document.getElementById('a4mLogo');
     if (logoEl) {
-      if (data.logoDataUrl) { logoEl.src = data.logoDataUrl; logoEl.style.display = ''; }
-      else { logoEl.style.display = 'none'; }
+      if (data.logoDataUrl) {
+        logoEl.src = data.logoDataUrl;
+        logoEl.style.width = (data.logoWidth || 180) + 'px';
+        logoEl.style.height = (data.logoHeight || 70) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.objectFit = 'contain';
+        logoEl.style.display = '';
+      } else { logoEl.style.display = 'none'; }
     }
 
     var titleAr = document.getElementById('a4mTitleAr');
@@ -2332,8 +2361,8 @@
     if (vatRow)   vatRow.style.display  = s.vatNumber          ? '' : 'none';
     if (crEl)     crEl.textContent   = s.commercialRegister ? 'السجل التجاري: ' + s.commercialRegister : '';
     if (crRow)    crRow.style.display   = s.commercialRegister ? '' : 'none';
-    if (emailEl)  emailEl.textContent = s.email             ? s.email                                   : '';
-    if (emailRow) emailRow.style.display = s.email          ? '' : 'none';
+    if (emailEl)  emailEl.textContent = (s.showEmailInInvoice !== false && s.email) ? s.email : '';
+    if (emailRow) emailRow.style.display = (s.showEmailInInvoice !== false && s.email) ? '' : 'none';
   }
 
   /* ========== FILL & SHOW INVOICE MODAL ========== */
@@ -2457,6 +2486,14 @@
     printNext();
   }
 
+  function showInsufficientCreditModal(creditRemaining, orderTotal) {
+    var msg = 'رصيد الاشتراك غير كافٍ — الرصيد: '
+      + Number(creditRemaining || 0).toFixed(2)
+      + ' — قيمة الطلب: '
+      + Number(orderTotal || 0).toFixed(2);
+    showTopToast(msg, 'error', 5000);
+  }
+
   function showConsumptionReceiptModal(result, subscription, autoOpenPrint) {
     var s = state.appSettings || {};
     var lang = getLang();
@@ -2471,6 +2508,11 @@
     var crLogo = document.getElementById('crModalLogo');
     if (s.logoDataUrl && crLogo) {
       crLogo.src = s.logoDataUrl;
+      crLogo.style.width = (s.logoWidth || 180) + 'px';
+      crLogo.style.height = (s.logoHeight || 70) + 'px';
+      crLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      crLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      crLogo.style.objectFit = 'contain';
       if (crLogoWrap) crLogoWrap.style.display = '';
     } else if (crLogoWrap) crLogoWrap.style.display = 'none';
     fillCrModalShopExtra(s);
@@ -2697,6 +2739,11 @@
     var crLogo = document.getElementById('crModalLogo');
     if (s.logoDataUrl && crLogo) {
       crLogo.src = s.logoDataUrl;
+      crLogo.style.width = (s.logoWidth || 180) + 'px';
+      crLogo.style.height = (s.logoHeight || 70) + 'px';
+      crLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      crLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      crLogo.style.objectFit = 'contain';
       if (crLogoWrap) crLogoWrap.style.display = '';
     } else if (crLogoWrap) {
       crLogoWrap.style.display = 'none';
@@ -2776,7 +2823,7 @@
     var locationFallback = lang === 'ar' ? s.locationAr : s.locationEn;
     els.invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (locationFallback || '');
     els.invShopPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
-    els.invShopEmail.textContent = s.email || '';
+    els.invShopEmail.textContent = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
 
     /* ── Custom fields ── */
     var invCF = document.getElementById('invCustomFields');
@@ -2800,6 +2847,11 @@
 
     if (s.logoDataUrl) {
       els.invLogo.src = s.logoDataUrl;
+      els.invLogo.style.width = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.height = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.objectFit = 'contain';
       els.invLogoWrap.style.display = '';
     } else {
       els.invLogoWrap.style.display = 'none';
@@ -3208,12 +3260,14 @@
       shopAddressAr:      addressPartsA4.length ? addressPartsA4.join('، ') : (s.locationAr || ''),
       shopAddressEn:      s.locationEn || '',
       shopPhone:          s.phone || '',
-      shopEmail:          s.email || '',
+      shopEmail:          (s.showEmailInInvoice !== false) ? (s.email || '') : '',
       invoiceNotes:       invoiceNotes || '',
       settingsNotes:      s.invoiceNotes || '',
       vatNumber:          s.vatNumber || '',
       commercialRegister: s.commercialRegister || '',
       logoDataUrl:        s.logoDataUrl || '',
+      logoWidth:          s.logoWidth || 180,
+      logoHeight:         s.logoHeight || 70,
       orderNum:           invoiceSeq ? String(invoiceSeq) : (orderNumber || '—'),
       date:               formatInvoiceDate(orderDate),
       payment:            pmLabelsA4[state.paymentMethod] || state.paymentMethod,
@@ -3493,7 +3547,8 @@
         vatRate: state.vatRate,
         vatAmount: parseFloat(vatAmount.toFixed(2)),
         totalAmount: parseFloat(total.toFixed(2)),
-        paymentMethod: state.paymentMethod,
+        paymentMethod: state.skipSubscription ? ((state.appSettings && state.appSettings.defaultPaymentMethod) || 'cash') : state.paymentMethod,
+        skipSubscription: state.skipSubscription || false,
         paidCash: state.paymentMethod === 'mixed' ? state.mixedCash : 0,
         paidCard: state.paymentMethod === 'mixed' ? state.mixedCard : 0,
         starch: state.starch || '',
@@ -3504,6 +3559,13 @@
       });
 
       if (!res || !res.success) {
+        if (res && res.code === 'INSUFFICIENT_SUBSCRIPTION_CREDIT') {
+          showInsufficientCreditModal(
+            res.creditRemaining != null ? res.creditRemaining : 0,
+            res.orderTotal != null ? res.orderTotal : total
+          );
+          return;
+        }
         showTopToast(res && res.message ? res.message : t('pos-err-save'), 'error');
         return;
       }
@@ -3598,6 +3660,11 @@
     if (els.extraInput) els.extraInput.value = '';
     state.invoiceNotes = '';
     if (els.invoiceNotesInput) els.invoiceNotesInput.value = '';
+    state.skipSubscription = false;
+    if (els.btnSkipSubscription) {
+      els.btnSkipSubscription.style.display = 'none';
+      els.btnSkipSubscription.classList.remove('skip-sub-active');
+    }
     if (els.mixedCashInline) els.mixedCashInline.style.display = state.paymentMethod === 'mixed' ? '' : 'none';
     if (els.mixedPaySection) els.mixedPaySection.style.display = state.paymentMethod === 'mixed' ? '' : 'none';
     if (els.mixedPayError) els.mixedPayError.style.display = 'none';
@@ -4141,7 +4208,7 @@
     if (s.postalCode)     addressParts.push(s.postalCode);
     els.invShopAddress.textContent = addressParts.length ? addressParts.join('، ') : (s.locationAr || s.locationEn || '');
     els.invShopPhone.textContent = s.phone ? 'هاتف: ' + s.phone : '';
-    els.invShopEmail.textContent = s.email || '';
+    els.invShopEmail.textContent = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
 
     /* ── Custom fields (credit note) ── */
     var invCFCn = document.getElementById('invCustomFields');
@@ -4165,6 +4232,11 @@
 
     if (s.logoDataUrl) {
       els.invLogo.src = s.logoDataUrl;
+      els.invLogo.style.width = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.height = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      els.invLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      els.invLogo.style.objectFit = 'contain';
       els.invLogoWrap.style.display = '';
     } else {
       els.invLogoWrap.style.display = 'none';
@@ -4388,7 +4460,7 @@
       var a4Data = {
         shopNameAr: s.laundryNameAr || '', shopNameEn: s.laundryNameEn || '',
         shopAddressAr: addressParts.length ? addressParts.join('، ') : (s.locationAr || ''),
-        shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: s.email || '',
+        shopAddressEn: s.locationEn || '', shopPhone: s.phone || '', shopEmail: (s.showEmailInInvoice !== false) ? (s.email || '') : '',
         invoiceNotes: inv.notes || '', settingsNotes: s.invoiceNotes || '', vatNumber: s.vatNumber || '',
         commercialRegister: s.commercialRegister || '', logoDataUrl: s.logoDataUrl || '',
         titleAr: 'إشعار دائن للفاتورة الضريبية المبسطة',
@@ -4818,6 +4890,14 @@
     });
 
     els.btnRemoveCustomer.addEventListener('click', clearCustomer);
+
+    // إيقاف الاشتراك لهذه الفاتورة فقط
+    if (els.btnSkipSubscription) {
+      els.btnSkipSubscription.addEventListener('click', () => {
+        state.skipSubscription = !state.skipSubscription;
+        els.btnSkipSubscription.classList.toggle('skip-sub-active', state.skipSubscription);
+      });
+    }
 
     // نقاط الولاء — زر + popup
     // زر فتح النقاط — desktop: popup / mobile: bottom sheet
@@ -5769,8 +5849,15 @@
     if (document.getElementById('crModalShopPhone')) document.getElementById('crModalShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
     const crLogoWrap = document.getElementById('crModalLogoWrap');
     const crLogo = document.getElementById('crModalLogo');
-    if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
-    else if (crLogoWrap) crLogoWrap.style.display = 'none';
+    if (s.logoDataUrl && crLogo) {
+      crLogo.src = s.logoDataUrl;
+      crLogo.style.width = (s.logoWidth || 180) + 'px';
+      crLogo.style.height = (s.logoHeight || 70) + 'px';
+      crLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      crLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      crLogo.style.objectFit = 'contain';
+      if (crLogoWrap) crLogoWrap.style.display = '';
+    } else if (crLogoWrap) crLogoWrap.style.display = 'none';
     fillCrModalShopExtra(s);
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
@@ -5863,8 +5950,15 @@
     if (document.getElementById('crModalShopPhone')) document.getElementById('crModalShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
     const crLogoWrap = document.getElementById('crModalLogoWrap');
     const crLogo = document.getElementById('crModalLogo');
-    if (s.logoDataUrl && crLogo) { crLogo.src = s.logoDataUrl; if (crLogoWrap) crLogoWrap.style.display = ''; }
-    else if (crLogoWrap) crLogoWrap.style.display = 'none';
+    if (s.logoDataUrl && crLogo) {
+      crLogo.src = s.logoDataUrl;
+      crLogo.style.width = (s.logoWidth || 180) + 'px';
+      crLogo.style.height = (s.logoHeight || 70) + 'px';
+      crLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      crLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      crLogo.style.objectFit = 'contain';
+      if (crLogoWrap) crLogoWrap.style.display = '';
+    } else if (crLogoWrap) crLogoWrap.style.display = 'none';
     fillCrModalShopExtra(s);
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');

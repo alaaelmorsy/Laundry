@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title data-i18n="settings-page-title">الإعدادات</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="../../assets/sidebar.css" />
   <style id="settings-inline-css">
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
@@ -810,7 +811,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </span>
-          <span class="tab-lbl">نقاط الولاء</span>
+          <span class="tab-lbl" data-i18n="settings-tab-loyalty">نقاط الولاء</span>
         </button>
 
         <button type="button" class="side-tab" data-panel="closing" id="tabClosing">
@@ -820,7 +821,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <polyline points="12 6 12 12 16 14"/>
             </svg>
           </span>
-          <span class="tab-lbl">ساعة الإقفال</span>
+          <span class="tab-lbl" data-i18n="settings-tab-closing">ساعة الإقفال</span>
         </button>
 
         <button type="button" class="side-tab" data-panel="systemRestore" id="tabSystemRestore">
@@ -830,7 +831,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <path d="M3.51 15a9 9 0 1 0 .49-3.36"/>
             </svg>
           </span>
-          <span class="tab-lbl">استعادة النظام</span>
+          <span class="tab-lbl" data-i18n="settings-tab-system-restore">استعادة النظام</span>
         </button>
 
         <button type="button" class="side-tab" data-panel="update" id="tabUpdate">
@@ -1246,11 +1247,21 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               </div>
               <div class="fld">
                 <label class="flbl" data-i18n="settings-label-logo-width">عرض الشعار</label>
-                <div class="fwrap"><input type="number" class="finp" id="logoWidth" min="1" max="2000" step="1" dir="ltr" style="text-align:left" /></div>
+                <div class="fwrap"><input type="number" class="finp" id="logoWidth" min="1" max="2000" step="1" dir="ltr" style="text-align:left" placeholder="180" /></div>
               </div>
               <div class="fld">
                 <label class="flbl" data-i18n="settings-label-logo-height">طول الشعار</label>
-                <div class="fwrap"><input type="number" class="finp" id="logoHeight" min="1" max="2000" step="1" dir="ltr" style="text-align:left" /></div>
+                <div class="fwrap"><input type="number" class="finp" id="logoHeight" min="1" max="2000" step="1" dir="ltr" style="text-align:left" placeholder="70" /></div>
+              </div>
+              <div class="fld f-full" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#f8fafc;border:1px solid var(--bdr)">
+                <label class="form-toggle-switch" style="flex-shrink:0">
+                  <input type="checkbox" id="showEmailInInvoice" />
+                  <span class="form-toggle-slider"></span>
+                </label>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <span style="font-size:12px;font-weight:700;line-height:1.4">إظهار البريد الإلكتروني في الفاتورة</span>
+                  <span style="font-size:11px;font-weight:400;color:var(--tx4);line-height:1.4">عند التفعيل يظهر البريد الإلكتروني في رأس الفاتورة المطبوعة</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1266,8 +1277,8 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               </svg>
             </div>
             <div>
-              <div class="c-tit">إرسال الفاتورة عبر الواتساب</div>
-              <div class="c-sub">إرسال PDF الفاتورة تلقائياً لجوال العميل عند كل حدث</div>
+              <div class="c-tit" data-i18n="settings-whatsapp-send-title">إرسال الفاتورة عبر الواتساب</div>
+              <div class="c-sub" data-i18n="settings-whatsapp-send-sub">إرسال PDF الفاتورة تلقائياً لجوال العميل عند كل حدث</div>
             </div>
           </div>
           <div class="card-body">
@@ -1277,42 +1288,42 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
                   <input type="checkbox" id="whatsappSendOnPrint" />
                   <span class="form-toggle-slider"></span>
                 </label>
-                <span style="font-size:12px;font-weight:700;line-height:1.4">إرسال عند الطباعة</span>
+                <span style="font-size:12px;font-weight:700;line-height:1.4" data-i18n="settings-whatsapp-send-on-print">إرسال عند الطباعة</span>
               </div>
               <div class="fld" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0">
                 <label class="form-toggle-switch" style="flex-shrink:0">
                   <input type="checkbox" id="whatsappSendOnClean" />
                   <span class="form-toggle-slider"></span>
                 </label>
-                <span style="font-size:12px;font-weight:700;line-height:1.4">إرسال عند التنظيف</span>
+                <span style="font-size:12px;font-weight:700;line-height:1.4" data-i18n="settings-whatsapp-send-on-clean">إرسال عند التنظيف</span>
               </div>
               <div class="fld" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0">
                 <label class="form-toggle-switch" style="flex-shrink:0">
                   <input type="checkbox" id="whatsappSendOnDeliver" />
                   <span class="form-toggle-slider"></span>
                 </label>
-                <span style="font-size:12px;font-weight:700;line-height:1.4">إرسال عند التسليم</span>
+                <span style="font-size:12px;font-weight:700;line-height:1.4" data-i18n="settings-whatsapp-send-on-deliver">إرسال عند التسليم</span>
               </div>
               <div class="fld" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0">
                 <label class="form-toggle-switch" style="flex-shrink:0">
                   <input type="checkbox" id="whatsappSendOnSubscription" />
                   <span class="form-toggle-slider"></span>
                 </label>
-                <span style="font-size:12px;font-weight:700;line-height:1.4">إرسال عند الاشتراك</span>
+                <span style="font-size:12px;font-weight:700;line-height:1.4" data-i18n="settings-whatsapp-send-on-subscription">إرسال عند الاشتراك</span>
               </div>
               <div class="fld" style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0">
                 <label class="form-toggle-switch" style="flex-shrink:0">
                   <input type="checkbox" id="whatsappSendOnPay" />
                   <span class="form-toggle-slider"></span>
                 </label>
-                <span style="font-size:12px;font-weight:700;line-height:1.4">إرسال عند الدفع</span>
+                <span style="font-size:12px;font-weight:700;line-height:1.4" data-i18n="settings-whatsapp-send-on-pay">إرسال عند الدفع</span>
               </div>
             </div>
             <div class="fld f-full" style="margin-top:12px">
-              <label class="flbl">رسالة إضافية مع كل رسائل الواتساب (اختياري)</label>
-              <div style="font-size:11px;color:#6b7280;margin-bottom:6px">تُضاف هذه الرسالة تلقائياً أسفل رسالة كل مرحلة (استلام / دفع / تنظيف / تسليم / استهلاك)</div>
+              <label class="flbl" data-i18n="settings-whatsapp-extra-msg-label">رسالة إضافية مع كل رسائل الواتساب (اختياري)</label>
+              <div style="font-size:11px;color:#6b7280;margin-bottom:6px" data-i18n="settings-whatsapp-extra-msg-hint">تُضاف هذه الرسالة تلقائياً أسفل رسالة كل مرحلة (استلام / دفع / تنظيف / تسليم / استهلاك)</div>
               <div class="fwrap">
-                <textarea class="finp" id="whatsappInvoiceMessage" rows="3" placeholder="مثال: شكراً لثقتكم بنا — مغسلة بلس" style="resize:vertical;min-height:72px;padding-top:8px;padding-bottom:8px"></textarea>
+                <textarea class="finp" id="whatsappInvoiceMessage" rows="3" data-i18n-placeholder="settings-whatsapp-extra-msg-placeholder" placeholder="مثال: شكراً لثقتكم بنا — مغسلة بلس" style="resize:vertical;min-height:72px;padding-top:8px;padding-bottom:8px"></textarea>
               </div>
             </div>
           </div>
@@ -1470,49 +1481,49 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               </svg>
             </div>
             <div>
-              <div class="c-tit">نظام نقاط الولاء</div>
-              <div class="c-sub">مكافأة العملاء بنقاط على كل فاتورة</div>
+              <div class="c-tit" data-i18n="settings-loyalty-title">نظام نقاط الولاء</div>
+              <div class="c-sub" data-i18n="settings-loyalty-sub">مكافأة العملاء بنقاط على كل فاتورة</div>
             </div>
           </div>
           <div class="card-body">
             <div class="fld" style="margin-bottom:20px">
-              <label class="flbl">تفعيل نظام نقاط الولاء</label>
+              <label class="flbl" data-i18n="settings-loyalty-enable-label">تفعيل نظام نقاط الولاء</label>
               <div class="fwrap" style="display:flex;align-items:center;gap:12px">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="checkbox" id="loyaltyEnabled" style="width:18px;height:18px;cursor:pointer" />
-                  <span id="loyaltyEnabledLabel" style="font-size:13px;color:var(--tx2)">معطّل</span>
+                  <span id="loyaltyEnabledLabel" style="font-size:13px;color:var(--tx2)" data-i18n="settings-loyalty-disabled">معطّل</span>
                 </label>
               </div>
             </div>
             <div id="loyaltySettingsFields">
               <div class="fg2" style="margin-bottom:16px">
                 <div class="fld">
-                  <label class="flbl">كل كم ريال = 1 نقطة</label>
+                  <label class="flbl" data-i18n="settings-loyalty-sar-per-point-label">كل كم ريال = 1 نقطة</label>
                   <div class="fwrap">
-                    <input type="number" class="finp" id="loyaltyRiyalsPerPoint" min="0.01" step="0.01" placeholder="مثال: 10" style="direction:ltr;text-align:left" />
+                    <input type="number" class="finp" id="loyaltyRiyalsPerPoint" min="0.01" step="0.01" data-i18n-placeholder="settings-loyalty-sar-per-point-placeholder" placeholder="مثال: 10" style="direction:ltr;text-align:left" />
                   </div>
-                  <div style="font-size:11px;color:var(--tx4);margin-top:4px">كل X ريال يكسب العميل نقطة واحدة</div>
+                  <div style="font-size:11px;color:var(--tx4);margin-top:4px" data-i18n="settings-loyalty-sar-per-point-hint">كل X ريال يكسب العميل نقطة واحدة</div>
                 </div>
                 <div class="fld">
-                  <label class="flbl">قيمة النقطة الواحدة (ريال)</label>
+                  <label class="flbl" data-i18n="settings-loyalty-point-value-label">قيمة النقطة الواحدة (ريال)</label>
                   <div class="fwrap">
-                    <input type="number" class="finp" id="loyaltySarPerPoint" min="0.0001" step="0.0001" placeholder="مثال: 0.05" style="direction:ltr;text-align:left" />
+                    <input type="number" class="finp" id="loyaltySarPerPoint" min="0.0001" step="0.0001" data-i18n-placeholder="settings-loyalty-point-value-placeholder" placeholder="مثال: 0.05" style="direction:ltr;text-align:left" />
                   </div>
-                  <div style="font-size:11px;color:var(--tx4);margin-top:4px">قيمة النقطة عند استخدامها كخصم</div>
+                  <div style="font-size:11px;color:var(--tx4);margin-top:4px" data-i18n="settings-loyalty-point-value-hint">قيمة النقطة عند استخدامها كخصم</div>
                 </div>
               </div>
               <div class="fg1" style="margin-bottom:16px">
                 <div class="fld">
-                  <label class="flbl">تاريخ انتهاء صلاحية النقاط</label>
+                  <label class="flbl" data-i18n="settings-loyalty-expiry-label">تاريخ انتهاء صلاحية النقاط</label>
                   <div class="fwrap">
                     <input type="date" class="finp" id="loyaltyExpiryDate" style="direction:ltr;text-align:left" />
                   </div>
-                  <div style="font-size:11px;color:var(--tx4);margin-top:4px">اتركه فارغاً = لا تنتهي صلاحية النقاط</div>
+                  <div style="font-size:11px;color:var(--tx4);margin-top:4px" data-i18n="settings-loyalty-expiry-hint">اتركه فارغاً = لا تنتهي صلاحية النقاط</div>
                 </div>
               </div>
             </div>
             <div class="save-bar">
-              <button type="button" class="btn-primary" id="btnSaveLoyalty">حفظ إعدادات النقاط</button>
+              <button type="button" class="btn-primary" id="btnSaveLoyalty" data-i18n="settings-loyalty-save-btn">حفظ إعدادات النقاط</button>
             </div>
           </div>
         </div>
@@ -1530,14 +1541,14 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               </svg>
             </div>
             <div>
-              <div class="c-tit">ساعة الإقفال اليومي</div>
-              <div class="c-sub">يبدأ التقرير اليومي من هذا الوقت ولمدة 24 ساعة</div>
+              <div class="c-tit" data-i18n="settings-closing-title">ساعة الإقفال اليومي</div>
+              <div class="c-sub" data-i18n="settings-closing-sub">يبدأ التقرير اليومي من هذا الوقت ولمدة 24 ساعة</div>
             </div>
           </div>
           <div class="card-body">
 
             <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px">
-              <label style="font-size:13px;color:var(--tx2);white-space:nowrap">وقت الإقفال</label>
+              <label style="font-size:13px;color:var(--tx2);white-space:nowrap" data-i18n="settings-closing-time-label">وقت الإقفال</label>
               <input type="time" id="closingTime" style="
                 height:42px;padding:0 14px;border-radius:10px;
                 border:1.5px solid var(--bdr);background:var(--bg);
@@ -1548,7 +1559,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
                 height:36px;padding:0 14px;border-radius:8px;
                 border:1.5px solid var(--bdr);background:transparent;
                 color:var(--tx3);font-size:12px;font-weight:700;cursor:pointer
-              ">مسح</button>
+              " data-i18n="settings-closing-clear-btn">مسح</button>
             </div>
 
             <!-- preview -->
@@ -1563,7 +1574,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              حفظ
+              <span data-i18n="settings-btn-save">حفظ الإعدادات</span>
             </button>
 
           </div>
@@ -1580,12 +1591,12 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               </svg>
             </div>
             <div>
-              <div class="c-tit">استعادة النظام</div>
-              <div class="c-sub">حذف بيانات محددة من النظام بشكل نهائي</div>
+              <div class="c-tit" data-i18n="settings-restore-title">استعادة النظام</div>
+              <div class="c-sub" data-i18n="settings-restore-sub">حذف بيانات محددة من النظام بشكل نهائي</div>
             </div>
           </div>
           <div class="card-body">
-            <p style="font-size:13px;color:var(--tx2);margin-bottom:16px;line-height:1.6">
+            <p style="font-size:13px;color:var(--tx2);margin-bottom:16px;line-height:1.6" data-i18n="settings-restore-desc">
               يتيح لك هذا الخيار حذف بيانات محددة من النظام. اختر ما تريد حذفه ثم اضغط الزر أدناه.
             </p>
             <button type="button" class="btn-danger" id="btnOpenSystemRestoreModal" style="padding:11px 28px;font-size:14px;border-radius:10px">
@@ -1593,7 +1604,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
                 <polyline points="1 4 1 10 7 10"/>
                 <path d="M3.51 15a9 9 0 1 0 .49-3.36"/>
               </svg>
-              استعادة النظام
+              <span data-i18n="settings-restore-btn">استعادة النظام</span>
             </button>
           </div>
         </div>
@@ -1683,9 +1694,9 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
                 <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/>
               </svg>
             </div>
-            <span style="font-weight:700;font-size:15px">استعادة النظام</span>
+            <span style="font-weight:700;font-size:15px" data-i18n="settings-restore-modal-title">استعادة النظام</span>
           </div>
-          <button type="button" class="btn-ghost" id="btnCloseSystemRestoreModal">إغلاق</button>
+          <button type="button" class="btn-ghost" id="btnCloseSystemRestoreModal" data-i18n="settings-restore-modal-close">إغلاق</button>
         </div>
         <div class="modal-body" style="padding:20px">
           <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px">
@@ -1693,62 +1704,70 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <span style="font-size:12px;font-weight:700;color:#dc2626;line-height:1.5">هذه العملية لا يمكن التراجع عنها — سيتم الحذف النهائي للبيانات المختارة</span>
+            <span style="font-size:12px;font-weight:700;color:#dc2626;line-height:1.5" data-i18n="settings-restore-warning">هذه العملية لا يمكن التراجع عنها — سيتم الحذف النهائي للبيانات المختارة</span>
           </div>
 
-          <p style="font-size:12px;color:var(--tx3);margin-bottom:14px">اختر ما تريد حذفه:</p>
+          <p style="font-size:12px;color:var(--tx3);margin-bottom:14px" data-i18n="settings-restore-choose">اختر ما تريد حذفه:</p>
 
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:22px">
             <label class="restore-option">
               <input type="checkbox" id="rcInvoices" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف الفواتير والفواتير الدائنة</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px">الفواتير، بنود الفواتير، المدفوعات، الفواتير الدائنة، المردودات</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-invoices-label">حذف الفواتير والفواتير الدائنة</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-invoices-desc">الفواتير، بنود الفواتير، المدفوعات، الفواتير الدائنة، المردودات</div>
               </div>
             </label>
             <label class="restore-option">
-              <input type="checkbox" id="rcCustomers" />
+              <input type="checkbox" id="rcSubscriptions" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف العملاء والاشتراكات وايصالات الاستهلاك</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px">العملاء، الاشتراكات، ايصالات الاستهلاك، نقاط الولاء</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-subscriptions-label">حذف الاشتراكات وايصالات الاستهلاك</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-subscriptions-desc">الاشتراكات، الدورات، إيصالات الاستهلاك، نقاط الولاء</div>
+              </div>
+            </label>
+            <label class="restore-option" id="rcCustomersOption" style="opacity:.5;cursor:not-allowed">
+              <input type="checkbox" id="rcCustomers" disabled />
+              <span class="restore-check"></span>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" class="restore-label" data-i18n="settings-rc-customers-label">حذف العملاء</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-customers-desc">جداول العملاء فقط — يجب اختيار حذف الاشتراكات وايصالات الاستهلاك أولاً</div>
               </div>
             </label>
             <label class="restore-option">
               <input type="checkbox" id="rcServices" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف الخدمات (الخدمات والعمليات والأسعار)</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px">الخدمات، المنتجات، الأسعار، الباقات المدفوعة مسبقاً، العروض</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-services-label">حذف الخدمات (الخدمات والعمليات والأسعار)</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-services-desc">الخدمات، المنتجات، الأسعار، الباقات المدفوعة مسبقاً، العروض</div>
               </div>
             </label>
             <label class="restore-option">
               <input type="checkbox" id="rcExpenses" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف المصروفات</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px">جميع سجلات المصروفات</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-expenses-label">حذف المصروفات</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-expenses-desc">جميع سجلات المصروفات</div>
               </div>
             </label>
             <label class="restore-option">
               <input type="checkbox" id="rcGarments" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف سير الملابس</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px">جميع بيانات الشماعات وسير الملابس</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-garments-label">حذف سير الملابس</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-garments-desc">جميع بيانات الشماعات وسير الملابس</div>
               </div>
             </label>
           </div>
 
           <div style="display:flex;justify-content:flex-end;gap:10px">
-            <button type="button" class="btn-ghost" id="btnCancelSystemRestore">إلغاء</button>
+            <button type="button" class="btn-ghost" id="btnCancelSystemRestore" data-i18n="settings-restore-cancel">إلغاء</button>
             <button type="button" class="btn-danger" id="btnConfirmSystemRestore" disabled style="padding:10px 24px;border-radius:10px;font-size:13px;opacity:.5;cursor:not-allowed">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
               </svg>
-              تنفيذ الاستعادة
+              <span data-i18n="settings-restore-confirm-btn">تنفيذ الاستعادة</span>
             </button>
           </div>
         </div>
@@ -1826,10 +1845,18 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
   });
 })();
 </script>
+<style>
+.modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(4px)}
+.modal-card{position:relative;background:var(--bg);border:1px solid var(--bdr);border-radius:16px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal-hdr{padding:16px 20px;border-bottom:1px solid var(--bdr)}
+.modal-body{padding:16px 20px}
+</style>
 <script src="../../assets/web-api.js"></script>
 <script src="../../assets/auth-guard.js"></script>
 <script src="../../assets/i18n.js"></script>
 <script src="settings.js"></script>
+  <script src="../../assets/sidebar.js"></script>
 </body>
 <!-- Update panel injected before </html> to keep it out of main DOM scan -->
 </html>

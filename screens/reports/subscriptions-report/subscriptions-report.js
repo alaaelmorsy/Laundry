@@ -8,6 +8,9 @@ let _perTotalPages  = 1;
 let _currentFilters = null;
 let _reportLoaded   = false;
 let _colSetup       = false;
+let _crColSetup     = false;
+let _crViewerSettings = {}; // إعدادات التطبيق للطباعة
+let _crViewerReceiptNum = '';
 
 /* ── Init ──────────────────────────────────────────────────────── */
 window.addEventListener('DOMContentLoaded', () => {
@@ -22,6 +25,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadPackages();
   setupCustomerSearch();
   setupEventListeners();
+  setupCrViewerListeners();
 });
 
 /* ── Date defaults (from = 1st of current month, to = today) ──── */
@@ -185,6 +189,9 @@ async function loadReport() {
       setupCollapsible('togglePeriods', 'bodyPeriods');
       _colSetup = true;
     }
+
+    // جلب إيصالات الاستهلاك بنفس الفلاتر
+    loadConsumptionReceipts(_currentFilters);
 
     document.getElementById('loadingState').style.display  = 'none';
     const rc = document.getElementById('reportContent');
@@ -511,6 +518,245 @@ async function doExport(type) {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ── Consumption Receipts ───────────────────────────────────────── */
+async function loadConsumptionReceipts(filters) {
+  const section = document.getElementById('sectionConsumption');
+  try {
+    const payload = { pageSize: 1000, page: 1 };
+    if (filters.customerId)  payload.customerId    = filters.customerId;
+    if (filters.dateFrom)    payload.dateFrom       = filters.dateFrom.substring(0, 10);
+    if (filters.dateTo)      payload.dateTo         = filters.dateTo.substring(0, 10);
+    if (filters.search && !filters.customerId) payload.search = filters.search;
+
+    const res = await window.api.getConsumptionReceipts(payload);
+    const list = (res && res.success) ? (res.receipts || []) : [];
+
+    renderConsumptionReceipts(list);
+    section.style.display = '';
+
+    if (!_crColSetup) {
+      setupCollapsible('toggleConsumption', 'bodyConsumption');
+      _crColSetup = true;
+    }
+  } catch (e) {
+    section.style.display = 'none';
+  }
+}
+
+function renderConsumptionReceipts(list) {
+  document.getElementById('badgeConsumption').textContent = list.length;
+
+  const total = list.reduce((s, r) => s + Number(r.amount_consumed || 0), 0);
+  document.getElementById('consumptionTotals').innerHTML = list.length
+    ? `<span class="section-total-item">الإجمالي المستهلك: <span>${fmt(total)} <span class="sar">&#xE900;</span></span></span>`
+    : '';
+
+  // desktop table
+  document.getElementById('consumptionTableBody').innerHTML = list.length
+    ? list.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td dir="ltr">C-${escHtml(String(r.receipt_seq || r.id))}</td>
+        <td>${escHtml(r.customer_name || '—')}</td>
+        <td dir="ltr">${escHtml(r.phone || '—')}</td>
+        <td>${escHtml(r.package_name || '—')}</td>
+        <td>${fmtD(r.created_at)}</td>
+        <td>${SAR(r.amount_consumed)}</td>
+        <td>${SAR(r.balance_before)}</td>
+        <td>${SAR(r.balance_after)}</td>
+        <td><button class="btn-view-cr" onclick="openCrViewer(${r.id})">عرض الإيصال</button></td>
+      </tr>`).join('')
+    : `<tr><td colspan="10" style="text-align:center;padding:12px;color:#888">لا توجد إيصالات استهلاك</td></tr>`;
+
+  // mobile cards
+  document.getElementById('consumptionMobileCards').innerHTML = list.length
+    ? list.map((r, i) => `
+      <div class="mobile-card">
+        <div class="mc-row1">
+          <span class="mc-num">C-${escHtml(String(r.receipt_seq || r.id))}</span>
+          <span class="mc-date">${fmtD(r.created_at)}</span>
+        </div>
+        <div class="mc-customer">${escHtml(r.customer_name || '—')} · <span dir="ltr">${escHtml(r.phone || '')}</span></div>
+        <div class="mc-pkg">${escHtml(r.package_name || '—')}</div>
+        <div class="mc-row2">
+          <span>مستهلك: ${SAR(r.amount_consumed)}</span>
+          <span>رصيد بعد: ${SAR(r.balance_after)}</span>
+        </div>
+        <button class="btn-view-cr" onclick="openCrViewer(${r.id})" style="margin-top:6px;width:100%">عرض الإيصال</button>
+      </div>`).join('')
+    : '';
+
+  document.getElementById('consumptionFooter').innerHTML = list.length
+    ? `إجمالي: <strong>${list.length}</strong> إيصال — مجموع المستهلك: <strong>${fmt(total)} <span class="sar">&#xE900;</span></strong>`
+    : '';
+}
+
+/* ── Receipt Viewer ─────────────────────────────────────────────── */
+async function openCrViewer(receiptId) {
+  try {
+    const [crRes, settingsRes] = await Promise.all([
+      window.api.getConsumptionReceiptById({ id: receiptId }),
+      window.api.getAppSettings()
+    ]);
+    if (!crRes || !crRes.success || !crRes.receipt) { showToast('تعذّر تحميل الإيصال', 'error'); return; }
+
+    const receipt  = crRes.receipt;
+    const settings = (settingsRes && settingsRes.settings) || {};
+    _crViewerSettings = settings;
+
+    if (receipt.order_id) {
+      try {
+        const orderRes = await window.api.getOrderById({ id: receipt.order_id });
+        if (orderRes && orderRes.success) {
+          if (orderRes.items && orderRes.items.length) {
+            receipt.items = orderRes.items.map(it => ({
+              productNameAr: it.product_name_ar, productNameEn: it.product_name_en,
+              serviceNameAr: it.service_name_ar, serviceNameEn: it.service_name_en,
+              quantity: it.quantity, lineTotal: it.line_total
+            }));
+          }
+          const ord = orderRes.order || null;
+          if (!receipt.cleaning_date && ord && ord.cleaning_date) receipt.cleaning_date = ord.cleaning_date;
+          if (!receipt.delivery_date && ord && ord.delivery_date) receipt.delivery_date = ord.delivery_date;
+        }
+      } catch (_) {}
+    }
+
+    populateCrViewer(receipt, settings);
+    document.getElementById('crViewerModal').style.display = 'flex';
+  } catch (e) {
+    showToast('حدث خطأ أثناء تحميل الإيصال', 'error');
+  }
+}
+
+function populateCrViewer(r, s) {
+  s = s || {};
+
+  // بيانات المغسلة
+  document.getElementById('crVShopName').textContent    = s.laundryNameAr || s.laundryNameEn || '';
+  document.getElementById('crVShopAddress').textContent = s.locationAr || s.locationEn || '';
+  document.getElementById('crVShopPhone').textContent   = s.phone ? 'هاتف: ' + s.phone : '';
+
+  const taxEl = document.getElementById('crVShopTax'), taxRow = document.getElementById('crVShopTaxRow');
+  if (s.vatNumber) { taxEl.textContent = 'الرقم الضريبي: ' + s.vatNumber; taxRow.style.display = ''; }
+  else taxRow.style.display = 'none';
+
+  const crEl = document.getElementById('crVShopCr'), crRow = document.getElementById('crVShopCrRow');
+  if (s.commercialRegister) { crEl.textContent = 'السجل التجاري: ' + s.commercialRegister; crRow.style.display = ''; }
+  else crRow.style.display = 'none';
+
+  const logoWrap = document.getElementById('crVLogoWrap'), logo = document.getElementById('crVLogo');
+  if (s.logoDataUrl && logo) { logo.src = s.logoDataUrl; logoWrap.style.display = ''; }
+  else if (logoWrap) logoWrap.style.display = 'none';
+
+  // بيانات الإيصال
+  _crViewerReceiptNum = r.receipt_seq ? 'C-' + r.receipt_seq : String(r.id || '');
+  document.getElementById('crVReceiptNum').textContent = _crViewerReceiptNum;
+  document.getElementById('crVDate').textContent       = fmtD(r.created_at);
+  document.getElementById('crVCustomer').textContent   = r.customer_name || '—';
+  document.getElementById('crVPhone').textContent      = r.phone || '—';
+  document.getElementById('crVSubRef').textContent     = r.subscription_number ? '#' + r.subscription_number : (r.subscription_id ? '#' + r.subscription_id : '—');
+  document.getElementById('crVPackage').textContent    = r.package_name || '—';
+
+  const cleanRow = document.getElementById('crVCleanedAtRow'), deliverRow = document.getElementById('crVDeliveredAtRow');
+  if (r.cleaning_date) { document.getElementById('crVCleanedAt').textContent = fmtD(r.cleaning_date); cleanRow.style.display = ''; }
+  else cleanRow.style.display = 'none';
+  if (r.delivery_date) { document.getElementById('crVDeliveredAt').textContent = fmtD(r.delivery_date); deliverRow.style.display = ''; }
+  else deliverRow.style.display = 'none';
+
+  // الأرقام
+  document.getElementById('crVConsumed').innerHTML  = SAR(r.amount_consumed);
+  document.getElementById('crVBalBefore').innerHTML = SAR(r.balance_before);
+  document.getElementById('crVBalAfter').innerHTML  = SAR(r.balance_after);
+
+  // البنود
+  let items = r.items || [];
+  try {
+    if (!items.length && r.items_json) items = typeof r.items_json === 'string' ? JSON.parse(r.items_json) : r.items_json;
+  } catch (_) {}
+
+  document.getElementById('crVItemsBody').innerHTML = items.length
+    ? items.map(it => {
+        const name = it.productNameAr || it.product_name_ar || it.productNameEn || it.product_name_en || it.name || '—';
+        const svc  = it.serviceNameAr || it.service_name_ar || it.serviceNameEn || it.service_name_en || '—';
+        const qty  = it.quantity || it.qty || 1;
+        const tot  = it.lineTotal != null ? it.lineTotal : (it.line_total != null ? it.line_total : null);
+        return `<tr>
+          <td class="inv-td-name">${escHtml(String(name))}</td>
+          <td class="inv-td-num">${escHtml(String(qty))}</td>
+          <td class="inv-td-num">${tot != null ? SAR(tot) : '—'}</td>
+          <td class="inv-td-name">${escHtml(String(svc))}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="4" style="text-align:center;padding:8px;color:#888">—</td></tr>`;
+}
+
+function closeCrViewer() {
+  document.getElementById('crViewerModal').style.display = 'none';
+}
+
+function setupCrViewerListeners() {
+  document.getElementById('crViewerCloseBtn').addEventListener('click', closeCrViewer);
+
+  document.getElementById('crViewerPrintBtn').addEventListener('click', () => {
+    const paper = document.getElementById('crViewerPaper');
+    const zone  = document.getElementById('crViewerPrintZone');
+    if (!paper || !zone) return;
+
+    // تطبيق هوامش الطباعة من إعدادات التطبيق
+    const s     = _crViewerSettings || {};
+    const mLeft  = parseFloat(s.thermalMarginLeft  || 0) || 0;
+    const mRight = parseFloat(s.thermalMarginRight || 0) || 0;
+    const shift  = mLeft - mRight;
+    const styleId = 'crPrintPageStyle';
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+    styleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { #crViewerPrintZone .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;'
+      + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
+
+    zone.innerHTML = paper.outerHTML;
+    zone.style.setProperty('display', 'block', 'important');
+    window.print();
+    setTimeout(() => { zone.innerHTML = ''; zone.style.display = 'none'; if (styleEl) styleEl.textContent = ''; }, 1000);
+  });
+
+  document.getElementById('crViewerPdfBtn').addEventListener('click', async () => {
+    const paper = document.getElementById('crViewerPaper');
+    if (!paper) return;
+    const btn = document.getElementById('crViewerPdfBtn');
+    try {
+      btn.disabled = true;
+      btn.querySelector('span').textContent = 'جارٍ التصدير...';
+      const s = _crViewerSettings || {};
+      const paperType = s.invoicePaperType || 'thermal';
+      const result = await window.api.exportInvoicePdfFromHtml({
+        html: paper.outerHTML,
+        paperType,
+        orderNum: _crViewerReceiptNum || 'receipt'
+      });
+      if (result && result.success) {
+        showToast('تم تنزيل PDF بنجاح', 'success');
+      } else {
+        showToast((result && result.message) || 'فشل تصدير PDF', 'error');
+      }
+    } catch (_) {
+      showToast('حدث خطأ أثناء تصدير PDF', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'تصدير PDF';
+    }
+  });
+
+  document.getElementById('crViewerModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('crViewerModal')) closeCrViewer();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('crViewerModal');
+    if (e.key === 'Escape' && modal && modal.style.display !== 'none') closeCrViewer();
+  });
 }
 
 /* ── Toast ──────────────────────────────────────────────────────── */

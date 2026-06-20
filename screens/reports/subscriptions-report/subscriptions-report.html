@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../../assets/tailwind.css" />
   <link rel="stylesheet" href="subscriptions-report.css" />
   <link rel="stylesheet" href="../../../assets/screen-mobile-compact.css" />
+  <link rel="stylesheet" href="../../consumption-receipts/consumption-receipts.css" />
 </head>
 <body>
 
@@ -207,11 +208,154 @@
           </div>
         </div>
 
+        <!-- ── قسم إيصالات الاستهلاك ── -->
+        <div class="report-section collapsible" id="sectionConsumption" style="display:none">
+          <div class="section-header toggle-header" id="toggleConsumption">
+            <div class="section-title-wrap">
+              <span class="toggle-arrow">▼</span>
+              <div class="section-icon-wrap sub-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
+              <h2 class="section-title">إيصالات الاستهلاك</h2>
+              <span class="section-badge badge-sub" id="badgeConsumption">0</span>
+            </div>
+            <div class="section-totals" id="consumptionTotals"></div>
+          </div>
+          <div class="collapsible-body open" id="bodyConsumption">
+            <div class="table-container desktop-only">
+              <table class="report-table detail-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>رقم الإيصال</th>
+                    <th>العميل</th>
+                    <th>الجوال</th>
+                    <th>الباقة</th>
+                    <th>التاريخ</th>
+                    <th>المستهلك</th>
+                    <th>الرصيد قبل</th>
+                    <th>الرصيد بعد</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="consumptionTableBody"></tbody>
+              </table>
+            </div>
+            <div id="consumptionMobileCards" class="mobile-cards-list mobile-only"></div>
+            <div class="section-footer" id="consumptionFooter"></div>
+          </div>
+        </div>
+
       </div>
 
     </main>
 
   </div>
+
+  <!-- مودال عرض إيصال الاستهلاك -->
+  <div id="crViewerModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="crViewerCloseBtn" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
+        <button id="crViewerPdfBtn" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="18"/>
+            <line x1="15" y1="15" x2="12" y2="18"/>
+          </svg>
+          <span>تصدير PDF</span>
+        </button>
+        <button id="crViewerPrintBtn" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="crViewerPaper">
+          <div class="inv-header-wrap">
+            <div class="inv-logo-wrap" id="crVLogoWrap" style="display:none">
+              <img id="crVLogo" class="inv-logo" alt="" />
+            </div>
+            <div class="inv-shop-name" id="crVShopName"></div>
+            <div class="inv-shop-sub" id="crVShopAddress"></div>
+            <div class="inv-shop-contact-row">
+              <span class="inv-shop-sub" id="crVShopPhone"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="crVShopTaxRow" style="display:none">
+              <span class="inv-shop-sub" id="crVShopTax" dir="ltr"></span>
+            </div>
+            <div class="inv-shop-contact-row" id="crVShopCrRow" style="display:none">
+              <span class="inv-shop-sub" id="crVShopCr" dir="ltr"></span>
+            </div>
+          </div>
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" style="justify-content:center">
+            <span class="inv-meta-label cr-receipt-title">إيصال استهلاك</span>
+          </div>
+          <div class="cr-info-grid">
+            <div class="cr-info-cell">
+              <span class="cr-info-label">رقم الإيصال</span>
+              <span class="cr-info-val" id="crVReceiptNum" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">التاريخ</span>
+              <span class="cr-info-val" id="crVDate" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">العميل</span>
+              <span class="cr-info-val" id="crVCustomer"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">الجوال</span>
+              <span class="cr-info-val" id="crVPhone" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">رقم الاشتراك</span>
+              <span class="cr-info-val" id="crVSubRef" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell">
+              <span class="cr-info-label">الباقة</span>
+              <span class="cr-info-val" id="crVPackage"></span>
+            </div>
+            <div class="cr-info-cell" id="crVCleanedAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التنظيف</span>
+              <span class="cr-info-val" id="crVCleanedAt" dir="ltr"></span>
+            </div>
+            <div class="cr-info-cell" id="crVDeliveredAtRow" style="display:none">
+              <span class="cr-info-label">تاريخ التسليم</span>
+              <span class="cr-info-val" id="crVDeliveredAt" dir="ltr"></span>
+            </div>
+          </div>
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="inv-th-name">النوع</th>
+                <th class="inv-th-num">عدد</th>
+                <th class="inv-th-num">الإجمالي</th>
+                <th class="inv-th-name">العملية</th>
+              </tr>
+            </thead>
+            <tbody id="crVItemsBody"></tbody>
+          </table>
+          <div class="inv-totals-box">
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label">المبلغ المستهلك</span><span class="inv-meta-val" id="crVConsumed" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label">الرصيد قبل</span><span class="inv-meta-val" id="crVBalBefore" dir="ltr"></span></div>
+            <div class="inv-meta-row inv-total-row"><span class="inv-meta-label">الرصيد بعد</span><span class="inv-meta-val" id="crVBalAfter" dir="ltr"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="crViewerPrintZone" style="display:none"></div>
 
   <div id="toastContainer" class="toast-container"></div>
 

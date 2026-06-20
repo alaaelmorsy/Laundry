@@ -403,19 +403,31 @@ async function verifySha256(filePath, checksumUrl) {
   logEvent('INFO', 'Checksum verified: OK');
 }
 
-// ── spawnUpdater: launch detached PowerShell updater script ──────────────────
+// ── spawnUpdater: register updater.ps1 as a Scheduled Task so it survives
+// the Node process exit (detached spawn stays inside the NSSM job object and
+// gets killed the moment this process exits — Task Scheduler owns the task).
 function spawnUpdater({ targetVersion, fromVersion, newExePath, backupPath }) {
-  const updaterScript = path.join(DATA_ROOT, 'scripts', 'updater.ps1');
-  const child = spawn('powershell.exe', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', updaterScript,
+  const srcUpdater = path.join(ROOT, 'scripts', 'updater.ps1');
+  const srcLaunch  = path.join(ROOT, 'scripts', 'launch-updater.ps1');
+  if (!fs.existsSync(srcUpdater)) throw new Error(`updater.ps1 غير موجود: ${srcUpdater}`);
+  if (!fs.existsSync(srcLaunch))  throw new Error(`launch-updater.ps1 غير موجود: ${srcLaunch}`);
+
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const updaterScript = path.join(DATA_DIR, '_updater.ps1');
+  const launchScript  = path.join(DATA_DIR, '_launch-updater.ps1');
+  fs.copyFileSync(srcUpdater, updaterScript);
+  fs.copyFileSync(srcLaunch,  launchScript);
+
+  execFileSync('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launchScript,
+    '-UpdaterScript', updaterScript,
     '-ServerPid',     String(process.pid),
     '-TargetVersion', targetVersion,
     '-FromVersion',   fromVersion,
     '-NewExePath',    newExePath,
     '-BackupPath',    backupPath,
     '-AppRoot',       DATA_ROOT,
-  ], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.unref();
+  ], { stdio: 'ignore', windowsHide: true, timeout: 30000 });
 }
 
 // ── T016: performUpdate ───────────────────────────────────────────────────────

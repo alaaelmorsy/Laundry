@@ -701,6 +701,17 @@ function buildPdfHtmlForSubscriptionCustomerReport(report, cairoRegularB64, cair
       <td>${escHtmlPdf(pmMap[inv.payment_method] || inv.payment_method || '—')}</td>
     </tr>`).join('');
 
+  const crRows = (report.consumptionReceipts || []).map((cr, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>C-${escHtmlPdf(String(cr.receipt_seq || cr.id))}</td>
+      <td>${formatDateSimple(cr.created_at)}</td>
+      <td><span class="sar">&#xE900;</span> ${Number(cr.amount_consumed || 0).toFixed(2)}</td>
+      <td><span class="sar">&#xE900;</span> ${Number(cr.balance_before || 0).toFixed(2)}</td>
+      <td><span class="sar">&#xE900;</span> ${Number(cr.balance_after || 0).toFixed(2)}</td>
+    </tr>`).join('');
+  const crTotal = (report.consumptionReceipts || []).reduce((s, cr) => s + Number(cr.amount_consumed || 0), 0);
+
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -763,6 +774,12 @@ ${custBlock}
 <table>
   <thead><tr><th>#</th><th>رقم الفاتورة</th><th>التاريخ</th><th>المبلغ الإجمالي</th><th>المخصوم من الاشتراك</th><th>طريقة الدفع</th></tr></thead>
   <tbody>${invRows || '<tr><td colspan="6">لا توجد فواتير مرتبطة</td></tr>'}</tbody>
+</table>
+<h2>إيصالات الاستهلاك</h2>
+<table>
+  <thead><tr><th>#</th><th>رقم الإيصال</th><th>التاريخ</th><th>المستهلك</th><th>الرصيد قبل</th><th>الرصيد بعد</th></tr></thead>
+  <tbody>${crRows || '<tr><td colspan="6">لا توجد إيصالات استهلاك</td></tr>'}</tbody>
+  ${crRows ? `<tfoot><tr><td colspan="3" style="font-weight:700">الإجمالي: ${(report.consumptionReceipts||[]).length} إيصال</td><td style="font-weight:700"><span class="sar">&#xE900;</span> ${crTotal.toFixed(2)}</td><td colspan="2"></td></tr></tfoot>` : ''}
 </table>
 <div class="footer">نظام إدارة المغسلة</div>
 </body>
@@ -2180,7 +2197,7 @@ function buildExcelDataForReport(data, filters) {
 }
 
 function buildPdfHtmlForReport(data, filters, cairoRegularB64, cairoBoldB64, saudiRiyalB64, branding) {
-  const { summary, paymentMethods, invoices, expenses, creditNotes, subscriptions } = data;
+  const { summary, paymentMethods, invoices, expenses, creditNotes, subscriptions, deferredPayments = [], consumptionReceipts = [] } = data;
   const br = branding || {};
   const shopName = br.laundryNameAr || br.laundryNameEn || 'نظام المغسلة';
   const shopAddress = [br.streetNameAr, br.districtAr, br.cityAr].filter(Boolean).join('، ');
@@ -2200,7 +2217,7 @@ function buildPdfHtmlForReport(data, filters, cairoRegularB64, cairoBoldB64, sau
     { label: 'المبيعات بعد الخصم', d: summary.salesAfterDisc, cls: '' },
     { label: 'إشعارات الدائن (المرتجعات)', d: summary.creditNotes, cls: '' },
     { label: 'إجمالي المبيعات بعد الخصم بعد المرتجعات', d: summary.totalNet, cls: 'row-total' },
-    ...(summary.partialPayments && summary.partialPayments.afterTax > 0
+    ...(summary.partialPayments
       ? [{ label: 'مدفوعات الفواتير الآجلة', d: summary.partialPayments, cls: '' }]
       : []),
     { label: 'الاشتراكات', d: summary.subscriptions, cls: '' },
@@ -2312,6 +2329,37 @@ function buildPdfHtmlForReport(data, filters, cairoRegularB64, cairoBoldB64, sau
       </tr>`
     : '<tr><td colspan="5" class="empty-msg">لا توجد اشتراكات</td></tr>';
 
+  const consTotal = consumptionReceipts.reduce((s, c) => s + Number(c.total_amount || 0), 0);
+  const consHtml = consumptionReceipts.length
+    ? consumptionReceipts.map((cr, i) => `
+      <tr class="${i % 2 !== 0 ? 'alt' : ''}">
+        <td class="num">C-${cr.receipt_seq || cr.id}</td>
+        <td>${cr.phone || cr.customer_name || '—'}</td>
+        <td>${fmtDT(cr.created_at)}</td>
+        <td class="num">${R(cr.total_amount)}</td>
+      </tr>`).join('') + `
+      <tr class="tbl-foot">
+        <td colspan="3">الإجمالي: ${consumptionReceipts.length} إيصال</td>
+        <td class="num">${R(consTotal)}</td>
+      </tr>`
+    : '<tr><td colspan="4" class="empty-msg">لا توجد إيصالات استهلاك</td></tr>';
+
+  const defTotal = deferredPayments.reduce((s, p) => s + Number(p.payment_amount || 0), 0);
+  const defHtml = deferredPayments.length
+    ? deferredPayments.map((p, i) => `
+      <tr class="${i % 2 !== 0 ? 'alt' : ''}">
+        <td class="num">${p.invoice_seq || p.order_number || p.order_id}</td>
+        <td>${p.phone || p.customer_name || '—'}</td>
+        <td>${fmtDT(p.created_at)}</td>
+        <td>${payLabel(p.payment_method)}</td>
+        <td class="num">${R(p.payment_amount)}</td>
+      </tr>`).join('') + `
+      <tr class="tbl-foot">
+        <td colspan="4">الإجمالي: ${deferredPayments.length} دفعة</td>
+        <td class="num">${R(defTotal)}</td>
+      </tr>`
+    : '<tr><td colspan="5" class="empty-msg">لا توجد مدفوعات آجلة</td></tr>';
+
   const logoHtml = br.logoDataUrl
     ? `<img src="${br.logoDataUrl}" class="hdr-logo-img" alt="logo" />`
     : `<svg class="hdr-logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2332,28 +2380,28 @@ body{direction:rtl;background:#fff;color:#000;font-size:10.5px}
 @page{size:A4;margin:0}
 .page{background:#fff;width:100%}
 
-.hdr{background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 55%,#0284c7 100%);padding:16px 22px;color:#fff;display:flex;align-items:center;gap:13px}
-.hdr-logo{width:50px;height:50px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+.hdr{background:linear-gradient(135deg,#0ea5e9 0%,#38bdf8 55%,#7dd3fc 100%);padding:16px 22px;color:#fff;display:flex;align-items:center;gap:13px}
+.hdr-logo{width:50px;height:50px;border-radius:10px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
 .hdr-logo-img{max-width:46px;max-height:46px;object-fit:contain}
 .hdr-logo-svg{width:28px;height:28px;color:#fff}
 .hdr-info{flex:1;min-width:0}
 .hdr-shop{font-size:17px;font-weight:900;line-height:1.2;letter-spacing:.2px}
 .hdr-sub{font-size:9.5px;font-weight:400;opacity:.82;margin-top:3px}
 .hdr-right{margin-right:auto;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
-.hdr-badge{background:rgba(255,255,255,.22);border-radius:20px;padding:4px 14px;font-size:10px;font-weight:700;white-space:nowrap}
+.hdr-badge{background:rgba(255,255,255,.28);border-radius:20px;padding:4px 14px;font-size:10px;font-weight:700;white-space:nowrap}
 .hdr-ts{font-size:8.5px;opacity:.72;text-align:left}
 
-.info-bar{background:#dbeafe;border-bottom:2px solid #93c5fd;padding:6px 22px;display:flex;justify-content:space-between;align-items:center;font-size:9.5px;color:#000;font-weight:700}
+.info-bar{background:#e0f2fe;border-bottom:2px solid #7dd3fc;padding:6px 22px;display:flex;justify-content:space-between;align-items:center;font-size:9.5px;color:#0c4a6e;font-weight:700}
 
 .body{padding:13px 20px;display:flex;flex-direction:column;gap:12px}
 
-.sec{border-radius:8px;overflow:hidden;border:1px solid #e2e8f0}
-.sec-hdr{background:linear-gradient(90deg,#1e3a8a,#2563eb);padding:7px 14px;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:space-between}
-.sec-badge{background:rgba(255,255,255,.25);border-radius:20px;padding:2px 10px;font-size:9px;font-weight:700;white-space:nowrap}
+.sec{border-radius:8px;overflow:hidden;border:1px solid #e0f2fe}
+.sec-hdr{background:linear-gradient(90deg,#0ea5e9,#38bdf8);padding:7px 14px;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:space-between}
+.sec-badge{background:rgba(255,255,255,.28);border-radius:20px;padding:2px 10px;font-size:9px;font-weight:700;white-space:nowrap}
 .sec-body{background:#fff}
 
 table{width:100%;border-collapse:collapse;font-size:9.5px}
-thead th{padding:7px 10px;background:#1e3a8a;color:#fff;font-weight:700;text-align:right;font-size:9.5px;white-space:nowrap}
+thead th{padding:7px 10px;background:#0ea5e9;color:#fff;font-weight:700;text-align:right;font-size:9.5px;white-space:nowrap}
 thead th.num{text-align:left;direction:ltr}
 tbody tr{border-bottom:1px solid #f1f5f9}
 tbody tr:last-child{border-bottom:none}
@@ -2365,9 +2413,9 @@ td.tax{color:#000}
 td.note{color:#000;font-size:9px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row-total td{background:#dcfce7!important;color:#000!important;font-weight:900}
 .row-total td.num{color:#000!important}
-.row-net td{background:#eff6ff!important;color:#000!important;font-weight:900;font-size:10px}
-.row-net td.num,.row-net td.tax{color:#000!important}
-.tbl-foot td{background:#f0f9ff;font-weight:900;font-size:10px;color:#000;border-top:2px solid #bae6fd;padding:6px 10px}
+.row-net td{background:#e0f2fe!important;color:#0c4a6e!important;font-weight:900;font-size:10px}
+.row-net td.num,.row-net td.tax{color:#0c4a6e!important}
+.tbl-foot td{background:#f0f9ff;font-weight:900;font-size:10px;color:#0c4a6e;border-top:2px solid #bae6fd;padding:6px 10px}
 .tbl-foot td.num{color:#000!important}
 .tbl-foot td.neg{color:#dc2626!important}
 
@@ -2392,10 +2440,10 @@ td.note{color:#000;font-size:9px;max-width:120px;overflow:hidden;text-overflow:e
 
 .empty-msg{text-align:center;color:#000;padding:14px;font-size:9.5px}
 
-.footer{border-top:2px solid #e2e8f0;padding:9px 22px;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;margin-top:12px}
-.footer-brand{font-size:10px;font-weight:900;color:#000}
-.footer-meta{font-size:9px;color:#000}
-@media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+.footer{border-top:2px solid #bae6fd;padding:9px 22px;background:#f0f9ff;display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.footer-brand{font-size:10px;font-weight:900;color:#0c4a6e}
+.footer-meta{font-size:9px;color:#0369a1}
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 </style>
 </head>
 <body>
@@ -2449,10 +2497,10 @@ td.note{color:#000;font-size:9px;max-width:120px;overflow:hidden;text-overflow:e
   </div>
 </div>
 
-${invoices.length ? `<div class="sec">
+<div class="sec">
   <div class="sec-hdr">
     <span>الفواتير</span>
-    <span class="sec-badge">${invoices.length} فاتورة &nbsp;·&nbsp; ${R(invTotal)}</span>
+    <span class="sec-badge">${invoices.length} فاتورة${invoices.length ? ` &nbsp;·&nbsp; ${R(invTotal)}` : ''}</span>
   </div>
   <div class="sec-body">
     <table>
@@ -2460,12 +2508,12 @@ ${invoices.length ? `<div class="sec">
       <tbody>${invoicesHtml}</tbody>
     </table>
   </div>
-</div>` : ''}
+</div>
 
-${expenses.length ? `<div class="sec">
+<div class="sec">
   <div class="sec-hdr">
     <span>المصروفات</span>
-    <span class="sec-badge">${expenses.length} مصروف &nbsp;·&nbsp; ${R(expTotal)}</span>
+    <span class="sec-badge">${expenses.length} مصروف${expenses.length ? ` &nbsp;·&nbsp; ${R(expTotal)}` : ''}</span>
   </div>
   <div class="sec-body">
     <table>
@@ -2473,12 +2521,25 @@ ${expenses.length ? `<div class="sec">
       <tbody>${expHtml}</tbody>
     </table>
   </div>
-</div>` : ''}
+</div>
 
-${creditNotes.length ? `<div class="sec">
+<div class="sec">
+  <div class="sec-hdr">
+    <span>مدفوعات الفواتير الآجلة</span>
+    <span class="sec-badge">${deferredPayments.length} دفعة${deferredPayments.length ? ` &nbsp;·&nbsp; ${R(defTotal)}` : ''}</span>
+  </div>
+  <div class="sec-body">
+    <table>
+      <thead><tr><th>رقم الفاتورة</th><th>الجوال</th><th>التاريخ</th><th>طريقة الدفع</th><th class="num">المبلغ</th></tr></thead>
+      <tbody>${defHtml}</tbody>
+    </table>
+  </div>
+</div>
+
+<div class="sec">
   <div class="sec-hdr">
     <span>مرتجع / إشعارات دائنة</span>
-    <span class="sec-badge">${creditNotes.length} إشعار</span>
+    <span class="sec-badge">${creditNotes.length} إشعار${creditNotes.length ? ` &nbsp;·&nbsp; ${R(cnTotal)}` : ''}</span>
   </div>
   <div class="sec-body">
     <table>
@@ -2486,12 +2547,12 @@ ${creditNotes.length ? `<div class="sec">
       <tbody>${cnHtml}</tbody>
     </table>
   </div>
-</div>` : ''}
+</div>
 
-${subscriptions.length ? `<div class="sec">
+<div class="sec">
   <div class="sec-hdr">
     <span>الاشتراكات</span>
-    <span class="sec-badge">${subscriptions.length} اشتراك &nbsp;·&nbsp; ${R(subTotal)}</span>
+    <span class="sec-badge">${subscriptions.length} اشتراك${subscriptions.length ? ` &nbsp;·&nbsp; ${R(subTotal)}` : ''}</span>
   </div>
   <div class="sec-body">
     <table>
@@ -2499,7 +2560,21 @@ ${subscriptions.length ? `<div class="sec">
       <tbody>${subHtml}</tbody>
     </table>
   </div>
-</div>` : ''}
+</div>
+
+<div class="sec">
+  <div class="sec-hdr" style="background:linear-gradient(90deg,#0891b2,#06b6d4)">
+    <span>إيصالات الاستهلاك</span>
+    <span class="sec-badge">${consumptionReceipts.length} إيصال${consumptionReceipts.length ? ` &nbsp;·&nbsp; ${R(consTotal)}` : ''}</span>
+  </div>
+  <div class="sec-note" style="padding:4px 14px;font-size:8.5px;color:#64748b;background:#f0f9ff;border-bottom:1px solid #e2e8f0">فواتير مدفوعة باشتراك — لا تدخل في الحسابات</div>
+  <div class="sec-body">
+    <table>
+      <thead><tr><th>رقم</th><th>العميل</th><th>التاريخ</th><th class="num">الإجمالي</th></tr></thead>
+      <tbody>${consHtml}</tbody>
+    </table>
+  </div>
+</div>
 
 </div>
 
@@ -3016,7 +3091,7 @@ function _srStatusAr(displayStatus, creditRemaining, daysUntilExpiry) {
   return displayStatus || '—';
 }
 
-function buildExcelDataForSubscriptionsReport({ periods, summary }, filters) {
+function buildExcelDataForSubscriptionsReport({ periods, summary, consumptionReceipts = [] }, filters) {
   const printDate = formatDateSimple(new Date().toISOString());
   const filterParts = [];
   if (filters.dateFrom || filters.dateTo) {
@@ -3087,6 +3162,31 @@ function buildExcelDataForSubscriptionsReport({ periods, summary }, filters) {
     ['إجمالي الرصيد المتبقي',   '—', fmt(summary.totalCreditRemaining)],
   ];
 
+  /* ── ورقة 3: إيصالات الاستهلاك ── */
+  const crTotal = consumptionReceipts.reduce((s, r) => s + Number(r.amount_consumed || 0), 0);
+  const crRows = [
+    ['تقرير الاشتراكات — إيصالات الاستهلاك'],
+    [`تاريخ الطباعة: ${printDate}`],
+    [],
+    [`إجمالي الإيصالات: ${consumptionReceipts.length}`, '', '', '', `إجمالي المستهلك: ${fmt(crTotal)} ${R}`],
+    [],
+    ['#', 'رقم الإيصال', 'العميل', 'الجوال', 'الباقة', 'التاريخ', `المستهلك (${R})`, `الرصيد قبل (${R})`, `الرصيد بعد (${R})`],
+  ];
+  consumptionReceipts.forEach((r, i) => {
+    crRows.push([
+      i + 1,
+      r.receipt_seq ? 'C-' + r.receipt_seq : String(r.id || ''),
+      r.customer_name || '',
+      r.phone || '',
+      r.package_name || '',
+      _srFmtD(r.created_at),
+      Number(r.amount_consumed || 0).toFixed(2),
+      Number(r.balance_before  || 0).toFixed(2),
+      Number(r.balance_after   || 0).toFixed(2),
+    ]);
+  });
+  if (!consumptionReceipts.length) crRows.push(['لا توجد إيصالات استهلاك']);
+
   return [
     {
       name: 'فترات الاشتراكات',
@@ -3104,11 +3204,20 @@ function buildExcelDataForSubscriptionsReport({ periods, summary }, filters) {
       cols: [{ wch: 28 }, { wch: 10 }, { wch: 18 }],
       freezeRow: 4,
     },
+    {
+      name: 'إيصالات الاستهلاك',
+      rows: crRows,
+      cols: [
+        { wch: 4 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 20 },
+        { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+      ],
+      freezeRow: 6,
+    },
   ];
 }
 
 function buildPdfHtmlForSubscriptionsReport(
-  { periods, summary },
+  { periods, summary, consumptionReceipts = [] },
   filters,
   cairoRegularB64,
   cairoBoldB64,
@@ -3259,6 +3368,46 @@ ${filterParts.length ? `<div class="info-bar">${filterParts.join(' &nbsp;·&nbsp
     </tr>
   </thead>
   <tbody>${periodsHtml || '<tr><td colspan="12" style="text-align:center;padding:16px;color:#94a3b8">لا توجد بيانات</td></tr>'}</tbody>
+</table>
+
+<div class="sec-hdr" style="margin-top:10px">
+  <span>إيصالات الاستهلاك</span>
+  <span class="sec-badge">${consumptionReceipts.length} إيصال</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th class="ctr">#</th>
+      <th>رقم الإيصال</th>
+      <th>العميل</th>
+      <th>الجوال</th>
+      <th>الباقة</th>
+      <th class="ctr">التاريخ</th>
+      <th class="num">المستهلك</th>
+      <th class="num">الرصيد قبل</th>
+      <th class="num">الرصيد بعد</th>
+    </tr>
+  </thead>
+  <tbody>${consumptionReceipts.length
+    ? consumptionReceipts.map((r, i) => `
+      <tr class="${i % 2 === 0 ? 'even' : ''}">
+        <td class="ctr">${i + 1}</td>
+        <td class="sub-ref" dir="ltr">C-${escHtmlPdf(String(r.receipt_seq || r.id))}</td>
+        <td>${escHtmlPdf(r.customer_name || '—')}</td>
+        <td class="ltr">${escHtmlPdf(r.phone || '—')}</td>
+        <td>${escHtmlPdf(r.package_name || '—')}</td>
+        <td class="ctr">${_srFmtD(r.created_at)}</td>
+        <td class="num">${Rv(r.amount_consumed)}</td>
+        <td class="num">${Rv(r.balance_before)}</td>
+        <td class="num">${Rv(r.balance_after)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="9" style="text-align:center;padding:16px;color:#94a3b8">لا توجد إيصالات استهلاك</td></tr>'
+  }</tbody>
+  ${consumptionReceipts.length ? `<tfoot><tr style="background:#f0fdfa;font-weight:700">
+    <td colspan="6" style="padding:5px 7px;font-size:9px">الإجمالي: ${consumptionReceipts.length} إيصال</td>
+    <td class="num">${Rv(consumptionReceipts.reduce((s,r)=>s+Number(r.amount_consumed||0),0))}</td>
+    <td colspan="2"></td>
+  </tr></tfoot>` : ''}
 </table>
 
 <div class="footer">

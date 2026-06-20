@@ -42,6 +42,8 @@ StatusRunProgram=جاري تشغيل البرنامج...
 ; البرنامج الرئيسي — يُستبدل دائماً
 Source: "..\release\laundry-app.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\release\mkcert.exe";      DestDir: "{app}"; Flags: ignoreversion
+; أيقونة التطبيق
+Source: "..\assets\icon\app.ico";     DestDir: "{app}"; Flags: ignoreversion
 
 ; NSSM — يُسجَّل البرنامج كـ Windows Service
 Source: "nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -61,10 +63,10 @@ Name: "{app}\ssl"
 
 [Icons]
 ; اختصار سطح المكتب — يفتح المتصفح مباشرة بدون نافذة سوداء
-Name: "{commondesktop}\{#AppName}"; \
+Name: "{commondesktop}\مغاسل"; \
   Filename: "{sys}\explorer.exe"; \
   Parameters: "https://localhost:3443"; \
-  IconFilename: "{app}\{#AppExeName}"; \
+  IconFilename: "{app}\app.ico"; \
   Comment: "فتح نظام إدارة المغسلة"
 
 [Run]
