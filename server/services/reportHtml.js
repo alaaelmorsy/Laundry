@@ -1657,8 +1657,6 @@ function buildHangerTicketHtml(order, hanger, branding, cairoRegularB64, cairoBo
     dateTimeStr = `${day}/${month}/${year} - ${hours}:${minutes} ${ampm}`;
   } catch (_) {}
   
-  const barcodeValue = escHtmlPdf(`INV-${invoiceNum}|${hangerNum}`);
-
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -1669,19 +1667,19 @@ function buildHangerTicketHtml(order, hanger, branding, cairoRegularB64, cairoBo
 @font-face{font-family:'Cairo';font-weight:700;src:url('data:font/woff2;base64,${cairoBoldB64}') format('woff2')}
 @font-face{font-family:'SaudiRiyal';font-weight:400;src:url('data:font/woff;base64,${saudiRiyalB64}') format('woff')}
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif}
-body{direction:rtl;background:#fff;color:#000;width:80mm;max-width:80mm;padding:3mm;font-size:12px;font-weight:700}
+body{direction:rtl;background:#fff;color:#000;width:80mm;max-width:80mm;padding:4mm;font-size:12px;font-weight:700;overflow:hidden}
 .shop-name{font-size:15px;font-weight:700;text-align:center;margin-bottom:5px;border-bottom:2px solid #000;padding-bottom:4px}
-.info-row{display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0;padding:0 1mm}
-.col-right{text-align:right}
-.col-left{text-align:left}
+.info-row{display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0}
+.col-right{text-align:right;flex:1 1 0;min-width:0}
+.col-left{text-align:left;flex:0 0 auto;padding-left:4mm}
 .label{font-size:10px;color:#333;margin-bottom:1px}
 .value{font-size:14px;font-weight:700;line-height:1.2}
 .date-sub{font-size:10px;font-weight:700;color:#333;margin-top:2px}
-.barcode-wrap{text-align:center;margin:5px 0 0}
-.barcode-wrap svg{max-width:100%;height:auto;display:block}
-.barcode-text{text-align:center;font-size:13px;font-weight:700;margin:0;padding:0;line-height:1.2}
+.barcode-wrap{text-align:center;margin:6px 4mm 0;overflow:hidden}
+.barcode-wrap svg{width:100%!important;height:auto!important;display:block;max-width:100%}
+.barcode-text{text-align:center;font-size:13px;font-weight:700;margin:2px 0 0;padding:0;line-height:1.2}
 @media print{
-  body{margin:0;padding:3mm;width:80mm}
+  body{margin:0;padding:4mm;width:80mm}
   @page{size:80mm auto;margin:0}
 }
 </style>
@@ -1700,11 +1698,9 @@ body{direction:rtl;background:#fff;color:#000;width:80mm;max-width:80mm;padding:
   </div>
 </div>
 <div class="barcode-wrap">
-<svg class="barcode" jsbarcode-format="CODE128" jsbarcode-value="${barcodeValue}" jsbarcode-textmargin="0" jsbarcode-fontoptions="bold" jsbarcode-width="2" jsbarcode-height="45" jsbarcode-displayvalue="false"></svg>
+<svg class="barcode" id="hanger-barcode"></svg>
 </div>
 <div class="barcode-text">${invoiceNum}</div>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<script>JsBarcode(".barcode").init();</script>
 </body>
 </html>`;
 }

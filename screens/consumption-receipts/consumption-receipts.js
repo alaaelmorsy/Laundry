@@ -341,29 +341,42 @@
     }
     if (copies > 20) copies = 20;
 
-    var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
-    var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
-    var pageStyleEl = document.createElement('style');
-    pageStyleEl.id = 'crPrintPageStyle';
-    var shift = mLeft - mRight;
-    pageStyleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { #invPrintZone .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
-    document.head.appendChild(pageStyleEl);
-
-    // نسخ محتوى الإيصال لـ print zone للتوافق مع متصفحات الجوال
+    // نسخ محتوى الإيصال لمنطقة الطباعة (خارج المودال) — نفس آلية شاشة البيع بالضبط
     var paperEl = document.getElementById('crPaper');
     var printZone = document.getElementById('invPrintZone');
-    if (paperEl && printZone) {
-      printZone.innerHTML = paperEl.outerHTML;
-      printZone.style.setProperty('display', 'block', 'important');
+    if (!paperEl || !printZone) return;
+    printZone.innerHTML = paperEl.outerHTML;
+
+    // حقن @page بنفس منطق شاشة البيع (توسيط 76mm + إزاحة الإعدادات)
+    var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+    var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+    var shift = mLeft - mRight;
+    var thermalPageStyle = document.createElement('style');
+    thermalPageStyle.id = 'thermalPageStyle';
+    // نحقن قواعد الطباعة — مطابق لآلية شاشة البيع (consumptionPrintZone)
+    // لا نقيّد عرض الـ body لأن RTL يسبب انزياح المحتوى لليمين
+    // بدلاً من ذلك نتركه full-width ونمرّكز #invPrintZone بـ margin: 0 auto
+    thermalPageStyle.textContent =
+      '@page { size: 80mm auto; margin: 0; }' +
+      '@media print {' +
+      '  html, body.printing-cr { direction: ltr !important; }' +
+      '  body.printing-cr > *:not(#invPrintZone) { display: none !important; }' +
+      '  body.printing-cr #invPrintZone { display: block !important; position: static !important; background: none !important; padding: 0 !important; overflow: visible !important; height: auto !important; width: 80mm !important; margin: 0 auto !important; }' +
+      '  body.printing-cr #invPrintZone .inv-paper { box-shadow: none !important; border-radius: 0 !important; width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm 3mm !important; height: auto !important; max-height: none !important; overflow: visible !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' }' +
+      '}';
+    document.head.appendChild(thermalPageStyle);
+
+    function cleanup() {
+      document.body.classList.remove('printing-cr');
+      if (printZone) printZone.innerHTML = '';
+      var ts = document.getElementById('thermalPageStyle');
+      if (ts) ts.remove();
     }
 
+    document.body.classList.add('printing-cr');
     var currentCopy = 0;
     function printNext() {
-      if (currentCopy >= copies) {
-        if (printZone) printZone.innerHTML = '';
-        if (pageStyleEl && pageStyleEl.parentNode) pageStyleEl.parentNode.removeChild(pageStyleEl);
-        return;
-      }
+      if (currentCopy >= copies) { cleanup(); return; }
       currentCopy += 1;
       var handled = false;
       function afterPrint() {
@@ -371,18 +384,16 @@
         handled = true;
         window.removeEventListener('afterprint', afterPrint);
         if (currentCopy < copies) {
-          setTimeout(printNext, 120);
+          setTimeout(printNext, 200);
         } else {
-          if (printZone) {
-            printZone.innerHTML = '';
-            printZone.style.setProperty('display', 'none', 'important');
-          }
-          if (pageStyleEl && pageStyleEl.parentNode) pageStyleEl.parentNode.removeChild(pageStyleEl);
+          cleanup();
         }
       }
       window.addEventListener('afterprint', afterPrint);
+      // ملاحظة: لا نستخدم مؤقّت إجباري للتنظيف لأنه قد يمسح المحتوى
+      // أثناء بقاء معاينة الطباعة مفتوحة في المتصفح (window.print غير حاجب).
+      // في Electron يكون window.print حاجباً ويُطلق afterprint بعد انتهائه.
       window.print();
-      setTimeout(afterPrint, 2500);
     }
     printNext();
   }

@@ -474,7 +474,9 @@ async function buildThermalHangerTicketHtml(orderId) {
 
   const branding = await loadAppBrandingForReceipts();
   const f = cairoFonts();
-  return reportHtml.buildHangerTicketHtml(
+  const invoiceNum = String(data.order.invoice_seq || data.order.order_number || data.order.id || '');
+  const hangerNum = String(data.order.hanger_number || '');
+  const html = reportHtml.buildHangerTicketHtml(
     data.order,
     { hanger_number: data.order.hanger_number },
     branding,
@@ -482,6 +484,7 @@ async function buildThermalHangerTicketHtml(orderId) {
     f.cairoBoldB64,
     f.saudiRiyalB64
   );
+  return { html, barcodeValue: `INV-${invoiceNum}|${hangerNum}` };
 }
 
 async function exportCreditNotes(type, filters = {}) {

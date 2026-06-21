@@ -1248,51 +1248,59 @@
     const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
     const copies = getPrintCopies();
     if (copies === 0) return;
-    let styleEl = null;
 
-    styleEl = document.createElement('style');
-    styleEl.id = 'printPageStyle';
-    if (paperType === 'a4') {
-      styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
-    } else {
-      const mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
-      const mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
-      const shift = mLeft - mRight;
-      styleEl.textContent = `@page { size: 80mm auto; margin: 0; } @media print { .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;${shift !== 0 ? ` transform: translateX(${shift}mm) !important;` : ''} } }`;
-    }
-    document.head.appendChild(styleEl);
+    const paperEl = document.getElementById(paperType === 'a4' ? 'invoicePaperA4m' : 'invoicePaper');
+    if (!paperEl) return;
+
+    const mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+    const mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+    const shift = mLeft - mRight;
+
+    const allCss = Array.from(document.styleSheets).map(ss => {
+      try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); } catch (_) { return ''; }
+    }).join('\n');
+
+    const pageSize = paperType === 'a4' ? '@page{size:A4 portrait;margin:10mm}' : '@page{size:80mm auto;margin:0}';
+    const bodyCss = paperType === 'a4'
+      ? 'body{margin:0;padding:0;background:#fff}'
+      : 'body{margin:0;padding:0;background:#fff;width:80mm}';
+    const shiftCss = (shift !== 0 && paperType !== 'a4') ? `@media print{.inv-paper{transform:translateX(${shift}mm)!important}}` : '';
+    const overrideCss = '@media print{html,body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal{display:block!important;width:80mm!important;margin:0!important;padding:0!important;position:static!important;background:none!important}body>#invoiceModal .inv-dialog{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal .inv-dialog-body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}.inv-paper{width:72mm!important;max-width:72mm!important;margin:0 4mm!important;padding:2mm 3mm!important;box-shadow:none!important;border-radius:0!important;height:auto!important;max-height:none!important;overflow:visible!important}}';
+
+    const bodyContent = paperType === 'a4'
+      ? paperEl.outerHTML
+      : `<div id="invoiceModal"><div class="inv-dialog"><div class="inv-dialog-body">${paperEl.outerHTML}</div></div></div>`;
+
+    const iframeHtml = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><style>${allCss}${pageSize}${bodyCss}${shiftCss}${overrideCss}</style></head><body>${bodyContent}</body></html>`;
 
     let currentCopy = 0;
-    let cleaned = false;
-
-    function cleanupPrintArtifacts() {
-      if (cleaned) return;
-      cleaned = true;
-      if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-    }
 
     function printNextCopy() {
-      if (currentCopy >= copies) {
-        cleanupPrintArtifacts();
-        return;
-      }
-
+      if (currentCopy >= copies) return;
       currentCopy += 1;
-      let handled = false;
-      function handleAfterPrint() {
-        if (handled) return;
-        handled = true;
-        window.removeEventListener('afterprint', handleAfterPrint);
-        if (currentCopy < copies) {
-          setTimeout(printNextCopy, 120);
-        } else {
-          cleanupPrintArtifacts();
-        }
-      }
 
-      window.addEventListener('afterprint', handleAfterPrint);
-      window.print();
-      setTimeout(handleAfterPrint, 2500);
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;pointer-events:none';
+      document.body.appendChild(iframe);
+
+      const qrSrcId = paperType === 'a4' ? 'a4mQR' : 'invQR';
+
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(iframeHtml);
+      iframe.contentDocument.close();
+
+      const srcQr = document.getElementById(qrSrcId);
+      const dstQr = iframe.contentDocument.getElementById(qrSrcId);
+      if (srcQr && dstQr) dstQr.innerHTML = srcQr.innerHTML;
+
+      iframe.contentWindow.focus();
+      setTimeout(() => {
+        try { iframe.contentWindow.print(); } catch (_) {}
+        setTimeout(() => {
+          iframe.remove();
+          if (currentCopy < copies) setTimeout(printNextCopy, 300);
+        }, 2000);
+      }, 300);
     }
 
     printNextCopy();

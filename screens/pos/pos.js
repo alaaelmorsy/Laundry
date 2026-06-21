@@ -3876,7 +3876,7 @@
       var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
       var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
       var shift = mLeft - mRight;
-      styleEl.textContent = '@page { size: 80mm auto; margin: 0; } @media print { .inv-paper { width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important;' + (shift !== 0 ? ' transform: translateX(' + shift + 'mm) !important;' : '') + ' } }';
+      styleEl.textContent = '@page { size: 80mm auto; margin: 0; }' + (shift !== 0 ? ' @media print { .inv-paper { transform: translateX(' + shift + 'mm) !important; } }' : '');
     }
     document.head.appendChild(styleEl);
 
@@ -4851,7 +4851,11 @@
         }
         try {
           els.btnPrintHangerTicket.disabled = true;
-          const result = await window.api.printHangerTicketThermal({ orderId: state.viewingOrderId });
+          const result = await window.api.printHangerTicketThermal({
+            orderId: state.viewingOrderId,
+            thermalMarginLeft: state.appSettings && state.appSettings.thermalMarginLeft,
+            thermalMarginRight: state.appSettings && state.appSettings.thermalMarginRight
+          });
           if (result.success) {
             showToast('تم فتح نافذة الطباعة (اختر الطابعة الحرارية)', 'success');
           } else {

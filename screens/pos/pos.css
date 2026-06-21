@@ -3209,10 +3209,12 @@ html, body {
 }
 
 /* Print media — show only the paper, hide dialog chrome */
+@page { size: 80mm auto; margin: 0; }
 @media print {
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
+  html, body { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; width: 80mm !important; margin: 0 !important; padding: 0 !important; }
+  body.invtype-a4 { width: 210mm !important; }
 
   /* --- طباعة الفاتورة العادية --- */
   body:not(.print-consumption-receipt) > *:not(#invoiceModal) { display: none !important; }
@@ -3224,6 +3226,8 @@ html, body {
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
+    width: 80mm !important;
+    margin: 0 !important;
   }
 
   /* --- طباعة إيصال الاستهلاك (عبر print zone للتوافق مع الجوال) --- */
@@ -3236,7 +3240,7 @@ html, body {
     overflow: visible !important;
     height: auto !important;
     width: 80mm !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
   }
 
   .inv-dialog {
@@ -3259,10 +3263,10 @@ html, body {
   .inv-paper {
     box-shadow: none !important;
     border-radius: 0 !important;
-    width: 80mm !important;
-    max-width: 80mm !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
     margin: 0 auto !important;
-    padding: 4mm !important;
+    padding: 2mm 3mm !important;
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;

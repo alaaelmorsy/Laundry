@@ -63,7 +63,7 @@ Name: "{app}\ssl"
 
 [Icons]
 ; اختصار سطح المكتب — يفتح المتصفح مباشرة بدون نافذة سوداء
-Name: "{commondesktop}\مغاسل"; \
+Name: "{commondesktop}\الرابط مغاسل"; \
   Filename: "{sys}\explorer.exe"; \
   Parameters: "https://localhost:3443"; \
   IconFilename: "{app}\app.ico"; \

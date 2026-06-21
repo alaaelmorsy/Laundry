@@ -10,6 +10,7 @@
     editingId: null,
     viewingOrderId: null,
     lastInvoiceData: null,
+    appSettings: null,
   };
 
   function t(key) {
@@ -181,9 +182,8 @@
   function showInvoiceModal(order, items, subscription, s) {
     const invoiceData = buildInvoiceDisplayData(order, items, subscription, s);
     const paperType = (s && s.invoicePaperType) || 'thermal';
-    
     document.body.classList.toggle('invtype-a4', paperType === 'a4');
-    
+
     if (paperType === 'a4') {
       fillA4InvoiceModal(invoiceData);
     } else {
@@ -263,8 +263,8 @@
       commercialRegister: s.commercialRegister || '',
       invoiceNotes:       s.invoiceNotes || '',
       logoDataUrl:        s.logoDataUrl || '',
-      logoWidth:          s.logoWidth || 180,
-      logoHeight:         s.logoHeight || 70,
+      logoWidth:          s.logoWidth || 80,
+      logoHeight:         s.logoHeight || 60,
       orderNum:           displaySeq ? String(displaySeq) : (order.order_number || '—'),
       date:               formatInvoiceDate(order.created_at),
       payment:            paymentLabel(order.payment_method),
@@ -277,6 +277,7 @@
       paidAt:             order.paid_at       ? formatInvoiceDate(order.paid_at)       : '',
       starch:             order.starch || '',
       bluing:             order.bluing || '',
+      hangerNumber:       order.hanger_number ? String(order.hanger_number) : '',
       items: (items || []).map(item => ({
         productAr:  item.product_name_ar || '',
         productEn:  item.product_name_en || '',
@@ -470,11 +471,19 @@
     const sarSpan = '<span class="sar">&#xE900;</span>';
     const sarFmt = n => sarSpan + ' ' + Number(n || 0).toFixed(2);
 
+    // رأس المتجر
     setText('invShopName', data.shopNameAr);
     setText('invShopAddress', data.shopAddressAr);
     setText('invShopPhone', data.shopPhone ? 'هاتف: ' + data.shopPhone : '');
     setText('invVatNumber', data.vatNumber ? 'الرقم الضريبي: ' + data.vatNumber : '');
     setText('invShopEmail', data.shopEmail);
+
+    if (data.commercialRegister) {
+      setText('invCR', 'السجل التجاري: ' + data.commercialRegister);
+      showRow('invCRRow', true);
+    } else {
+      showRow('invCRRow', false);
+    }
 
     /* Custom fields */
     var invCfHng = document.getElementById('invCustomFields');
@@ -494,65 +503,78 @@
       }
     }
 
+    // الشعار - بنفس منطق شاشة البيع
     const logoEl = document.getElementById('invLogo');
     const logoWrap = document.getElementById('invLogoWrap');
     if (logoEl && logoWrap) {
       if (data.logoDataUrl) {
         logoEl.src = data.logoDataUrl;
-        logoEl.style.width = (data.logoWidth || 180) + 'px';
-        logoEl.style.height = (data.logoHeight || 70) + 'px';
-        logoEl.style.maxWidth = (data.logoWidth || 180) + 'px';
-        logoEl.style.maxHeight = (data.logoHeight || 70) + 'px';
+        logoEl.style.width = (data.logoWidth || 80) + 'px';
+        logoEl.style.height = (data.logoHeight || 60) + 'px';
+        logoEl.style.maxWidth = (data.logoWidth || 80) + 'px';
+        logoEl.style.maxHeight = (data.logoHeight || 60) + 'px';
         logoEl.style.objectFit = 'contain';
         logoWrap.style.display = '';
       } else { logoWrap.style.display = 'none'; }
     }
 
+    // بيانات الفاتورة - grid الجديد
     setText('invOrderNum', data.orderNum);
     setText('invDate', data.date);
-    
+
     const pmLabels = { cash: 'نقداً', card: 'شبكة', credit: 'آجل', mixed: 'مختلط', bank: 'تحويل بنكي', subscription: 'اشتراك', deferred: 'آجل' };
     setText('invPayment', pmLabels[data.paymentMethod] || data.payment);
-    
+
+    // رقم الشماعة (إن وجد)
+    if (data.hangerNumber) {
+      setText('invHangerNum', data.hangerNumber);
+      showRow('invHangerRow', true);
+    } else {
+      showRow('invHangerRow', false);
+    }
+
+    if (data.createdBy) {
+      setText('invCreatedBy', data.createdBy);
+      showRow('invCashierRow', true);
+    } else {
+      showRow('invCashierRow', false);
+    }
+
+    showRow('invCustNameRow', !!data.custName);
+    if (data.custName) setText('invCustName', data.custName);
+    showRow('invCustPhoneRow', !!data.custPhone);
+    if (data.custPhone) setText('invCustPhone', data.custPhone);
+    if (data.subBalance != null && !isNaN(data.subBalance)) {
+      setHtml('invSubBalance', sarFmt(data.subBalance));
+      showRow('invSubBalRow', true);
+    } else {
+      showRow('invSubBalRow', false);
+    }
+
     showRow('invPaidAtRow', !!data.paidAt);
     if (data.paidAt) setText('invPaidAt', data.paidAt);
     showRow('invCleanedAtRow', !!data.cleanedAt);
     if (data.cleanedAt) setText('invCleanedAt', data.cleanedAt);
     showRow('invDeliveredAtRow', !!data.deliveredAt);
     if (data.deliveredAt) setText('invDeliveredAt', data.deliveredAt);
-    
-    if (data.commercialRegister) {
-      setText('invCR', data.commercialRegister);
-      showRow('invCRRow', true);
-    } else {
-      showRow('invCRRow', false);
-    }
 
-    if (data.createdBy) {
-      setText('invCreatedBy', data.createdBy);
-      showRow('invCreatedByRow', true);
+    if (data.starch) {
+      setText('invStarch', data.starch);
+      showRow('invStarchRow', true);
     } else {
-      showRow('invCreatedByRow', false);
+      showRow('invStarchRow', false);
     }
-
-    const custSection = document.getElementById('invCustomerSection');
-    if (custSection) {
-      if (data.custName || data.custPhone) {
-        custSection.style.display = '';
-        showRow('invCustNameRow', !!data.custName);
-        if (data.custName) setText('invCustName', data.custName);
-        showRow('invCustPhoneRow', !!data.custPhone);
-        if (data.custPhone) setText('invCustPhone', data.custPhone);
-        
-        if (data.subBalance != null && !isNaN(data.subBalance)) {
-          setHtml('invSubBalance', sarFmt(data.subBalance));
-          showRow('invSubBalRow', true);
-        } else {
-          showRow('invSubBalRow', false);
-        }
-      } else {
-        custSection.style.display = 'none';
-      }
+    if (data.bluing) {
+      setText('invBluing', data.bluing);
+      showRow('invBluingRow', true);
+    } else {
+      showRow('invBluingRow', false);
+    }
+    if (data.invoiceNotes) {
+      setText('invNotesContent', data.invoiceNotes);
+      showRow('invNotesRow', true);
+    } else {
+      showRow('invNotesRow', false);
     }
 
     const tbody = document.getElementById('invItemsTbody');
@@ -602,11 +624,11 @@
     if (data.vatRate > 0) {
       setText('invVatLabel', `ضريبة القيمة المضافة (${data.vatRate}%)`);
       setHtml('invVat', sarFmt(data.vatAmount));
-      showRow('invVatRow', true);
+      showRow('invVatAmountRow', true);
       setText('invSubtotalLabel', 'المجموع قبل الضريبة');
       setText('invTotalLabel', 'الإجمالي شامل الضريبة');
     } else {
-      showRow('invVatRow', false);
+      showRow('invVatAmountRow', false);
       setText('invSubtotalLabel', 'المجموع');
       setText('invTotalLabel', 'الإجمالي');
     }
@@ -634,36 +656,6 @@
       showRow('invRemainingRow', false);
     }
 
-    const invExtraOpts = document.getElementById('invExtraOpts');
-    if (invExtraOpts) {
-      const hasExtraOpts = data.starch || data.bluing;
-      invExtraOpts.style.display = hasExtraOpts ? '' : 'none';
-      
-      if (data.starch) {
-        setText('invStarch', data.starch);
-        showRow('invStarchRow', true);
-      } else {
-        showRow('invStarchRow', false);
-      }
-      
-      if (data.bluing) {
-        setText('invBluing', data.bluing);
-        showRow('invBluingRow', true);
-      } else {
-        showRow('invBluingRow', false);
-      }
-    }
-
-    const invFooterNotes = document.getElementById('invFooterNotes');
-    if (invFooterNotes) {
-      if (data.invoiceNotes) {
-        const invNotesContent = document.getElementById('invNotesContent');
-        if (invNotesContent) invNotesContent.textContent = data.invoiceNotes;
-        invFooterNotes.style.display = '';
-      } else {
-        invFooterNotes.style.display = 'none';
-      }
-    }
 
     if (data.qrPayload) {
       renderQR(data.qrPayload);
@@ -929,7 +921,53 @@
     const invoiceModal = document.getElementById('invoiceModal');
     
     if (btnInvClose) btnInvClose.addEventListener('click', closeInvoiceModal);
-    if (btnInvPrint) btnInvPrint.addEventListener('click', () => window.print());
+    if (btnInvPrint) btnInvPrint.addEventListener('click', () => {
+      var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+      var paperEl = document.getElementById(paperType === 'a4' ? 'invoicePaperA4m' : 'invoicePaper');
+      if (!paperEl) return;
+
+      // استخراج CSS من الصفحة الحالية
+      var allCss = Array.from(document.styleSheets).map(function(ss) {
+        try { return Array.from(ss.cssRules).map(function(r) { return r.cssText; }).join('\n'); } catch(_) { return ''; }
+      }).join('\n');
+
+      var mLeft = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft) || 0) || 0;
+      var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+      var shift = mLeft - mRight;
+
+      var pageSize = paperType === 'a4' ? '@page{size:A4 portrait;margin:10mm}' : ('@page{size:80mm auto;margin:0}');
+      var shiftCss = (shift !== 0 && paperType !== 'a4') ? '@media print{.inv-paper{transform:translateX(' + shift + 'mm)!important}}' : '';
+      var bodyCss = paperType === 'a4'
+        ? 'body{margin:0;padding:0;background:#fff}'
+        : 'body{margin:0;padding:0;background:#fff;width:80mm}';
+
+      // نلف المحتوى في #invoiceModal لتطابق قواعد الـ @media print الموجودة
+      var bodyContent = paperType === 'a4'
+        ? paperEl.outerHTML
+        : '<div id="invoiceModal" style="display:block"><div class="inv-dialog"><div class="inv-dialog-body">' + paperEl.outerHTML + '</div></div></div>';
+      var iframeHtml = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><style>'
+        + allCss + pageSize + bodyCss + shiftCss
+        + '</style></head><body>' + bodyContent + '</body></html>';
+
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;pointer-events:none';
+      document.body.appendChild(iframe);
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(iframeHtml);
+      iframe.contentDocument.close();
+
+      // رسم QR إن وجد
+      var qrSrcId = paperType === 'a4' ? 'a4mQR' : 'invQR';
+      var srcQr = document.getElementById(qrSrcId);
+      var dstQr = iframe.contentDocument.getElementById(qrSrcId);
+      if (srcQr && dstQr) dstQr.innerHTML = srcQr.innerHTML;
+
+      iframe.contentWindow.focus();
+      setTimeout(function() {
+        try { iframe.contentWindow.print(); } catch(_) {}
+        setTimeout(function() { iframe.remove(); }, 2000);
+      }, 300);
+    });
     if (btnInvExportPdf) {
       btnInvExportPdf.addEventListener('click', async () => {
         if (!state.lastInvoiceData) return;
@@ -960,7 +998,11 @@
         }
         try {
           btnPrintHangerTicket.disabled = true;
-          const result = await window.api.printHangerTicketThermal({ orderId: state.viewingOrderId });
+          const result = await window.api.printHangerTicketThermal({
+            orderId: state.viewingOrderId,
+            thermalMarginLeft: state.appSettings && state.appSettings.thermalMarginLeft,
+            thermalMarginRight: state.appSettings && state.appSettings.thermalMarginRight
+          });
           if (result.success) {
             showToast('تم طباعة التيكت بنجاح', 'success');
           } else {
@@ -1023,4 +1065,5 @@
   if (window.I18N) window.I18N.apply();
   bindEvents();
   loadHangers();
+  window.api.getAppSettings().then(r => { if (r && r.settings) state.appSettings = r.settings; }).catch(() => {});
 })();

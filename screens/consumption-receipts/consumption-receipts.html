@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title data-i18n="consumption-receipts-title">إيصالات الاستهلاك - نظام المغسلة</title>
   <link rel="stylesheet" href="../../assets/tailwind.css" />
-  <link rel="stylesheet" href="consumption-receipts.css?v=6" />
+  <link rel="stylesheet" href="consumption-receipts.css?v=8" />
   <link rel="stylesheet" href="../../assets/screen-mobile-compact.css" />
   <link rel="stylesheet" href="../../assets/sidebar.css" />
 </head>
@@ -105,8 +105,8 @@
     </main>
   </div>
 
-  <!-- print zone خارج المودال للتوافق مع متصفحات الجوال -->
-  <div id="invPrintZone" style="display:none"></div>
+  <!-- print zone خارج المودال للتوافق مع متصفحات الجوال — data-print-root ليُعيده sidebar.js إلى body -->
+  <div id="invPrintZone" data-print-root="true" style="display:none"></div>
 
   <div id="receiptViewModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
     <div class="inv-dialog">
@@ -223,7 +223,7 @@
   <script src="../../assets/auth-guard.js"></script>
   <script src="../../assets/i18n.js"></script>
   <script src="../../assets/JsBarcode.min.js"></script>
-  <script src="consumption-receipts.js?v=4"></script>
+  <script src="consumption-receipts.js?v=6"></script>
   <script src="../../assets/sidebar.js"></script>
 </body>
 </html>

@@ -315,31 +315,33 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 @media print{
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  @page{size:80mm auto;margin:4mm 3mm}
+  @page{size:80mm auto;margin:0}
   html,body{height:auto;overflow:visible;background:#fff}
   body{max-height:none;overflow:visible}
 
   /* عند فتح مودال الفاتورة: اخفِ كل شيء ماعدا المودال — نفس سلوك شاشة البيع */
   body.printing-invoice > *:not(#invoiceViewModal){display:none !important}
-  body.printing-invoice #invoiceViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  body.printing-invoice #invoiceViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important;width:80mm !important;margin:0 auto !important}
+  body.printing-invoice.invtype-a4 #invoiceViewModal{width:auto !important;max-width:none !important}
   body.printing-cn > *:not(#cnViewModal){display:none !important}
-  body.printing-cn #cnViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  body.printing-cn #cnViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important;width:80mm !important;margin:0 auto !important}
+  body.printing-cn.invtype-a4 #cnViewModal{width:auto !important;max-width:none !important}
   body.printing-cn .inv-dialog{max-height:none !important;box-shadow:none !important;background:none !important;border-radius:0 !important;overflow:visible !important;width:100% !important;height:auto !important}
   body.printing-cn .inv-dialog-body{overflow:visible !important;padding:0 !important;height:auto !important;max-height:none !important;flex:none !important}
   body.printing-cn .inv-dialog-footer{display:none !important}
-  body.printing-cn .inv-paper{box-shadow:none !important;border-radius:0 !important;width:80mm !important;max-width:80mm !important;margin:0 auto !important;padding:4mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
+  body.printing-cn .inv-paper{box-shadow:none !important;border-radius:0 !important;width:76mm !important;max-width:76mm !important;margin:0 auto !important;padding:2mm 3mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
   body.printing-cn.invtype-a4 .inv-paper{display:none !important}
   body.printing-cn.invtype-a4 .inv-paper-a4m{display:block !important;width:210mm !important;max-width:210mm !important;padding:8mm 10mm 20mm !important}
   body.printing-cr > *:not(#crViewModal){display:none !important}
-  body.printing-cr #crViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  body.printing-cr #crViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important;width:80mm !important;margin:0 auto !important}
   body.printing-cr .inv-dialog{max-height:none !important;box-shadow:none !important;background:none !important;border-radius:0 !important;overflow:visible !important;width:100% !important;height:auto !important}
   body.printing-cr .inv-dialog-body{overflow:visible !important;padding:0 !important;height:auto !important;max-height:none !important;flex:none !important}
   body.printing-cr .inv-dialog-footer{display:none !important}
-  body.printing-cr .inv-paper{box-shadow:none !important;border-radius:0 !important;width:80mm !important;max-width:80mm !important;margin:0 auto !important;padding:4mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
+  body.printing-cr .inv-paper{box-shadow:none !important;border-radius:0 !important;width:76mm !important;max-width:76mm !important;margin:0 auto !important;padding:2mm 3mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
   body.printing-invoice .inv-dialog{max-height:none !important;box-shadow:none !important;background:none !important;border-radius:0 !important;overflow:visible !important;width:100% !important;height:auto !important}
   body.printing-invoice .inv-dialog-body{overflow:visible !important;padding:0 !important;height:auto !important;max-height:none !important;flex:none !important}
   body.printing-invoice .inv-dialog-footer{display:none !important}
-  body.printing-invoice .inv-paper{box-shadow:none !important;border-radius:0 !important;width:80mm !important;max-width:80mm !important;margin:0 auto !important;padding:4mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
+  body.printing-invoice .inv-paper{box-shadow:none !important;border-radius:0 !important;width:76mm !important;max-width:76mm !important;margin:0 auto !important;padding:2mm 3mm !important;height:auto !important;max-height:none !important;overflow:visible !important}
   body.printing-invoice.invtype-a4 .inv-paper{display:none !important}
   body.printing-invoice.invtype-a4 .inv-paper-a4m{display:block !important;width:210mm !important;max-width:210mm !important;padding:8mm 10mm 20mm !important}
 

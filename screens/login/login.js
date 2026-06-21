@@ -37,24 +37,29 @@ window.addEventListener('DOMContentLoaded', async () => {
   const userDeleteBtn      = document.getElementById('userDeleteBtn');
   const savedUsersDropdown = document.getElementById('savedUsersDropdown');
 
-  // ── Update badge ──────────────────────────────────────────────────────────
-  const updateBadge = document.getElementById('updateBadge');
+  // ── Update toast ──────────────────────────────────────────────────────────
+  const updateToast   = document.getElementById('updateToast');
+  const updateToastTitle   = document.getElementById('updateToastTitle');
+  const updateToastVersion = document.getElementById('updateToastVersion');
 
   (async () => {
     try {
       const res = await fetch('/api/update-status');
       const status = await res.json();
       if (status && status.hasUpdate && status.latestVersion) {
-        if (!updateBadge) return;
-        updateBadge.title = `تحديث متاح — الإصدار ${status.latestVersion}`;
-        updateBadge.style.display = 'flex';
-        updateBadge.style.opacity = '1';
-        updateBadge.style.transform = 'scale(1)';
+        if (!updateToast) return;
+        if (updateToastTitle)   updateToastTitle.textContent   = 'يتوفر تحديث جديد';
+        if (updateToastVersion) updateToastVersion.textContent = `الإصدار ${status.latestVersion}`;
+        updateToast.style.display = 'block';
+        requestAnimationFrame(() => {
+          updateToast.style.opacity   = '1';
+          updateToast.style.transform = 'translateY(0)';
+        });
         setTimeout(() => {
-          updateBadge.style.opacity = '0';
-          updateBadge.style.transform = 'scale(.7)';
-          setTimeout(() => { updateBadge.style.display = 'none'; }, 400);
-        }, 5000);
+          updateToast.style.opacity   = '0';
+          updateToast.style.transform = 'translateY(-12px)';
+          setTimeout(() => { updateToast.style.display = 'none'; }, 500);
+        }, 7000);
       }
     } catch (_) {}
   })();

@@ -495,51 +495,60 @@ body {
 #invPrintZone .inv-table td,
 #invPrintZone .cr-receipt-title,
 #invPrintZone .cr-vat-note,
-#invPrintZone .cr-warning-banner,
+#invPrintZone .cr-warning-banner {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
 #receiptViewModal .cr-info-label,
 #invPrintZone .cr-info-label {
   color: #000 !important;
   font-weight: 700 !important;
-  font-size: 9px !important;
+  font-size: 8px !important;
 }
 #receiptViewModal .cr-info-val,
 #invPrintZone .cr-info-val {
   color: #000 !important;
   font-weight: 900 !important;
-  font-size: 10px !important;
+  font-size: 9px !important;
 }
 
 /* ══════════════════════════════
-   PRINT STYLES — لا تُعدَّل
+   PRINT STYLES — مطابقة تماماً لشاشة البيع (print zone + window.print)
+   لا تُعدَّل
 ══════════════════════════════ */
 @page { size: 80mm auto; margin: 0; }
 @media print {
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  html, body { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; width: 80mm !important; margin: 0 auto !important; padding: 0 !important; }
-  body > *:not(#invPrintZone) { display: none !important; }
-  body > #invPrintZone, #invPrintZone {
+  html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
+
+  /* تحويل direction إلى ltr أثناء الطباعة لمنع انزياح RTL — الإيصال نفسه له direction:rtl صريح */
+  html, body.printing-cr { direction: ltr !important; }
+  body.printing-cr > *:not(#invPrintZone) { display: none !important; }
+  body.printing-cr #invPrintZone {
     display: block !important;
     position: static !important;
     background: none !important;
     padding: 0 !important;
     overflow: visible !important;
     height: auto !important;
-    width: 76mm !important;
+    width: 80mm !important;
     margin: 0 auto !important;
   }
-  #invPrintZone .inv-paper {
+  .inv-paper {
     box-shadow: none !important;
     border-radius: 0 !important;
-    width: 76mm !important;
-    max-width: 76mm !important;
-    margin: 0 !important;
     padding: 2mm 3mm !important;
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
   }
-  #invPrintZone .no-print { display: none !important; }
+  body.printing-cr #invPrintZone .inv-paper {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+  }
+  .no-print { display: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

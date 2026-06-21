@@ -590,9 +590,9 @@ async function start() {
       if (!orderId) {
         return res.status(400).json({ success: false, message: 'رقم الطلب مطلوب' });
       }
-      const html = await exportsService.buildThermalHangerTicketHtml(Number(orderId));
-      if (!html) return res.json({ success: false, message: 'الفاتورة غير موجودة' });
-      return res.json({ success: true, html });
+      const result = await exportsService.buildThermalHangerTicketHtml(Number(orderId));
+      if (!result) return res.json({ success: false, message: 'الفاتورة غير موجودة' });
+      return res.json({ success: true, html: result.html, barcodeValue: result.barcodeValue });
     } catch (err) {
       console.error(err);
       res.status(500).json({ success: false, message: err.message });

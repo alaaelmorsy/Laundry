@@ -312,6 +312,24 @@
       iframe.contentDocument.open();
       iframe.contentDocument.write(j.html);
       iframe.contentDocument.close();
+      // حقن CSS الإزاحة من إعدادات الطابعة الحرارية
+      const mLeft = parseFloat(data.thermalMarginLeft || 0) || 0;
+      const mRight = parseFloat(data.thermalMarginRight || 0) || 0;
+      const shift = mLeft - mRight;
+      const shiftStyle = iframe.contentDocument.createElement('style');
+      shiftStyle.textContent = '@page{size:80mm auto;margin:0}' + (shift !== 0 ? `body{transform:translateX(${shift}mm)}` : '');
+      iframe.contentDocument.head.appendChild(shiftStyle);
+      // تهيئة الباركود محلياً بدون CDN وتعديله ليناسب عرض الورقة
+      try {
+        const barcodeEl = iframe.contentDocument.getElementById('hanger-barcode');
+        if (barcodeEl && j.barcodeValue && window.JsBarcode) {
+          window.JsBarcode(barcodeEl, j.barcodeValue, { format: 'CODE128', width: 1.5, height: 45, displayValue: false, margin: 4 });
+          // جعل الباركود responsive بإزالة الأبعاد الثابتة
+          barcodeEl.removeAttribute('width');
+          barcodeEl.removeAttribute('height');
+          barcodeEl.style.cssText = 'width:100%;height:auto;display:block';
+        }
+      } catch (_) {}
       iframe.contentWindow.focus();
       setTimeout(() => {
         try {
