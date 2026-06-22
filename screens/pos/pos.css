@@ -2887,7 +2887,7 @@ html, body {
 .inv-total-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 2px;

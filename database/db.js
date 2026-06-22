@@ -122,6 +122,8 @@ async function initialize() {
   await createRefundsTable();
   await migrateRefundsColumns();
   await createOffersTable();
+  await createProductOffersTable();
+  await createProductOfferLinesTable();
   await migrateZatcaSettings();
   await migrateSubscriptionInvoicesTable();
   await migrateOrderTypeColumn();
@@ -140,6 +142,7 @@ async function initialize() {
   await migrateCustomerDiscountColumns();
   await migrateOrdersCustomerDiscountAmount();
   await migrateOrdersManualDiscountAmount();
+  await fixSubscriptionVatAmounts();
 }
 
 async function createLicenseTable() {
@@ -203,6 +206,39 @@ async function migrateOrdersManualDiscountAmount() {
     }
   } catch (e) {
     console.error('migrateOrdersManualDiscountAmount:', e);
+  }
+}
+
+async function fixSubscriptionVatAmounts() {
+  try {
+    // الاشتراك دائماً شامل الضريبة — صحّح أي فاتورة اشتراك أو إشعار دائن خُزّن بضريبة منفصلة بسبب خطأ || 15
+    const [[row]] = await pool.query(`SELECT vat_rate FROM app_settings WHERE id = 1`);
+    if (!row || Number(row.vat_rate) !== 0) return;
+    // تصحيح فواتير الاشتراك
+    await pool.query(`
+      UPDATE orders
+      SET vat_rate   = 0,
+          vat_amount = 0,
+          subtotal   = total_amount
+      WHERE order_type IN ('subscription_new', 'subscription_renewal')
+        AND vat_rate > 0
+    `);
+  } catch (e) {
+    console.error('fixSubscriptionVatAmounts (orders):', e);
+  }
+  try {
+    // تصحيح إشعارات الاشتراك دائماً بغض النظر عن إعداد معدل الضريبة الحالي
+    await pool.query(`
+      UPDATE credit_notes cn
+      JOIN orders o ON o.id = cn.original_order_id
+      SET cn.vat_rate   = 0,
+          cn.vat_amount = 0,
+          cn.subtotal   = cn.total_amount
+      WHERE o.order_type IN ('subscription_new', 'subscription_renewal')
+        AND (cn.vat_rate > 0 OR cn.vat_amount > 0)
+    `);
+  } catch (e) {
+    console.error('fixSubscriptionVatAmounts (credit_notes):', e);
   }
 }
 
@@ -926,6 +962,12 @@ async function migrateConsumptionReceipts() {
     }
     if (!colSet.has('delivery_date')) {
       await pool.query(`ALTER TABLE consumption_receipts ADD COLUMN delivery_date DATETIME NULL DEFAULT NULL`);
+    }
+    if (!colSet.has('discount_amount')) {
+      await pool.query(`ALTER TABLE consumption_receipts ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    }
+    if (!colSet.has('discount_label')) {
+      await pool.query(`ALTER TABLE consumption_receipts ADD COLUMN discount_label VARCHAR(255) NULL DEFAULT NULL`);
     }
   } catch (e) {
     console.error('migrateConsumptionReceipts:', e);
@@ -4184,7 +4226,7 @@ async function getPosProducts() {
     ORDER BY p.sort_order ASC, p.id ASC
   `);
   const [priceLines] = await pool.query(`
-    SELECT ppl.product_id, ppl.laundry_service_id, ppl.price,
+    SELECT ppl.id AS price_line_id, ppl.product_id, ppl.laundry_service_id, ppl.price,
            ls.name_ar AS service_name_ar, ls.name_en AS service_name_en
     FROM product_price_lines ppl
     JOIN laundry_services ls ON ls.id = ppl.laundry_service_id AND ls.is_active = 1
@@ -4238,7 +4280,9 @@ async function insertConsumptionReceipt(conn, {
   balanceAfter,
   itemsJson = null,
   notes = null,
-  createdBy = null
+  createdBy = null,
+  discountAmount = 0,
+  discountLabel = null
 }) {
   const [[maxRow]] = await conn.query(
     'SELECT COALESCE(MAX(receipt_seq), 0) AS mx FROM consumption_receipts FOR UPDATE'
@@ -4248,12 +4292,13 @@ async function insertConsumptionReceipt(conn, {
     INSERT INTO consumption_receipts
       (receipt_seq, order_id, customer_id, subscription_id, period_id,
        package_name, amount_consumed, balance_before, balance_after,
-       items_json, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       items_json, notes, created_by, discount_amount, discount_label)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     receiptSeq, orderId, customerId, subscriptionId, periodId,
     packageName, amountConsumed, balanceBefore, balanceAfter,
-    itemsJson ? JSON.stringify(itemsJson) : null, notes, createdBy
+    itemsJson ? JSON.stringify(itemsJson) : null, notes, createdBy,
+    Number(discountAmount) || 0, discountLabel || null
   ]);
   return { receiptId: result.insertId, receiptSeq };
 }
@@ -4324,6 +4369,7 @@ async function getConsumptionReceipts({
       cr.id, cr.receipt_seq, cr.order_id, cr.customer_id,
       cr.subscription_id, cr.period_id, cr.package_name,
       cr.amount_consumed, cr.balance_before, cr.balance_after,
+      cr.discount_amount, cr.discount_label,
       cr.items_json, cr.notes, cr.created_by, cr.created_at,
       c.customer_name, c.phone,
       cs.subscription_ref,
@@ -4860,7 +4906,8 @@ async function getSubscriptionTransactions(subscriptionId) {
 async function createOrder({ orderNumber, customerId, items, subtotal, discountAmount, discountLabel, extraAmount = 0,
   vatRate, vatAmount, totalAmount, paymentMethod, paidCash = 0, paidCard = 0,
   starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt,
-  loyaltyPointsToRedeem = 0, customerDiscountAmount = 0, manualDiscountAmount = 0 }) {
+  loyaltyPointsToRedeem = 0, customerDiscountAmount = 0, manualDiscountAmount = 0,
+  totalWithoutOffer = null, consumptionDiscountAmount = 0, consumptionDiscountLabel = null }) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -4891,11 +4938,15 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
       if (activeSub) {
         const creditRemaining = Number(activeSub.credit_remaining);
         const allowDebt = allowSubscriptionDebt === true;
+        // العرض لا يطبق على إيصالات الاستهلاك — نستخدم الإجمالي بعد خصم العميل فقط
+        const numTotalForConsumption = totalWithoutOffer != null
+          ? Math.round(Number(totalWithoutOffer) * 100) / 100
+          : numTotal;
 
         if (allowDebt) {
-          consumptionAmount = numTotal;
-        } else if (creditRemaining >= numTotal) {
-          consumptionAmount = numTotal;
+          consumptionAmount = numTotalForConsumption;
+        } else if (creditRemaining >= numTotalForConsumption) {
+          consumptionAmount = numTotalForConsumption;
         }
         // إذا الرصيد لا يكفي الطلب كاملاً ولا مديونية → لا خصم ولا إيصال استهلاك
 
@@ -4903,11 +4954,12 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
           const subErr = new Error('رصيد الاشتراك غير كافٍ لتغطية هذا الطلب');
           subErr.code = 'INSUFFICIENT_SUBSCRIPTION_CREDIT';
           subErr.creditRemaining = creditRemaining;
-          subErr.orderTotal = numTotal;
+          subErr.orderTotal = numTotalForConsumption;
           throw subErr;
         }
 
         consumptionAmount = Math.round(consumptionAmount * 100) / 100;
+        // invoiceAmount = ما يدفعه العميل نقداً بعد خصم الاستهلاك من الإجمالي المخصوم (numTotal)
         invoiceAmount = Math.round((numTotal - consumptionAmount) * 100) / 100;
         if (invoiceAmount < 0) invoiceAmount = 0;
         isConsumptionOnly = invoiceAmount === 0 && consumptionAmount > 0;
@@ -5060,7 +5112,9 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
         balanceAfter: pendingConsumption.balanceAfter,
         itemsJson: itemsJsonSnapshot,
         notes: null,
-        createdBy: createdBy || null
+        createdBy: createdBy || null,
+        discountAmount: Number(consumptionDiscountAmount) || 0,
+        discountLabel: consumptionDiscountLabel || null
       });
       consumptionReceiptId = receipt.receiptId;
       consumptionReceiptSeq = receipt.receiptSeq;
@@ -5163,6 +5217,10 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
       consumptionReceiptId,
       consumptionReceiptSeq,
       consumptionAmount,
+      customerDiscountAmount: Number(customerDiscountAmount) || 0,
+      consumptionDiscountAmount: Number(consumptionDiscountAmount) || 0,
+      consumptionDiscountLabel: consumptionDiscountLabel || null,
+      discountLabel: discountLabel || null,
       invoiceAmount,
       loyaltyEarned,
       loyaltyRedeemed
@@ -6564,6 +6622,11 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
     const cnSeq = seqRow.next_seq;
     const cnNumber = `CN-${cnSeq}`;
 
+    // فواتير الاشتراك دائماً بدون ضريبة منفصلة — السعر شامل الضريبة
+    const finalVatRate   = isSubInvoice ? 0 : (Number(vatRate) || 0);
+    const finalVatAmount = isSubInvoice ? 0 : (vatAmount || 0);
+    const finalSubtotal  = isSubInvoice ? (totalAmount || 0) : (subtotal || 0);
+
     const [result] = await conn.query(`
       INSERT INTO credit_notes
         (credit_note_number, credit_note_seq, original_order_id, original_invoice_seq,
@@ -6573,8 +6636,8 @@ async function createCreditNote({ originalOrderId, customerId, subtotal, discoun
     `, [
       cnNumber, cnSeq, originalOrderId, orderRow.invoice_seq,
       orderRow.order_number, customerId || null,
-      subtotal || 0, discountAmount || 0, extraAmount || 0,
-      vatRate || 15, vatAmount || 0, totalAmount || 0,
+      finalSubtotal, discountAmount || 0, extraAmount || 0,
+      finalVatRate, finalVatAmount, totalAmount || 0,
       notes || null, createdBy || 'system',
       priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive'
     ]);
@@ -7124,6 +7187,196 @@ async function deleteOffer(id) {
   const oid = Number(id);
   if (!oid) throw new Error('معرّف العرض غير صالح');
   await pool.query('DELETE FROM offers WHERE id=?', [oid]);
+}
+
+// ═══════════════════════════════════════════════════
+// ═══ PRODUCT OFFERS ═══
+// ═══════════════════════════════════════════════════
+
+async function createProductOffersTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS product_offers (
+      id             INT AUTO_INCREMENT PRIMARY KEY,
+      name           VARCHAR(200) NOT NULL,
+      discount_type  ENUM('percentage','fixed') NOT NULL DEFAULT 'percentage',
+      discount_value DECIMAL(10,2) NOT NULL,
+      start_date     DATETIME DEFAULT NULL,
+      end_date       DATETIME DEFAULT NULL,
+      is_active      TINYINT(1) NOT NULL DEFAULT 1,
+      created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
+async function createProductOfferLinesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS product_offer_lines (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      offer_id      INT NOT NULL,
+      price_line_id INT NOT NULL,
+      UNIQUE KEY uq_offer_priceline (offer_id, price_line_id),
+      FOREIGN KEY (offer_id) REFERENCES product_offers(id) ON DELETE CASCADE,
+      FOREIGN KEY (price_line_id) REFERENCES product_price_lines(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
+async function getProductsForOffers() {
+  const [rows] = await pool.query(`
+    SELECT
+      p.id        AS product_id,
+      p.name_ar   AS product_name,
+      ppl.id      AS price_line_id,
+      ls.name_ar  AS service_name,
+      ppl.price
+    FROM products p
+    INNER JOIN product_price_lines ppl ON ppl.product_id = p.id
+    INNER JOIN laundry_services ls     ON ls.id = ppl.laundry_service_id
+    ORDER BY p.name_ar, ls.name_ar
+  `);
+  // Group by product
+  const map = new Map();
+  for (const row of rows) {
+    if (!map.has(row.product_id)) {
+      map.set(row.product_id, { product_id: row.product_id, product_name: row.product_name, lines: [] });
+    }
+    map.get(row.product_id).lines.push({
+      price_line_id: row.price_line_id,
+      service_name: row.service_name,
+      price: row.price
+    });
+  }
+  return Array.from(map.values());
+}
+
+async function getAllProductOffers() {
+  const [rows] = await pool.query(`
+    SELECT po.*,
+           COUNT(pol.id) AS lines_count
+    FROM product_offers po
+    LEFT JOIN product_offer_lines pol ON pol.offer_id = po.id
+    GROUP BY po.id
+    ORDER BY po.created_at DESC
+  `);
+  return rows;
+}
+
+async function getProductOfferById(id) {
+  const oid = Number(id);
+  if (!oid) throw new Error('معرّف العرض غير صالح');
+  const [[offer]] = await pool.query(`SELECT * FROM product_offers WHERE id = ?`, [oid]);
+  if (!offer) throw new Error('العرض غير موجود');
+  const [lines] = await pool.query(`SELECT price_line_id FROM product_offer_lines WHERE offer_id = ?`, [oid]);
+  return { offer, price_line_ids: lines.map(l => l.price_line_id) };
+}
+
+function _validateProductOffer(data) {
+  const name = String(data.name || '').trim().slice(0, 200);
+  if (!name) throw new Error('اسم العرض مطلوب');
+  const discountType = data.discountType === 'fixed' ? 'fixed' : 'percentage';
+  const discountValue = Number(data.discountValue);
+  if (isNaN(discountValue) || discountValue <= 0) throw new Error('قيمة الخصم غير صالحة');
+  if (discountType === 'percentage' && discountValue > 100) throw new Error('النسبة لا يمكن أن تتجاوز 100%');
+  const priceLineIds = Array.isArray(data.priceLineIds) ? data.priceLineIds.map(Number).filter(n => n > 0) : [];
+  if (priceLineIds.length === 0) throw new Error('يجب اختيار صنف وعملية واحدة على الأقل');
+  const startDate = data.startDate ? String(data.startDate).replace('T', ' ').slice(0, 19) : null;
+  const endDate   = data.endDate   ? String(data.endDate).replace('T', ' ').slice(0, 19)   : null;
+  if (startDate && endDate && startDate > endDate) throw new Error('تاريخ البداية يجب أن يكون قبل النهاية');
+  return { name, discountType, discountValue, startDate, endDate, priceLineIds };
+}
+
+async function createProductOffer(data) {
+  const { name, discountType, discountValue, startDate, endDate, priceLineIds } = _validateProductOffer(data);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [result] = await conn.query(
+      `INSERT INTO product_offers (name, discount_type, discount_value, start_date, end_date) VALUES (?, ?, ?, ?, ?)`,
+      [name, discountType, discountValue, startDate, endDate]
+    );
+    const offerId = result.insertId;
+    const lineValues = priceLineIds.map(pid => [offerId, pid]);
+    await conn.query(`INSERT INTO product_offer_lines (offer_id, price_line_id) VALUES ?`, [lineValues]);
+    await conn.commit();
+    return { id: offerId };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function updateProductOffer(data) {
+  const id = Number(data.id);
+  if (!id) throw new Error('معرّف العرض غير صالح');
+  const { name, discountType, discountValue, startDate, endDate, priceLineIds } = _validateProductOffer(data);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE product_offers SET name=?, discount_type=?, discount_value=?, start_date=?, end_date=? WHERE id=?`,
+      [name, discountType, discountValue, startDate, endDate, id]
+    );
+    await conn.query(`DELETE FROM product_offer_lines WHERE offer_id = ?`, [id]);
+    const lineValues = priceLineIds.map(pid => [id, pid]);
+    await conn.query(`INSERT INTO product_offer_lines (offer_id, price_line_id) VALUES ?`, [lineValues]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function toggleProductOfferStatus(id) {
+  const oid = Number(id);
+  if (!oid) throw new Error('معرّف العرض غير صالح');
+  await pool.query(`UPDATE product_offers SET is_active = IF(is_active=1,0,1) WHERE id=?`, [oid]);
+}
+
+async function deleteProductOffer(id) {
+  const oid = Number(id);
+  if (!oid) throw new Error('معرّف العرض غير صالح');
+  await pool.query(`DELETE FROM product_offers WHERE id=?`, [oid]);
+}
+
+async function getActiveProductOffersForPos() {
+  // Returns all currently active product offers with their price_line_ids
+  const [offers] = await pool.query(`
+    SELECT po.id, po.name, po.discount_type, po.discount_value
+    FROM product_offers po
+    WHERE po.is_active = 1
+      AND (po.start_date IS NULL OR po.start_date <= NOW())
+      AND (po.end_date IS NULL OR po.end_date >= NOW())
+    ORDER BY po.discount_value DESC
+  `);
+  if (!offers.length) return {};
+  const offerIds = offers.map(o => o.id);
+  const placeholders = offerIds.map(() => '?').join(',');
+  const [lines] = await pool.query(
+    `SELECT offer_id, price_line_id FROM product_offer_lines WHERE offer_id IN (${placeholders})`,
+    offerIds
+  );
+  // Map: price_line_id -> best offer (highest discount_value)
+  const priceLineOfferMap = {};
+  for (const offer of offers) {
+    const offerLines = lines.filter(l => l.offer_id === offer.id);
+    for (const line of offerLines) {
+      const plid = line.price_line_id;
+      if (!priceLineOfferMap[plid]) {
+        priceLineOfferMap[plid] = {
+          offerId: offer.id,
+          offerName: offer.name,
+          discountType: offer.discount_type,
+          discountValue: parseFloat(offer.discount_value)
+        };
+      }
+    }
+  }
+  return priceLineOfferMap;
 }
 
 /* ========== ZATCA Order Status Functions ========== */
@@ -7809,6 +8062,12 @@ module.exports = {
   generateRefundNumber, createRefund, getOrderForRefund, getSubscriptionTransactions,
   // Offer functions
   createOffersTable, getAllOffers, getActiveOffers, createOffer, updateOffer, toggleOfferStatus, deleteOffer,
+  // Product Offer functions
+  createProductOffersTable, createProductOfferLinesTable,
+  getAllProductOffers, getProductOfferById,
+  createProductOffer, updateProductOffer, toggleProductOfferStatus, deleteProductOffer,
+  getActiveProductOffersForPos,
+  getProductsForOffers,
   // Customer Account Statement
   getCustomerAccountStatement,
   // Zakat Report
@@ -8088,9 +8347,12 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   `, cnParams);
 
   const [[subSummary]] = await pool.query(`
-    SELECT COALESCE(SUM(sp.prepaid_price_paid), 0) AS sub_total
+    SELECT
+      COALESCE(SUM(sp.prepaid_price_paid), 0)    AS sub_total,
+      COALESCE(SUM(IFNULL(o.vat_amount, 0)), 0)  AS sub_vat
     FROM subscription_ledger sl
     INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
+    LEFT JOIN orders o ON o.id = sp.order_id
     ${subWhere} AND sl.entry_type IN ('purchase', 'renewal')
   `, subParams);
 
@@ -8202,8 +8464,8 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const totalNetAfterTax  = salesNetAfterTax - cnAfterTax;
 
   const subAfterTax  = Number(subSummary.sub_total);
-  const subBeforeTax = subAfterTax / 1.15;
-  const subTax       = subAfterTax - subBeforeTax;
+  const subTax       = Number(subSummary.sub_vat);
+  const subBeforeTax = subAfterTax - subTax;
 
   const netBeforeTax = totalNetBeforeTax + subBeforeTax - expBeforeTax + partialBeforeTax;
   const netTax       = totalNetTax + subTax - expTax + partialTax;
@@ -8413,9 +8675,12 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
   `, cnParams);
 
   const [[subSummary]] = await pool.query(`
-    SELECT COALESCE(SUM(sp.prepaid_price_paid), 0) AS sub_total
+    SELECT
+      COALESCE(SUM(sp.prepaid_price_paid), 0)    AS sub_total,
+      COALESCE(SUM(IFNULL(o.vat_amount, 0)), 0)  AS sub_vat
     FROM subscription_ledger sl
     INNER JOIN subscription_periods sp ON sp.id = sl.subscription_period_id
+    LEFT JOIN orders o ON o.id = sp.order_id
     ${subWhere} AND sl.entry_type IN ('purchase', 'renewal')
   `, subParams);
 
@@ -8527,8 +8792,8 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
   const totalNetAfterTax  = salesNetAfterTax - cnAfterTax;
 
   const subAfterTax  = Number(subSummary.sub_total);
-  const subBeforeTax = subAfterTax / 1.15;
-  const subTax       = subAfterTax - subBeforeTax;
+  const subTax       = Number(subSummary.sub_vat);
+  const subBeforeTax = subAfterTax - subTax;
 
   const netBeforeTax = totalNetBeforeTax + subBeforeTax - expBeforeTax + partialBeforeTax;
   const netTax       = totalNetTax + subTax - expTax + partialTax;

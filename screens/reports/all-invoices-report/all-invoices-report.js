@@ -873,9 +873,26 @@ window.addEventListener('DOMContentLoaded', () => {
       if (invSubtotal) invSubtotal.innerHTML = sarFmtA(preTaxSubtotal);
 
       if (discount > 0 && invDiscRow && invDiscount) {
-        if (invDiscLabel) invDiscLabel.textContent = order.discount_label || 'الخصم';
-        invDiscount.innerHTML = sarFmtA(discount);
-        invDiscRow.style.display = '';
+        var discLabel = order.discount_label || 'الخصم';
+        var existingRowsAIR = invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+        for (var i = 0; i < existingRowsAIR.length; i++) existingRowsAIR[i].remove();
+        
+        if (discLabel.startsWith('[')) {
+          invDiscRow.style.display = 'none';
+          try {
+            var arrAIR = JSON.parse(discLabel);
+            arrAIR.forEach(function(dItem) {
+              var div = document.createElement('div');
+              div.className = 'inv-total-row dynamic-disc-row';
+              div.innerHTML = '<span class="inv-total-label">' + dItem.label + '</span><span class="inv-total-val" dir="ltr">' + sarFmtA(dItem.amount) + '</span>';
+              invDiscRow.parentNode.insertBefore(div, invDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          if (invDiscLabel) invDiscLabel.textContent = discLabel;
+          invDiscount.innerHTML = sarFmtA(discount);
+          invDiscRow.style.display = '';
+        }
         if (invAfterDiscRow && invAfterDiscount) {
           invAfterDiscount.innerHTML = sarFmtA(preTaxSubtotal - discount);
           invAfterDiscRow.style.display = '';

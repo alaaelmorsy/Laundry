@@ -1,4 +1,4 @@
-﻿@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
 @font-face{font-family:'SaudiRiyal';src:url('../../assets/fonts/saudi-riyal.woff') format('woff'),url('../../assets/fonts/saudi-riyal.ttf') format('truetype')}
 .sar{font-family:'SaudiRiyal';font-style:normal;font-weight:400;font-size:1.15em;display:inline-block;line-height:1;vertical-align:middle}
@@ -142,7 +142,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-td-amt{text-align:center;direction:ltr;white-space:nowrap;font-weight:700;color:#000}
 .inv-totals-box{border:2px solid #000;margin:6px 0 4px}
 .inv-totals-box .inv-total-row,.inv-totals-box .inv-grand-row{padding:2px 8px;margin-bottom:0}
-.inv-total-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;margin-bottom:2px}
+.inv-total-row {display:flex;justify-content:space-between;align-items: center;font-size:12px;font-weight:700;margin-bottom:2px}
 .inv-total-label{color:#000;font-weight:700}
 .inv-total-val{font-weight:700;color:#000}
 .inv-disc-val{color:#000}
@@ -239,20 +239,15 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 /* Print */
 @page { size: 80mm auto; margin: 0; }
 @media print {
-  html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
+  html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important;overflow:visible !important;height:auto !important;max-height:none !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
-  body > *:not(#invoiceViewModal):not(#cnViewModal) { display: none !important; }
-  #invoiceViewModal { display: none !important; }
-  #cnViewModal { position: static !important; background: none !important; padding: 0 !important; display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; width: 80mm !important; margin: 0 auto !important; }
-  body.invtype-a4 #cnViewModal { width: auto !important; max-width: none !important; }
-  .inv-dialog { max-height: none !important; box-shadow: none !important; background: none !important; border-radius: 0 !important; overflow: visible !important; width: 100% !important; height: auto !important; }
-  .inv-dialog-body { overflow: visible !important; padding: 0 !important; height: auto !important; max-height: none !important; flex: none !important; }
-  .inv-dialog-footer { display: none !important; }
-  .inv-paper { box-shadow: none !important; border-radius: 0 !important; width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm 3mm !important; height: auto !important; max-height: none !important; overflow: visible !important; }
+  body.printing-creditinvoices > *:not(#creditPrintZone) { display: none !important; }
+  body.printing-creditinvoices #creditPrintZone { display: block !important; position: static !important; background: none !important; padding: 0 !important; overflow: visible !important; height: auto !important; width: 80mm !important; margin: 0 auto !important; }
+  body.printing-creditinvoices.invtype-a4 #creditPrintZone { width: 210mm !important; max-width: none !important; }
+  body.printing-creditinvoices #creditPrintZone .inv-paper { box-shadow: none !important; border-radius: 0 !important; width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm 3mm !important; height: auto !important; max-height: none !important; overflow: visible !important; }
+  body.printing-creditinvoices.invtype-a4 #creditPrintZone .inv-paper { display: none !important; }
+  body.printing-creditinvoices.invtype-a4 #creditPrintZone .inv-paper-a4m { display: block !important; width: 210mm !important; max-width: 210mm !important; padding: 8mm 10mm 20mm !important; }
   .no-print { display: none !important; }
-  body.invtype-a4 .inv-paper { display: none !important; }
-  body.invtype-a4 .inv-paper-a4m { display: block !important; width: 210mm !important; max-width: 210mm !important; padding: 8mm 10mm 20mm !important; }
 }
 
 @media screen and (max-width: 767px) {

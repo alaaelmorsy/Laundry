@@ -200,7 +200,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       a4mShow('a4mDiscRow', true);
       if (data.discountLabel) {
         var a4mDiscLabel = document.querySelector('#a4mDiscRow span');
-        if (a4mDiscLabel) a4mDiscLabel.textContent = data.discountLabel + ' / Discount';
+        if (a4mDiscLabel) a4mDiscLabel.innerHTML = data.discountLabel.split(' + ').join('<br>') + '<br>/ Discount';
       }
       var afterDiscInv = Number(data.subtotal || 0) - Number(data.discount || 0);
       a4mHtml('a4mAfterDiscount', sarFmt(afterDiscInv));
@@ -635,10 +635,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (isInclusive && vatRate > 0) {
       if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal * 100 / (100 + vatRate));
       if (discount > 0) {
-        if (invDiscount) invDiscount.innerHTML = sarFmtA(discount);
-        if (invDiscRow) invDiscRow.style.display = '';
-        var discLabelEl = invDiscRow ? invDiscRow.querySelector('.inv-total-label') : null;
-        if (discLabelEl) discLabelEl.textContent = discountLabel;
+        var existingRowsDR1 = invDiscRow ? invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row') : [];
+        for (var i = 0; i < existingRowsDR1.length; i++) existingRowsDR1[i].remove();
+        
+        if (discountLabel.startsWith('[')) {
+          if (invDiscRow) invDiscRow.style.display = 'none';
+          try {
+            var arrDR1 = JSON.parse(discountLabel);
+            arrDR1.forEach(function(dItem) {
+              var div = document.createElement('div');
+              div.className = 'inv-total-row dynamic-disc-row';
+              div.innerHTML = '<span class="inv-total-label">' + dItem.label + '</span><span class="inv-total-val" dir="ltr">' + sarFmtA(dItem.amount) + '</span>';
+              invDiscRow.parentNode.insertBefore(div, invDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          if (invDiscount) invDiscount.innerHTML = sarFmtA(discount);
+          if (invDiscRow) invDiscRow.style.display = '';
+          var discLabelEl = invDiscRow ? invDiscRow.querySelector('.inv-total-label') : null;
+          if (discLabelEl) discLabelEl.innerHTML = discountLabel.split(' + ').join('<br>');
+        }
         if (invAfterDiscount) invAfterDiscount.innerHTML = sarFmtA((subtotal * 100 / (100 + vatRate)) - discount);
         if (invAfterDiscRow) invAfterDiscRow.style.display = '';
       } else {
@@ -667,10 +683,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else {
       if (invSubtotal) invSubtotal.innerHTML = sarFmtA(subtotal);
       if (discount > 0) {
-        if (invDiscount) invDiscount.innerHTML = sarFmtA(discount);
-        if (invDiscRow) invDiscRow.style.display = '';
-        var discLabelEl2 = invDiscRow ? invDiscRow.querySelector('.inv-total-label') : null;
-        if (discLabelEl2) discLabelEl2.textContent = discountLabel;
+        var existingRowsDR2 = invDiscRow ? invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row') : [];
+        for (var i = 0; i < existingRowsDR2.length; i++) existingRowsDR2[i].remove();
+        
+        if (discountLabel.startsWith('[')) {
+          if (invDiscRow) invDiscRow.style.display = 'none';
+          try {
+            var arrDR2 = JSON.parse(discountLabel);
+            arrDR2.forEach(function(dItem) {
+              var div = document.createElement('div');
+              div.className = 'inv-total-row dynamic-disc-row';
+              div.innerHTML = '<span class="inv-total-label">' + dItem.label + '</span><span class="inv-total-val" dir="ltr">' + sarFmtA(dItem.amount) + '</span>';
+              invDiscRow.parentNode.insertBefore(div, invDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          if (invDiscount) invDiscount.innerHTML = sarFmtA(discount);
+          if (invDiscRow) invDiscRow.style.display = '';
+          var discLabelEl2 = invDiscRow ? invDiscRow.querySelector('.inv-total-label') : null;
+          if (discLabelEl2) discLabelEl2.innerHTML = discountLabel.split(' + ').join('<br>');
+        }
         if (invAfterDiscount) invAfterDiscount.innerHTML = sarFmtA(subtotal - discount);
         if (invAfterDiscRow) invAfterDiscRow.style.display = '';
       } else {

@@ -1,4 +1,4 @@
-﻿@font-face{font-family:'Cairo';src:url('../../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Cairo';src:url('../../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
 @font-face{font-family:'SaudiRiyal';src:url('../../../assets/fonts/saudi-riyal.woff') format('woff'),url('../../../assets/fonts/saudi-riyal.ttf') format('truetype')}
 .sar{font-family:'SaudiRiyal';font-style:normal;font-weight:400;font-size:1.15em;display:inline-block;line-height:1;vertical-align:middle}
 html{height:100%;overflow-x:hidden}
@@ -6,7 +6,7 @@ html{height:100%;overflow-x:hidden}
 body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;overflow:hidden;background:#f8fafc;color:#1e293b;user-select:none;-webkit-app-region:no-drag;direction:rtl}
 .page-wrapper{display:flex;flex-direction:column;height:100%;max-height:100dvh;min-height:0;min-width:0}
 
-/* ── Header ── */
+/* -- Header -- */
 .header-bar{min-height:52px;background:#ffffff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:max(8px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) 8px max(12px,env(safe-area-inset-left,0));flex-shrink:0;-webkit-app-region:drag;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
 .header-right,.header-left{display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag}
 .back-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(90deg,#f43f5e,#e11d48);border:none;color:#fff;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;padding:7px 16px 7px 12px;border-radius:50px;cursor:pointer;transition:opacity .2s,transform .15s,box-shadow .2s;box-shadow:0 2px 8px rgba(244,63,94,.25);white-space:nowrap}
@@ -26,18 +26,18 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .btn-pdf{background:linear-gradient(90deg,#dc2626,#b91c1c);color:#fff;box-shadow:0 2px 6px rgba(220,38,38,.25)}
 .btn-pdf:hover{opacity:.9;transform:translateY(-1px)}
 
-/* ── Main content ── */
+/* -- Main content -- */
 .main-content{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:max(14px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) max(20px,env(safe-area-inset-bottom,0)) max(12px,env(safe-area-inset-left,0));display:flex;flex-direction:column;gap:14px}
 .main-content::-webkit-scrollbar{width:6px}
 .main-content::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 
-/* ── Loading ── */
+/* -- Loading -- */
 .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#94a3b8;min-height:200px}
 .loading-state p{font-size:15px;font-weight:700}
 .spinner{width:28px;height:28px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Sections ── */
+/* -- Sections -- */
 .report-section{background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .section-header{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid #f1f5f9}
 .toggle-header{cursor:pointer;transition:background .15s}
@@ -54,7 +54,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .collapsible-body.open{max-height:9999px;opacity:1}
 .section-footer{padding:11px 18px;background:#f8fafc;border-top:1px solid #f1f5f9;text-align:start;font-size:13px;color:#3b82f6;font-weight:700}
 
-/* ── Summary table column alignment ── */
+/* -- Summary table column alignment -- */
 .summary-table{table-layout:fixed;width:100%;min-width:0}
 .col-label{width:44%}
 .col-num{width:18.67%}
@@ -63,7 +63,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .summary-table tbody td{text-align:right !important}
 .summary-table tbody td.num-cell,.summary-table tbody td.tax-cell{text-align:center !important}
 
-/* ── Tables ── */
+/* -- Tables -- */
 .table-container{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
 .table-container::-webkit-scrollbar{height:8px}
 .table-container::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
@@ -84,11 +84,11 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .tax-cell{color:#f59e0b;font-weight:700}
 .detail-table{min-width:560px}
 
-/* ── View button ── */
+/* -- View button -- */
 .view-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:none;border-radius:20px;background:linear-gradient(90deg,#3b82f6,#1d4ed8);color:#fff;font-family:'Cairo',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .2s,transform .15s;white-space:nowrap}
 .view-btn:hover{opacity:.88;transform:translateY(-1px)}
 
-/* ── Payment Methods ── */
+/* -- Payment Methods -- */
 .pay-grid{padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .pay-empty{text-align:center;color:#94a3b8;font-size:13px;padding:20px;grid-column:1/-1}
 .pay-card-item{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;border-right:4px solid #e2e8f0;transition:background .15s}
@@ -107,7 +107,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .pay-card-amounts{text-align:start;flex-shrink:0}
 .pay-card-main{font-size:15px;font-weight:700;color:#1e293b;white-space:nowrap}
 
-/* ── Simple Invoice Detail Modal ── */
+/* -- Simple Invoice Detail Modal -- */
 .inv-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:12px;-webkit-app-region:no-drag}
 .inv-modal-box{background:#fff;border-radius:18px;width:100%;max-width:600px;max-height:90dvh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.18);overflow:hidden}
 .inv-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e8f0;background:linear-gradient(90deg,rgba(59,130,246,.07),rgba(29,78,216,.05));flex-shrink:0}
@@ -145,7 +145,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-pay-badge.mixed{background:#f1f5f9;color:#475569}
 .inv-pay-badge.subscription{background:#ede9fe;color:#7c3aed}
 
-/* ── Invoice Modal (same as invoices screen) ── */
+/* -- Invoice Modal (same as invoices screen) -- */
 .modal-overlay{position:fixed;inset:0;z-index:600;-webkit-app-region:no-drag}
 .inv-overlay{background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;overflow:hidden}
 .inv-dialog{display:flex;flex-direction:column;width:340px;max-width:calc(100vw - 32px);max-height:calc(100vh - 40px);background:#f4f4f4;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.45);overflow:hidden}
@@ -177,7 +177,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-td-amt{text-align:center;direction:ltr;white-space:nowrap;font-weight:700;color:#000}
 .inv-totals-box{border:2px solid #000;margin:6px 0 4px}
 .inv-totals-box .inv-total-row,.inv-totals-box .inv-grand-row{padding:2px 8px;margin-bottom:0}
-.inv-total-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;margin-bottom:2px}
+.inv-total-row {display:flex;justify-content:space-between;align-items: center;font-size:12px;font-weight:700;margin-bottom:2px}
 .inv-total-label{color:#000;font-weight:700}
 .inv-total-val{font-weight:700;color:#000}
 .inv-disc-val{color:#000}
@@ -260,10 +260,10 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .a4m-mixed-row b{font-size:.9em}
 .a4m-footer{position:absolute;left:10mm;right:10mm;bottom:5mm;background:#fff;color:#000;border:2px solid #000;padding:2mm 5mm;font-size:8pt;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:4mm}
 
-/* ── Print header (hidden on screen, shown on print) ── */
+/* -- Print header (hidden on screen, shown on print) -- */
 .print-header{display:none}
 
-/* ── Toast ── */
+/* -- Toast -- */
 .toast-container{position:fixed;top:max(12px,env(safe-area-inset-top,0));right:max(12px,env(safe-area-inset-right,0));left:max(12px,env(safe-area-inset-left,0));z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none;max-width:100%}
 .toast{display:flex;align-items:center;gap:12px;min-width:0;width:min(360px,100%);max-width:100%;padding:14px 16px;border-radius:12px;border:1px solid;pointer-events:all;animation:toastIn .35s cubic-bezier(.34,1.56,.64,1) forwards;overflow:hidden}
 .toast.toast-hide{animation:toastOut .3s ease forwards}
@@ -273,14 +273,14 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .toast-error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#dc2626}
 .toast-text{flex:1;font-size:13px;font-weight:700;line-height:1.5}
 
-/* ── Mobile: tablet (≤700px) ── */
+/* -- Mobile: tablet (=700px) -- */
 @media(max-width:700px){
   .header-title{font-size:14px}
   .btn-action{padding:7px 10px}
   .prof-cards{grid-template-columns:1fr 1fr}
 }
 
-/* ── Mobile: phone (≤480px) ── */
+/* -- Mobile: phone (=480px) -- */
 @media(max-width:480px){
   .header-bar{flex-direction:column;align-items:stretch;gap:6px;padding:8px 10px}
   .header-right,.header-left{justify-content:space-between}
@@ -296,7 +296,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
   .report-table thead th,.report-table tbody td{padding:9px 10px;font-size:12px}
 }
 
-/* ══ Invoice POS Classes (reused from pos.css) ══ */
+/* -- Invoice POS Classes (reused from pos.css) -- */
 .inv-header-wrap{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0 6px}
 .inv-logo-wrap{display:flex;justify-content:center;align-items:center;margin-bottom:4px;width:100%}
 .inv-logo{max-width:80px;max-height:60px;object-fit:contain;display:block;margin:0 auto}
@@ -311,7 +311,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-cn-ref-row{text-align:center;font-size:11px;font-weight:800;color:#000;border-top:1px dashed #94a3b8;border-bottom:1px dashed #94a3b8;padding:3px 0;margin:3px 0 4px;line-height:1.5;word-break:break-all}
 .inv-cn-refund-row{text-align:center;font-size:11px;font-weight:800;color:#000;border-top:1px dashed #94a3b8;border-bottom:1px dashed #94a3b8;padding:3px 4px;margin:0 0 4px;line-height:1.5;word-break:break-word;background:#fff}
 
-/* ── Thermal print 80mm ── */
+/* -- Thermal print 80mm -- */
 @media print{
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
@@ -319,7 +319,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
   html,body{height:auto;overflow:visible;background:#fff}
   body{max-height:none;overflow:visible}
 
-  /* عند فتح مودال الفاتورة: اخفِ كل شيء ماعدا المودال — نفس سلوك شاشة البيع */
+  /* ??? ??? ????? ????????: ???? ?? ??? ????? ??????? � ??? ???? ???? ????? */
   body.printing-invoice > *:not(#invoiceViewModal){display:none !important}
   body.printing-invoice #invoiceViewModal{position:static !important;background:none !important;padding:0 !important;display:block !important;overflow:visible !important;height:auto !important;max-height:none !important;width:80mm !important;margin:0 auto !important}
   body.printing-invoice.invtype-a4 #invoiceViewModal{width:auto !important;max-width:none !important}

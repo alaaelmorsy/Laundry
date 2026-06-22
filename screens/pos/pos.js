@@ -47,6 +47,7 @@
     processingInvoice: null,
     _creditNoteModalMode: false,
     activeOffer: null,
+    productOfferMap: {},
     lastZatcaQr: null,
     refundSearchTarget: null,
     shouldClearCartAfterConsumptionPrint: true,
@@ -440,10 +441,11 @@
     }
     I18N.apply();
 
-    const [settingsRes, offersRes, loyaltyRes] = await Promise.all([
+    const [settingsRes, offersRes, loyaltyRes, productOffersRes] = await Promise.all([
       window.api.getAppSettings(),
       window.api.getActiveOffers(),
-      window.api.getLoyaltySettings().catch(() => null)
+      window.api.getLoyaltySettings().catch(() => null),
+      window.api.getActiveProductOffersForPos().catch(() => null)
     ]);
 
     if (loyaltyRes && loyaltyRes.success) {
@@ -467,6 +469,10 @@
       state.activeOffer = offersRes.offers[0];
     } else {
       state.activeOffer = null;
+    }
+
+    if (productOffersRes && productOffersRes.success && productOffersRes.priceLineOfferMap) {
+      state.productOfferMap = productOffersRes.priceLineOfferMap;
     }
 
     updateVatLabel();
@@ -963,6 +969,7 @@
       key,
       productId: product.id,
       serviceId: priceLine.laundry_service_id,
+      priceLineId: priceLine.price_line_id || null,
       productNameAr,
       productNameEn,
       serviceNameAr,
@@ -1142,6 +1149,7 @@
     const newServiceName = lang === 'ar' ? (newServiceNameAr || newServiceNameEn) : (newServiceNameEn || newServiceNameAr);
 
     item.serviceId = newServiceId;
+    item.priceLineId = newLine.price_line_id || null;
     item.serviceNameAr = newServiceNameAr;
     item.serviceNameEn = newServiceNameEn;
     item.serviceName = newServiceName;
@@ -1178,7 +1186,7 @@
         : Math.min(cd.value, base);
     }
 
-    // 2. خصم العرض — على الأساس الكامل
+    // 2. خصم العرض العام — على الأساس الكامل
     let offerDisc = 0;
     if (state.activeOffer) {
       const offer = state.activeOffer;
@@ -1186,6 +1194,10 @@
         ? Math.min(parseFloat(offer.discount_value) / 100 * base, base)
         : Math.min(parseFloat(offer.discount_value), base);
     }
+    
+    // 2b. خصم عروض الأصناف — يُحسب على مستوى كل عنصر ويُضاف للمجموع
+    const productOfferDisc = getTotalProductOfferDiscount();
+    offerDisc = Math.min(offerDisc + productOfferDisc, base);
 
     // 3. الخصم اليدوي — على المتبقي بعد خصم العميل والعرض (تسلسلي)
     // هذا يضمن أن النسبة المعروضة تطابق المبلغ الفعلي
@@ -1206,14 +1218,62 @@
     return Math.min(customerDisc + offerDisc + manualDisc + loyaltyDisc, maxTotal);
   }
 
-  function getOfferDiscountAmount(subtotal) {
-    if (!state.activeOffer || subtotal <= 0) return 0;
-    const base = getPreTaxBase(subtotal);
-    const offer = state.activeOffer;
-    if (offer.discount_type === 'percentage') {
-      return Math.min(parseFloat(offer.discount_value) / 100 * base, base);
+  // حساب خصم عرض الأصناف لعنصر واحد في السلة
+  function getProductOfferDiscountForItem(item) {
+    if (!item.priceLineId || !state.productOfferMap) return 0;
+    const offerInfo = state.productOfferMap[item.priceLineId];
+    if (!offerInfo) return 0;
+    const lineTotal = item.lineTotal || 0;
+    if (lineTotal <= 0) return 0;
+    const base = getPreTaxBase(lineTotal);
+    if (offerInfo.discountType === 'percentage') {
+      return Math.min(offerInfo.discountValue / 100 * base, base);
     }
-    return Math.min(parseFloat(offer.discount_value), base);
+    return Math.min(offerInfo.discountValue, base);
+  }
+
+  // مجموع خصم عروض الأصناف لكل السلة
+  function getTotalProductOfferDiscount() {
+    if (!state.productOfferMap || !Object.keys(state.productOfferMap).length) return 0;
+    return state.cart.reduce((sum, item) => sum + getProductOfferDiscountForItem(item), 0);
+  }
+
+  function getOfferDiscountAmount(subtotal) {
+    let globalOfferDisc = 0;
+    if (state.activeOffer && subtotal > 0) {
+      const base = getPreTaxBase(subtotal);
+      const offer = state.activeOffer;
+      if (offer.discount_type === 'percentage') {
+        globalOfferDisc = Math.min(parseFloat(offer.discount_value) / 100 * base, base);
+      } else {
+        globalOfferDisc = Math.min(parseFloat(offer.discount_value), base);
+      }
+    }
+    const productOfferDisc = getTotalProductOfferDiscount();
+    return globalOfferDisc + productOfferDisc;
+  }
+
+  // خصم بدون العرض — لحساب استهلاك الاشتراك (العرض لا يطبق على إيصالات الاستهلاك)
+  function calcDiscountWithoutOffer(subtotal) {
+    const base = getPreTaxBase(subtotal);
+    if (base <= 0) return 0;
+    let customerDisc = 0;
+    if (state.customerDiscount) {
+      const cd = state.customerDiscount;
+      customerDisc = cd.type === 'percentage'
+        ? Math.min(cd.value / 100 * base, base)
+        : Math.min(cd.value, base);
+    }
+    const remaining1 = Math.max(0, base - customerDisc);
+    let manualDisc = 0;
+    if (state.discount > 0) {
+      manualDisc = state.discountType === 'pct'
+        ? Math.min(Math.max(0, state.discount) / 100 * remaining1, remaining1)
+        : Math.min(Math.max(0, state.discount), remaining1);
+    }
+    const remaining2 = Math.max(0, remaining1 - manualDisc);
+    const loyaltyDisc = Math.min(Math.max(0, state.loyaltyDiscount || 0), remaining2);
+    return Math.min(customerDisc + manualDisc + loyaltyDisc, base * 0.90);
   }
 
   /**
@@ -2320,25 +2380,80 @@
     } else { a4mShow('a4mCustomerDiscRow', false); }
     if (a4mOtherDiscAmt > 0) {
       var a4mOtherLblParts = [];
-      if (state.discount > 0) {
-        var a4mMdTxt = state.discountType === 'pct' ? state.discount + '%' : parseFloat(state.discount).toFixed(2) + ' ر.س';
-        a4mOtherLblParts.push('خصم إضافي (' + a4mMdTxt + ')');
-      }
+      var base = getPreTaxBase(data.subtotal);
+      var generalOfferAmt = 0;
+      var totalPoDisc = 0;
+      var manualDiscAmt = 0;
+
       if (state.activeOffer) {
         var a4mOfName = state.activeOffer.name || '';
         var a4mOfVal = state.activeOffer.discount_type === 'percentage'
           ? parseFloat(state.activeOffer.discount_value) + '%'
           : parseFloat(state.activeOffer.discount_value) + ' ر.س';
-        a4mOtherLblParts.push('خصم عرض (' + a4mOfName + ' ' + a4mOfVal + ')');
+        generalOfferAmt = state.activeOffer.discount_type === 'percentage'
+          ? Math.min(parseFloat(state.activeOffer.discount_value) / 100 * base, base)
+          : Math.min(parseFloat(state.activeOffer.discount_value), base);
+        if (generalOfferAmt > 0) {
+          a4mOtherLblParts.push({ label: 'خصم عرض (' + a4mOfName + ' ' + a4mOfVal + ') / Offer Discount', amount: generalOfferAmt });
+        }
       }
-      var a4mOtherLblFinal = (a4mOtherLblParts.length ? a4mOtherLblParts.join(' + ') : 'خصم إضافي') + ' / Discount';
-      var a4mOtherLblEl = document.getElementById('a4mOtherDiscLabel');
-      if (a4mOtherLblEl) a4mOtherLblEl.textContent = a4mOtherLblFinal;
-      a4mHtml('a4mOtherDiscount', sarFmt(a4mOtherDiscAmt));
-      a4mShow('a4mOtherDiscRow', true);
-    } else { a4mShow('a4mOtherDiscRow', false); }
-    // إخفاء السطر القديم (للاستخدام من الفواتير المحفوظة)
-    a4mShow('a4mDiscRow', false);
+
+      if (state.productOfferMap && Object.keys(state.productOfferMap).length > 0) {
+        var a4mAppliedPOs = {};
+        state.cart.forEach(function(item) {
+          if (item.priceLineId && state.productOfferMap[item.priceLineId]) {
+            var po = state.productOfferMap[item.priceLineId];
+            var amt = getProductOfferDiscountForItem(item);
+            if (amt > 0) {
+              a4mAppliedPOs[po.id || po.name] = { po: po, amt: (a4mAppliedPOs[po.id || po.name] ? a4mAppliedPOs[po.id || po.name].amt + amt : amt) };
+            }
+          }
+        });
+        Object.keys(a4mAppliedPOs).forEach(function(key) {
+          var po = a4mAppliedPOs[key].po;
+          var amt = a4mAppliedPOs[key].amt;
+          var poTxt = po.discountType === 'percentage' ? parseFloat(po.discountValue) + '%' : parseFloat(po.discountValue) + ' ر.س';
+          totalPoDisc += amt;
+          a4mOtherLblParts.push({ label: 'خصم عرض (' + (po.name || '') + ' ' + poTxt + ') / Offer Discount', amount: amt });
+        });
+      }
+
+      var remaining1 = Math.max(0, base - a4mCustDiscAmt - generalOfferAmt - totalPoDisc);
+      if (state.discount > 0) {
+        var a4mMdTxt = state.discountType === 'pct' ? state.discount + '%' : parseFloat(state.discount).toFixed(2) + ' ر.س';
+        manualDiscAmt = state.discountType === 'pct'
+          ? Math.min(Math.max(0, state.discount) / 100 * remaining1, remaining1)
+          : Math.min(Math.max(0, state.discount), remaining1);
+        if (manualDiscAmt > 0) {
+          a4mOtherLblParts.push({ label: 'خصم إضافي (' + a4mMdTxt + ') / Extra Discount', amount: manualDiscAmt });
+        }
+      }
+
+      var loyaltyRedeemAmt = Number(state.loyaltyDiscount || 0);
+      var loyaltyRedeemedPts = Number(state.loyaltyPointsToRedeem || 0);
+      if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
+        a4mOtherLblParts.push({ label: 'خصم نقاط الولاء / Loyalty Discount', amount: loyaltyRedeemAmt });
+      }
+
+      var a4mDiscRowEl = document.getElementById('a4mDiscRow');
+      var a4mOtherDiscRowEl = document.getElementById('a4mOtherDiscRow');
+      a4mDiscRowEl.style.display = 'none';
+      a4mOtherDiscRowEl.style.display = 'none';
+      
+      var existingA4Rows = a4mOtherDiscRowEl.parentNode.querySelectorAll('.dynamic-a4m-disc-row');
+      for (var i = 0; i < existingA4Rows.length; i++) existingA4Rows[i].remove();
+
+      a4mOtherLblParts.forEach(function(dItem) {
+        var tr = document.createElement('tr');
+        tr.className = 'dynamic-a4m-disc-row';
+        tr.style.fontWeight = '700';
+        tr.innerHTML = '<td colspan="4"></td><td><span>' + escHtml(dItem.label) + '</span></td><td colspan="3" class="a4m-td-num" dir="ltr"><span class="sar">&#xE900;</span> ' + fmtLtr(dItem.amount) + '</td>';
+        a4mOtherDiscRowEl.parentNode.insertBefore(tr, a4mOtherDiscRowEl);
+      });
+    } else {
+      a4mShow('a4mOtherDiscRow', false);
+      a4mShow('a4mDiscRow', false);
+    }
     // المجموع بعد الخصم — A4
     if (data.discount && data.discount > 0) {
       var a4mAfterDiscVal = a4mSubtotalVal - data.discount;
@@ -2650,6 +2765,29 @@
     document.getElementById('crModalPackage').textContent =
       (subscription && subscription.package_name) || '—';
     var sarHtml = '<span class="sar">&#xE900;</span> ';
+
+    /* ── خصم العميل في إيصال الاستهلاك (المبالغ شاملة الضريبة) ── */
+    var crSubtotalEl = document.getElementById('crModalSubtotal');
+    var crDiscRowEl  = document.getElementById('crModalDiscRow');
+    var crDiscLblEl  = document.getElementById('crModalDiscLabel');
+    var crDiscValEl  = document.getElementById('crModalDiscount');
+    var crDiscountAmt = Number(result.consumptionDiscountAmount || 0);
+    var crTotalBeforeDiscount = Math.round((consumed + crDiscountAmt) * 100) / 100;
+    if (crSubtotalEl) {
+      crSubtotalEl.parentElement.style.display = '';
+      crSubtotalEl.innerHTML = sarHtml + fmtLtr(crTotalBeforeDiscount);
+    }
+    if (crDiscRowEl && crDiscValEl) {
+      if (crDiscountAmt > 0) {
+        if (crDiscLblEl) crDiscLblEl.textContent = result.consumptionDiscountLabel || 'خصم العميل';
+        crDiscValEl.innerHTML = sarHtml + fmtLtr(crDiscountAmt);
+        crDiscRowEl.style.display = '';
+      } else {
+        crDiscRowEl.style.display = 'none';
+        if (crSubtotalEl) crSubtotalEl.parentElement.style.display = 'none';
+      }
+    }
+
     document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(consumed);
     document.getElementById('crModalBalBefore').innerHTML =
       balBefore != null ? sarHtml + fmtLtr(balBefore) : '—';
@@ -2888,6 +3026,12 @@
     if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
     if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد الإرجاع';
 
+    // إخفاء صفوف الخصم في المرتجع
+    var _refSubtotalEl = document.getElementById('crModalSubtotal');
+    var _refDiscRowEl  = document.getElementById('crModalDiscRow');
+    if (_refSubtotalEl) _refSubtotalEl.parentElement.style.display = 'none';
+    if (_refDiscRowEl)  _refDiscRowEl.style.display = 'none';
+
     var sarHtml = '<span class="sar">&#xE900;</span> ';
     document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(refund.refundAmount || receipt.amountConsumed || 0);
     document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(refund.oldBalance || 0);
@@ -3065,72 +3209,96 @@
         + '</tr>';
     }).join('');
 
-    /* ── Build discount label with offer name ── */
-    var discountLabel = 'الخصم';
-    var loyaltyRedeemAmt = Number(totals.loyaltyDiscount || 0);
-    var loyaltyRedeemedPts = Number(totals.loyaltyRedeemed || 0);
-    var discLabelParts = [];
-    if (state.customerDiscount) {
+    /* ── Build discount label array for JSON and Thermal UI ── */
+    var discountLabelArr = [];
+    var base = getPreTaxBase(totals.subtotal);
+    var generalOfferAmt = 0;
+    var manualDiscAmt = 0;
+    var totalPoDisc = 0;
+
+    /* ── Customer Discount ── */
+    var customerDiscAmt = getCustomerDiscountAmount(totals.subtotal);
+    if (customerDiscAmt > 0 && state.customerDiscount) {
       var cd = state.customerDiscount;
-      discLabelParts.push('خصم العميل (' + (cd.type === 'percentage' ? cd.value + '%' : cd.value.toFixed(2) + ' ر.س') + ')');
+      var cdTxt = cd.type === 'percentage' ? cd.value + '%' : cd.value.toFixed(2) + ' ر.س';
+      discountLabelArr.push({ label: 'خصم العميل (' + cdTxt + ')', amount: customerDiscAmt, isCustomer: true });
     }
+
     if (state.activeOffer && totals.discount > 0) {
       var offerName = state.activeOffer.name || '';
       var offerValTxt = state.activeOffer.discount_type === 'percentage'
         ? parseFloat(state.activeOffer.discount_value) + '%'
         : parseFloat(state.activeOffer.discount_value) + ' ر.س';
-      discLabelParts.push('خصم عرض (' + offerName + ' ' + offerValTxt + ')');
-    }
-    if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
-      discLabelParts.push('خصم نقاط الولاء');
-    }
-    if (discLabelParts.length) discountLabel = discLabelParts.join(' + ');
+      
+      generalOfferAmt = state.activeOffer.discount_type === 'percentage'
+        ? Math.min(parseFloat(state.activeOffer.discount_value) / 100 * base, base)
+        : Math.min(parseFloat(state.activeOffer.discount_value), base);
 
-    /* ── Totals ── */
+      if (generalOfferAmt > 0) {
+        discountLabelArr.push({ label: 'خصم عرض (' + offerName + ' ' + offerValTxt + ')', amount: generalOfferAmt });
+      }
+    }
+
+    if (totals.discount > 0 && state.productOfferMap && Object.keys(state.productOfferMap).length > 0) {
+      var appliedPOs1 = {};
+      state.cart.forEach(function(item) {
+        if (item.priceLineId && state.productOfferMap[item.priceLineId]) {
+          var po = state.productOfferMap[item.priceLineId];
+          var amt = getProductOfferDiscountForItem(item);
+          if (amt > 0) {
+            appliedPOs1[po.id || po.name] = { po: po, amt: (appliedPOs1[po.id || po.name] ? appliedPOs1[po.id || po.name].amt + amt : amt) };
+          }
+        }
+      });
+      Object.keys(appliedPOs1).forEach(function(key) {
+        var po = appliedPOs1[key].po;
+        var amt = appliedPOs1[key].amt;
+        var poTxt = po.discountType === 'percentage' ? parseFloat(po.discountValue) + '%' : parseFloat(po.discountValue) + ' ر.س';
+        totalPoDisc += amt;
+        discountLabelArr.push({ label: 'خصم عرض (' + (po.name || '') + ' ' + poTxt + ')', amount: amt });
+      });
+    }
+
+    var remaining1 = Math.max(0, base - customerDiscAmt - generalOfferAmt - totalPoDisc);
+    if (state.discount > 0) {
+      var mdTxt = state.discountType === 'pct' ? state.discount + '%' : parseFloat(state.discount).toFixed(2) + ' ر.س';
+      manualDiscAmt = state.discountType === 'pct'
+        ? Math.min(Math.max(0, state.discount) / 100 * remaining1, remaining1)
+        : Math.min(Math.max(0, state.discount), remaining1);
+      if (manualDiscAmt > 0) {
+        discountLabelArr.push({ label: 'خصم إضافي (' + mdTxt + ')', amount: manualDiscAmt });
+      }
+    }
+
+    var loyaltyRedeemAmt = Number(totals.loyaltyDiscount || 0);
+    var loyaltyRedeemedPts = Number(totals.loyaltyRedeemed || 0);
+    if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
+      discountLabelArr.push({ label: 'خصم نقاط الولاء', amount: loyaltyRedeemAmt });
+    }
+
+    // Save as JSON string for the DB (this replaces the old multi-line string)
+    var discountLabel = discountLabelArr.length > 0 ? JSON.stringify(discountLabelArr) : 'الخصم';
+
+    /* ── Render Dynamic Rows for Thermal Receipt ── */
+    var otherDiscAmt = Math.max(0, totals.discount - customerDiscAmt);
     var displayMode = (state.viewingDeferredInvoice !== null)
       ? (state.appSettings && state.appSettings.priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive')
       : state.priceDisplayMode;
-    /* ── فصل خصم العميل عن بقية الخصومات ── */
-    var customerDiscAmt = getCustomerDiscountAmount(totals.subtotal);
-    var otherDiscAmt = Math.max(0, totals.discount - customerDiscAmt);
 
-    /* ── تسمية خصم العميل ── */
-    if (customerDiscAmt > 0 && state.customerDiscount) {
-      var cd2 = state.customerDiscount;
-      var cdLabelTxt = 'خصم العميل (' + (cd2.type === 'percentage' ? cd2.value + '%' : cd2.value.toFixed(2) + ' ر.س') + ')';
-      if (els.invCustomerDiscLabel) els.invCustomerDiscLabel.textContent = cdLabelTxt;
-      els.invCustomerDisc.innerHTML = sarFmt(customerDiscAmt);
-      els.invCustomerDiscRow.style.display = '';
-    } else {
-      els.invCustomerDiscRow.style.display = 'none';
-    }
+    els.invCustomerDiscRow.style.display = 'none';
+    els.invDiscRow.style.display = 'none';
+    
+    // Clear previous dynamic rows
+    var existingRows = els.invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+    for (var i = 0; i < existingRows.length; i++) existingRows[i].remove();
 
-    /* ── بقية الخصومات (يدوي + عروض + ولاء) في السطر الأصلي ── */
-    if (otherDiscAmt > 0) {
-      var otherLabelParts = [];
-      if (state.discount > 0) {
-        var mdTxt = state.discountType === 'pct'
-          ? state.discount + '%'
-          : parseFloat(state.discount).toFixed(2) + ' ر.س';
-        otherLabelParts.push('خصم إضافي (' + mdTxt + ')');
-      }
-      if (state.activeOffer) {
-        var ofv2 = state.activeOffer;
-        var ofTxt2 = ofv2.discount_type === 'percentage' ? parseFloat(ofv2.discount_value) + '%' : parseFloat(ofv2.discount_value) + ' ر.س';
-        otherLabelParts.push('خصم عرض (' + (ofv2.name || '') + ' ' + ofTxt2 + ')');
-      }
-      var loyaltyRedeemAmt2 = Number(state.loyaltyDiscount || 0);
-      var loyaltyRedeemedPts2 = Number(state.loyaltyPointsToRedeem || 0);
-      if (loyaltyRedeemedPts2 > 0 && loyaltyRedeemAmt2 > 0) {
-        otherLabelParts.push('خصم نقاط الولاء');
-      }
-      var otherLabel = otherLabelParts.length ? otherLabelParts.join(' + ') : 'خصم إضافي';
-      els.invDiscount.innerHTML = sarFmt(otherDiscAmt);
-      els.invDiscRow.style.display = '';
-      var discLabelElOther = els.invDiscRow.querySelector('.inv-total-label');
-      if (discLabelElOther) discLabelElOther.textContent = otherLabel;
-    } else {
-      els.invDiscRow.style.display = 'none';
+    if (discountLabelArr.length > 0) {
+      discountLabelArr.forEach(function(dItem) {
+        var div = document.createElement('div');
+        div.className = 'inv-total-row dynamic-disc-row';
+        div.innerHTML = '<span class="inv-total-label">' + escHtml(dItem.label) + '</span><span class="inv-total-val inv-disc-val" dir="ltr">' + sarFmt(dItem.amount) + '</span>';
+        els.invDiscRow.parentNode.insertBefore(div, els.invDiscRow);
+      });
     }
 
     /* ── سطر المجموع بعد الخصم ── */
@@ -3549,6 +3717,10 @@
         state.paymentMethod = 'mixed';
       }
 
+      const _savedCustomerDiscount = state.customerDiscount;
+      const _savedActiveOffer = state.activeOffer;
+      state.customerDiscount = null;
+      state.activeOffer = null;
       showInvoiceModal(
         order.order_number,
         order.created_at,
@@ -3570,6 +3742,8 @@
         order.id,
         order.notes || ''
       );
+      state.customerDiscount = _savedCustomerDiscount;
+      state.activeOffer = _savedActiveOffer;
       state._printingSubscription = true;
     } catch (e) {
       console.error('showSubscriptionInvoiceModal error:', e);
@@ -3691,12 +3865,44 @@
           if (state.activeOffer) {
             parts.push('خصم عرض (' + (state.activeOffer.name || '') + ' ' + (state.activeOffer.discount_type === 'percentage' ? parseFloat(state.activeOffer.discount_value) + '%' : parseFloat(state.activeOffer.discount_value) + ' ر.س') + ')');
           }
+          if (state.productOfferMap && Object.keys(state.productOfferMap).length > 0) {
+            var appliedPOs3 = {};
+            state.cart.forEach(function(item) {
+              if (item.priceLineId && state.productOfferMap[item.priceLineId]) {
+                var po = state.productOfferMap[item.priceLineId];
+                appliedPOs3[po.id || po.name] = po;
+              }
+            });
+            Object.keys(appliedPOs3).forEach(function(key) {
+              var po = appliedPOs3[key];
+              var poTxt = po.discountType === 'percentage' ? parseFloat(po.discountValue) + '%' : parseFloat(po.discountValue) + ' ر.س';
+              parts.push('خصم عرض (' + (po.name || '') + ' ' + poTxt + ')');
+            });
+          }
           if (state.loyaltyPointsToRedeem > 0) {
             parts.push('خصم نقاط الولاء (' + state.loyaltyPointsToRedeem + ' نقطة)');
           }
           return parts.length ? parts.join(' + ') : null;
         })(),
         customerDiscountAmount: parseFloat(getCustomerDiscountAmount(subtotal).toFixed(2)),
+        totalWithoutOffer: (() => {
+          const discWO = calcDiscountWithoutOffer(subtotal);
+          return parseFloat(calcTotalsFromSubtotal(subtotal, discWO, extra).total.toFixed(2));
+        })(),
+        consumptionDiscountAmount: (() => {
+          // الخصم على الاشتراك = الفرق بين السعر الكامل وبعد خصم العميل فقط (شامل الضريبة)
+          const discWO = calcDiscountWithoutOffer(subtotal);
+          const totalFull = calcTotalsFromSubtotal(subtotal, 0, extra).total;
+          const totalWO   = calcTotalsFromSubtotal(subtotal, discWO, extra).total;
+          return parseFloat(Math.max(0, totalFull - totalWO).toFixed(2));
+        })(),
+        consumptionDiscountLabel: (() => {
+          if (state.customerDiscount) {
+            const cd = state.customerDiscount;
+            return 'خصم العميل (' + (cd.type === 'percentage' ? cd.value + '%' : cd.value.toFixed(2) + ' ر.س') + ')';
+          }
+          return null;
+        })(),
         manualDiscountAmount: parseFloat(getManualDiscountAmount(subtotal).toFixed(2)),
         loyaltyPointsToRedeem: state.loyaltyPointsToRedeem || 0,
         extraAmount: parseFloat(extra.toFixed(2)),
@@ -6098,12 +6304,37 @@
     })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';
+    const _histSubtotalEl = document.getElementById('crModalSubtotal');
+    const _histDiscRowEl  = document.getElementById('crModalDiscRow');
+    const _histDiscLblEl  = document.getElementById('crModalDiscLabel');
+    const _histDiscValEl  = document.getElementById('crModalDiscount');
     if (r.refund_id) {
+      // المرتجع: إخفاء سطري الخصم والمجموع قبل الخصم
+      if (_histSubtotalEl) _histSubtotalEl.parentElement.style.display = 'none';
+      if (_histDiscRowEl)  _histDiscRowEl.style.display = 'none';
       document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.refund_amount || r.amount_consumed || 0);
       document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.refund_old_balance || 0);
       document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.refund_new_balance || 0);
     } else {
-      document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
+      const _disc = Number(r.discount_amount || 0);
+      const _consumed = Number(r.amount_consumed || 0);
+      // discount_amount مخزّن شامل الضريبة — الجمع مباشر صحيح
+      const _subtotal = Math.round((_consumed + _disc) * 100) / 100;
+      if (_histSubtotalEl) {
+        _histSubtotalEl.parentElement.style.display = '';
+        _histSubtotalEl.innerHTML = sarHtml + fmtLtr(_subtotal);
+      }
+      if (_histDiscRowEl && _histDiscValEl) {
+        if (_disc > 0) {
+          if (_histDiscLblEl) _histDiscLblEl.textContent = r.discount_label || 'خصم العميل';
+          _histDiscValEl.innerHTML = sarHtml + fmtLtr(_disc);
+          _histDiscRowEl.style.display = '';
+        } else {
+          _histDiscRowEl.style.display = 'none';
+          if (_histSubtotalEl) _histSubtotalEl.parentElement.style.display = 'none';
+        }
+      }
+      document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(_consumed);
       document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
       document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
     }
@@ -6188,7 +6419,28 @@
     })();
 
     const sarHtml = '<span class="sar">&#xE900;</span> ';
-    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(r.amount_consumed || 0);
+    const _h2SubtotalEl = document.getElementById('crModalSubtotal');
+    const _h2DiscRowEl  = document.getElementById('crModalDiscRow');
+    const _h2DiscLblEl  = document.getElementById('crModalDiscLabel');
+    const _h2DiscValEl  = document.getElementById('crModalDiscount');
+    const _h2Disc = Number(r.discount_amount || 0);
+    const _h2Consumed = Number(r.amount_consumed || 0);
+    const _h2Subtotal = Math.round((_h2Consumed + _h2Disc) * 100) / 100;
+    if (_h2SubtotalEl) {
+      _h2SubtotalEl.parentElement.style.display = '';
+      _h2SubtotalEl.innerHTML = sarHtml + fmtLtr(_h2Subtotal);
+    }
+    if (_h2DiscRowEl && _h2DiscValEl) {
+      if (_h2Disc > 0) {
+        if (_h2DiscLblEl) _h2DiscLblEl.textContent = r.discount_label || 'خصم العميل';
+        _h2DiscValEl.innerHTML = sarHtml + fmtLtr(_h2Disc);
+        _h2DiscRowEl.style.display = '';
+      } else {
+        _h2DiscRowEl.style.display = 'none';
+        if (_h2SubtotalEl) _h2SubtotalEl.parentElement.style.display = 'none';
+      }
+    }
+    document.getElementById('crModalConsumed').innerHTML = sarHtml + fmtLtr(_h2Consumed);
     document.getElementById('crModalBalBefore').innerHTML = sarHtml + fmtLtr(r.balance_before || 0);
     document.getElementById('crModalBalAfter').innerHTML = sarHtml + fmtLtr(r.balance_after || 0);
 

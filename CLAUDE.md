@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/001-customer-discount/plan.md](specs/001-customer-discount/plan.md)
+[specs/027-product-offers/plan.md](specs/027-product-offers/plan.md)
 <!-- SPECKIT END -->
 
 > **MANDATORY: Before doing anything else, read the full Project Constitution:**

@@ -737,7 +737,8 @@ async function invoke(method, payload, reqUser) {
       try {
         // جلب vatRate من الإعدادات وتمريره
         const settings = await db.getAppSettings();
-        payload.vatRate = Number(settings.vatRate) || 15;
+        const sr = Number(settings.vatRate);
+        payload.vatRate = Number.isFinite(sr) ? sr : 15;
         const result = await db.createSubscription(payload);
         // الفاتورة تُنشأ الآن داخل createSubscription في db.js
         // result يحتوي على: subscriptionId, periodId, orderId
@@ -758,7 +759,8 @@ async function invoke(method, payload, reqUser) {
       try {
         // جلب vatRate من الإعدادات وتمريره
         const settings = await db.getAppSettings();
-        payload.vatRate = Number(settings.vatRate) || 15;
+        const sr = Number(settings.vatRate);
+        payload.vatRate = Number.isFinite(sr) ? sr : 15;
         const result = await db.renewSubscription(payload);
         // الفاتورة تُنشأ الآن داخل renewSubscription في db.js
         // result يحتوي على: periodId, customerId, packageId, subscriptionId, orderId
@@ -1154,7 +1156,7 @@ async function invoke(method, payload, reqUser) {
           subtotal: p.subtotal || 0,
           discountAmount: p.discountAmount || 0,
           extraAmount: p.extraAmount || 0,
-          vatRate: p.vatRate || 15,
+          vatRate: p.vatRate != null ? Number(p.vatRate) : 0,
           vatAmount: p.vatAmount || 0,
           totalAmount: p.totalAmount || 0,
           items: p.items || [],
@@ -1394,6 +1396,78 @@ async function invoke(method, payload, reqUser) {
     case 'deleteOffer': {
       try {
         await db.deleteOffer(payload.id);
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getProductsForOffers': {
+      try {
+        const products = await db.getProductsForOffers();
+        return { success: true, products };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getProductOffers': {
+      try {
+        const offers = await db.getAllProductOffers();
+        return { success: true, offers };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getProductOfferById': {
+      try {
+        const result = await db.getProductOfferById(payload.id);
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getActiveProductOffersForPos': {
+      try {
+        const priceLineOfferMap = await db.getActiveProductOffersForPos();
+        return { success: true, priceLineOfferMap };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'createProductOffer': {
+      try {
+        const result = await db.createProductOffer(payload);
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'updateProductOffer': {
+      try {
+        await db.updateProductOffer(payload);
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'toggleProductOfferStatus': {
+      try {
+        await db.toggleProductOfferStatus(payload.id);
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'deleteProductOffer': {
+      try {
+        await db.deleteProductOffer(payload.id);
         return { success: true };
       } catch (err) {
         return { success: false, message: err.message };

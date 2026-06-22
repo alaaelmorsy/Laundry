@@ -325,7 +325,29 @@
     a4h('a4mSubtotal', sf(data.subtotal));
     if (data.discount > 0) {
       a4h('a4mDiscount', sf(data.discount)); a4s('a4mDiscRow', true);
-      if (data.discountLabel) { var discLblA4Ci = document.querySelector('#a4mDiscRow span'); if (discLblA4Ci) discLblA4Ci.textContent = data.discountLabel + ' / Discount'; }
+      if (data.discountLabel) { 
+        var a4mDiscRow = document.getElementById('a4mDiscRow');
+        var existingA4Rows = a4mDiscRow.parentNode.querySelectorAll('.dynamic-a4m-disc-row');
+        for (var i = 0; i < existingA4Rows.length; i++) existingA4Rows[i].remove();
+        if (data.discountLabel.startsWith('[')) {
+          a4mDiscRow.style.display = 'none';
+          try {
+            var arr = JSON.parse(data.discountLabel);
+            arr.forEach(function(dItem) {
+              var tr = document.createElement('tr');
+              tr.className = 'dynamic-a4m-disc-row';
+              tr.style.fontWeight = '700';
+              var lblEn = dItem.isCustomer ? 'Customer Discount' : 'Discount';
+              tr.innerHTML = '<td colspan="4"></td><td><span>' + escHtml(dItem.label) + ' / ' + lblEn + '</span></td><td colspan="3" class="a4m-td-num" dir="ltr"><span class="sar">&#xE900;</span> ' + fmtLtr(dItem.amount) + '</td>';
+              a4mDiscRow.parentNode.insertBefore(tr, a4mDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          a4mShow('a4mDiscRow', true);
+          var discLblA4Ci = document.querySelector('#a4mDiscRow span'); 
+          if (discLblA4Ci) discLblA4Ci.innerHTML = data.discountLabel.split(' + ').join('<br>') + '<br>/ Discount'; 
+        }
+      }
       var a4mAfterDiscCi = Number(data.subtotal || 0) - Number(data.discount || 0); a4h('a4mAfterDiscount', sf(a4mAfterDiscCi)); a4s('a4mAfterDiscRow', true);
     } else { a4s('a4mDiscRow', false); a4s('a4mAfterDiscRow', false); }
     if (data.extra > 0) { a4h('a4mExtra', sf(data.extra)); a4s('a4mExtraRow', true); } else a4s('a4mExtraRow', false);
@@ -494,7 +516,29 @@
     a4h('Subtotal', sf(data.subtotal));
     if (data.discount > 0) {
       a4h('Discount', sf(data.discount)); a4s('DiscRow', true);
-      if (data.discountLabel) { var discLblA4Cn = document.querySelector('#cnA4mDiscRow span'); if (discLblA4Cn) discLblA4Cn.textContent = data.discountLabel + ' / Discount'; }
+      if (data.discountLabel) { 
+        var cnA4mDiscRow = document.getElementById('cnA4mDiscRow');
+        var existingCnA4Rows = cnA4mDiscRow.parentNode.querySelectorAll('.dynamic-a4m-disc-row');
+        for (var i = 0; i < existingCnA4Rows.length; i++) existingCnA4Rows[i].remove();
+        if (data.discountLabel.startsWith('[')) {
+          cnA4mDiscRow.style.display = 'none';
+          try {
+            var arr2 = JSON.parse(data.discountLabel);
+            arr2.forEach(function(dItem) {
+              var tr = document.createElement('tr');
+              tr.className = 'dynamic-a4m-disc-row';
+              tr.style.fontWeight = '700';
+              var lblEn = dItem.isCustomer ? 'Customer Discount' : 'Discount';
+              tr.innerHTML = '<td colspan="4"></td><td><span>' + escHtml(dItem.label) + ' / ' + lblEn + '</span></td><td colspan="3" class="a4m-td-num" dir="ltr"><span class="sar">&#xE900;</span> ' + fmtLtr(dItem.amount) + '</td>';
+              cnA4mDiscRow.parentNode.insertBefore(tr, cnA4mDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          a4s('DiscRow', true);
+          var discLblA4Cn = document.querySelector('#cnA4mDiscRow span'); 
+          if (discLblA4Cn) discLblA4Cn.innerHTML = data.discountLabel.split(' + ').join('<br>') + '<br>/ Discount'; 
+        }
+      }
       var cnA4AfterDisc = Number(data.subtotal || 0) - Number(data.discount || 0);
       a4h('AfterDiscount', sf(cnA4AfterDisc)); a4s('AfterDiscRow', true);
     } else { a4s('DiscRow', false); a4s('AfterDiscRow', false); }
@@ -946,10 +990,27 @@
     }
 
     if (discount > 0) {
-      els.invDiscount.innerHTML = sarFmt(discount); els.invDiscRow.style.display = '';
-      if (order.discount_label) {
-        var discLblCi = els.invDiscRow.querySelector('.inv-total-label');
-        if (discLblCi) discLblCi.textContent = order.discount_label;
+      els.invDiscRow.style.display = '';
+      var existingRows = els.invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+      for (var i = 0; i < existingRows.length; i++) existingRows[i].remove();
+      
+      if (order.discount_label && order.discount_label.startsWith('[')) {
+        els.invDiscRow.style.display = 'none';
+        try {
+          var arr3 = JSON.parse(order.discount_label);
+          arr3.forEach(function(dItem) {
+            var div = document.createElement('div');
+            div.className = 'inv-total-row dynamic-disc-row';
+            div.innerHTML = '<span class="inv-total-label">' + escHtml(dItem.label) + '</span><span class="inv-total-val" dir="ltr">' + sarFmt(dItem.amount) + '</span>';
+            els.invDiscRow.parentNode.insertBefore(div, els.invDiscRow);
+          });
+        } catch(e) {}
+      } else {
+        els.invDiscount.innerHTML = sarFmt(discount);
+        if (order.discount_label) {
+          var discLblCi = els.invDiscRow.querySelector('.inv-total-label');
+          if (discLblCi) discLblCi.innerHTML = order.discount_label.split(' + ').join('<br>');
+        }
       }
       var invAfterDiscEl = document.getElementById('invAfterDiscount');
       var invAfterDiscRowEl = document.getElementById('invAfterDiscRow');
@@ -1207,10 +1268,27 @@
     }
 
     if (discount > 0) {
-      els.cnDiscount.innerHTML = sarFmt(discount); els.cnDiscRow.style.display = '';
-      if (cn.discount_label) {
-        var cnDiscLbl = els.cnDiscRow.querySelector('.inv-total-label');
-        if (cnDiscLbl) cnDiscLbl.textContent = cn.discount_label;
+      els.cnDiscRow.style.display = '';
+      var existingRowsCn = els.cnDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+      for (var i = 0; i < existingRowsCn.length; i++) existingRowsCn[i].remove();
+      
+      if (cn.discount_label && cn.discount_label.startsWith('[')) {
+        els.cnDiscRow.style.display = 'none';
+        try {
+          var arr4 = JSON.parse(cn.discount_label);
+          arr4.forEach(function(dItem) {
+            var div = document.createElement('div');
+            div.className = 'inv-total-row dynamic-disc-row';
+            div.innerHTML = '<span class="inv-total-label">' + escHtml(dItem.label) + '</span><span class="inv-total-val" dir="ltr">' + sarFmt(dItem.amount) + '</span>';
+            els.cnDiscRow.parentNode.insertBefore(div, els.cnDiscRow);
+          });
+        } catch(e) {}
+      } else {
+        els.cnDiscount.innerHTML = sarFmt(discount);
+        if (cn.discount_label) {
+          var cnDiscLbl = els.cnDiscRow.querySelector('.inv-total-label');
+          if (cnDiscLbl) cnDiscLbl.innerHTML = cn.discount_label.split(' + ').join('<br>');
+        }
       }
       var cnAfterDiscEl = document.getElementById('cnAfterDiscount');
       var cnAfterDiscRowEl = document.getElementById('cnAfterDiscRow');
@@ -1362,18 +1440,51 @@
     const copies = getPrintCopies();
     if (copies === 0) return;
     const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+
+    let paperEl;
+    if (state.activePrintTarget === 'invoice') {
+      paperEl = paperType === 'a4'
+        ? document.getElementById('invoicePaperA4m')
+        : document.getElementById('invoicePaper');
+    } else {
+      paperEl = paperType === 'a4'
+        ? document.getElementById('cnPaperA4m')
+        : document.getElementById('cnPaper');
+    }
+    if (!paperEl) return;
+
+    const printZone = document.getElementById('creditPrintZone');
+    printZone.innerHTML = paperEl.outerHTML;
+
+    document.body.classList.add('printing-creditinvoices');
+    if (paperType === 'a4') document.body.classList.add('invtype-a4');
+
     let styleEl = null;
     if (paperType === 'a4') {
       styleEl = document.createElement('style');
       styleEl.id = 'a4PageStyle';
       styleEl.textContent = '@page { size: A4 portrait; margin: 0; }';
       document.head.appendChild(styleEl);
+    } else {
+      var mLeft  = parseFloat((state.appSettings && state.appSettings.thermalMarginLeft)  || 0) || 0;
+      var mRight = parseFloat((state.appSettings && state.appSettings.thermalMarginRight) || 0) || 0;
+      var shift  = mLeft - mRight;
+      if (shift !== 0) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'thermalShiftStyle';
+        styleEl.textContent = '@media print { #creditPrintZone .inv-paper { transform: translateX(' + shift + 'mm) !important; } }';
+        document.head.appendChild(styleEl);
+      }
     }
+
     let current = 0;
     let cleaned = false;
     function cleanup() {
       if (cleaned) return;
       cleaned = true;
+      printZone.innerHTML = '';
+      document.body.classList.remove('printing-creditinvoices');
+      if (paperType === 'a4') document.body.classList.remove('invtype-a4');
       if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
     }
     function printNext() {

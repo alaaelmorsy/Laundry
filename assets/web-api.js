@@ -397,6 +397,16 @@
     toggleOffer: (data) => invoke('toggleOffer', data),
     deleteOffer: (data) => invoke('deleteOffer', data),
 
+    // Product Offer functions
+    getProductsForOffers: () => invoke('getProductsForOffers'),
+    getProductOffers: () => invoke('getProductOffers'),
+    getActiveProductOffersForPos: () => invoke('getActiveProductOffersForPos'),
+    getProductOfferById: (data) => invoke('getProductOfferById', data),
+    createProductOffer: (data) => invoke('createProductOffer', data),
+    updateProductOffer: (data) => invoke('updateProductOffer', data),
+    toggleProductOfferStatus: (data) => invoke('toggleProductOfferStatus', data),
+    deleteProductOffer: (data) => invoke('deleteProductOffer', data),
+
     getReportData: (filters) => invoke('getReportData', filters),
     getWorkerReport: (filters) => invoke('getWorkerReport', filters),
     getAllInvoicesReport: (filters) => invoke('getAllInvoicesReport', filters),

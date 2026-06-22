@@ -320,14 +320,32 @@
 
     a4mHtml('a4mSubtotal', sarFmt(data.subtotal));
     if (data.discount && data.discount > 0) {
-      a4mHtml('a4mDiscount', sarFmt(data.discount));
-      a4mShow('a4mDiscRow', true);
       if (data.discountLabel) {
-        var a4mDiscLabel = document.querySelector('#a4mDiscRow span');
-        if (a4mDiscLabel) a4mDiscLabel.textContent = data.discountLabel + ' / Discount';
+        var a4mDiscRow = document.getElementById('a4mDiscRow');
+        var existingA4Rows = a4mDiscRow.parentNode.querySelectorAll('.dynamic-a4m-disc-row');
+        for (var i = 0; i < existingA4Rows.length; i++) existingA4Rows[i].remove();
+
+        if (data.discountLabel.startsWith('[')) {
+          a4mDiscRow.style.display = 'none';
+          try {
+            var arr = JSON.parse(data.discountLabel);
+            arr.forEach(function(dItem) {
+              var tr = document.createElement('tr');
+              tr.className = 'dynamic-a4m-disc-row';
+              tr.style.fontWeight = '700';
+              var lblEn = dItem.isCustomer ? 'Customer Discount' : 'Discount';
+              tr.innerHTML = '<td colspan="4"></td><td><span>' + escHtml(dItem.label) + ' / ' + lblEn + '</span></td><td colspan="3" class="a4m-td-num" dir="ltr"><span class="sar">&#xE900;</span> ' + fmtLtr(dItem.amount) + '</td>';
+              a4mDiscRow.parentNode.insertBefore(tr, a4mDiscRow);
+            });
+          } catch(e) { }
+        } else {
+          a4mShow('a4mDiscRow', true);
+          var a4mDiscLabel = a4mDiscRow.querySelector('span');
+          if (a4mDiscLabel) a4mDiscLabel.innerHTML = data.discountLabel.split(' + ').join('<br>') + '<br>/ Discount';
+          a4mHtml('a4mDiscount', sarFmt(data.discount));
+        }
       }
-      var afterDiscInv = Number(data.subtotal || 0) - Number(data.discount || 0);
-      a4mHtml('a4mAfterDiscount', sarFmt(afterDiscInv));
+      a4mHtml('a4mAfterDiscount', sarFmt(Number(data.subtotal || 0) - Number(data.discount || 0)));
       a4mShow('a4mAfterDiscRow', true);
     } else { a4mShow('a4mDiscRow', false); a4mShow('a4mAfterDiscRow', false); }
     if (data.extra && data.extra > 0) {
@@ -976,10 +994,26 @@
       const netBeforeTax = subtotal * 100 / (100 + vatRate);
       els.invSubtotal.innerHTML = sarFmt(netBeforeTax);
       if (discount > 0) {
-        els.invDiscount.innerHTML = sarFmt(discount);
         els.invDiscRow.style.display = '';
-        var discLabelEl = els.invDiscRow.querySelector('.inv-total-label');
-        if (discLabelEl) discLabelEl.textContent = discountLabel;
+        var existingRows1 = els.invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+        for (var i = 0; i < existingRows1.length; i++) existingRows1[i].remove();
+        
+        if (discountLabel.startsWith('[')) {
+          els.invDiscRow.style.display = 'none';
+          try {
+            var arr1 = JSON.parse(discountLabel);
+            arr1.forEach(function(dItem) {
+              var div = document.createElement('div');
+              div.className = 'inv-total-row dynamic-disc-row';
+              div.innerHTML = '<span class="inv-total-label">' + escHtml(dItem.label) + '</span><span class="inv-total-val" dir="ltr">' + sarFmt(dItem.amount) + '</span>';
+              els.invDiscRow.parentNode.insertBefore(div, els.invDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          els.invDiscount.innerHTML = sarFmt(discount);
+          var discLabelEl = els.invDiscRow.querySelector('.inv-total-label');
+          if (discLabelEl) discLabelEl.innerHTML = discountLabel.split(' + ').join('<br>');
+        }
         els.invAfterDiscount.innerHTML = sarFmt(netBeforeTax - discount);
         els.invAfterDiscRow.style.display = '';
       } else {
@@ -1006,10 +1040,26 @@
     } else {
       els.invSubtotal.innerHTML = sarFmt(subtotal);
       if (discount > 0) {
-        els.invDiscount.innerHTML = sarFmt(discount);
         els.invDiscRow.style.display = '';
-        var discLabelEl2 = els.invDiscRow.querySelector('.inv-total-label');
-        if (discLabelEl2) discLabelEl2.textContent = discountLabel;
+        var existingRows2 = els.invDiscRow.parentNode.querySelectorAll('.dynamic-disc-row');
+        for (var i = 0; i < existingRows2.length; i++) existingRows2[i].remove();
+        
+        if (discountLabel.startsWith('[')) {
+          els.invDiscRow.style.display = 'none';
+          try {
+            var arr2 = JSON.parse(discountLabel);
+            arr2.forEach(function(dItem) {
+              var div = document.createElement('div');
+              div.className = 'inv-total-row dynamic-disc-row';
+              div.innerHTML = '<span class="inv-total-label">' + escHtml(dItem.label) + '</span><span class="inv-total-val" dir="ltr">' + sarFmt(dItem.amount) + '</span>';
+              els.invDiscRow.parentNode.insertBefore(div, els.invDiscRow);
+            });
+          } catch(e) {}
+        } else {
+          els.invDiscount.innerHTML = sarFmt(discount);
+          var discLabelEl2 = els.invDiscRow.querySelector('.inv-total-label');
+          if (discLabelEl2) discLabelEl2.innerHTML = discountLabel.split(' + ').join('<br>');
+        }
         els.invAfterDiscount.innerHTML = sarFmt(subtotal - discount);
         els.invAfterDiscRow.style.display = '';
       } else {

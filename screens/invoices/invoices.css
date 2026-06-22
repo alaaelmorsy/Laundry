@@ -1,4 +1,4 @@
-﻿@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
 @font-face{font-family:'SaudiRiyal';src:url('../../assets/fonts/saudi-riyal.woff') format('woff'),url('../../assets/fonts/saudi-riyal.ttf') format('truetype')}
 .sar{font-family:'SaudiRiyal';font-style:normal;font-weight:400;font-size:1.15em;display:inline-block;line-height:1;vertical-align:middle}
@@ -114,7 +114,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .modal-close-btn{background:transparent;border:none;color:#64748b;font-size:16px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:color .2s,background .2s;flex-shrink:0}
 .modal-close-btn:hover{color:#dc2626;background:rgba(239,68,68,.1)}
 
-/* ========== INVOICE MODAL — نفس تصميم شاشة البيع ========== */
+/* ========== INVOICE MODAL � ??? ????? ???? ????? ========== */
 .inv-overlay{z-index:600;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;overflow:hidden}
 .inv-dialog{display:flex;flex-direction:column;width:340px;max-width:calc(100vw - 32px);max-height:calc(100vh - 40px);background:#f4f4f4;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.45);overflow:hidden}
 .inv-dialog-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1e293b;flex-shrink:0;border-radius:12px 12px 0 0}
@@ -155,7 +155,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-totals-box{border:2px solid #000;margin:6px 0 4px}
 .inv-totals-box .inv-total-row,.inv-totals-box .inv-grand-row{padding:2px 8px;margin-bottom:0}
 .inv-totals-box .inv-grand-row{margin-top:0}
-.inv-total-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;margin-bottom:2px}
+.inv-total-row {display:flex;justify-content:space-between;align-items: center;font-size:12px;font-weight:700;margin-bottom:2px}
 .inv-total-label{color:#000;font-weight:700}
 .inv-total-val{font-weight:700;color:#000}
 .inv-disc-val{color:#000}
@@ -276,7 +276,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
   body.invtype-a4 .a4m-footer { background: #fff !important; }
 }
 
-/* A4 Modal Mobile — same layout, scroll to navigate */
+/* A4 Modal Mobile � same layout, scroll to navigate */
 @media screen and (max-width: 767px) {
   .inv-overlay.invtype-a4,
   body.invtype-a4 .inv-overlay {
@@ -302,7 +302,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
     flex: 1 !important;
   }
   .inv-paper-a4m {
-    /* keep 210mm width — user scrolls to see full invoice */
+    /* keep 210mm width � user scrolls to see full invoice */
     flex-shrink: 0 !important;
   }
 }

@@ -214,6 +214,11 @@
     const balBeforeLabel = document.getElementById('crBalBeforeLabel');
     const balAfterLabel = document.getElementById('crBalAfterLabel');
 
+    const crSubtotalEl = document.getElementById('crSubtotal');
+    const crDiscRowEl  = document.getElementById('crDiscRow');
+    const crDiscLblEl  = document.getElementById('crDiscLabel');
+    const crDiscValEl  = document.getElementById('crDiscount');
+
     if (r.refund_id) {
       if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
       if (refundNumRow) {
@@ -231,6 +236,8 @@
       if (amountLabel) amountLabel.textContent = 'المبلغ المسترجع';
       if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
       if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+      if (crSubtotalEl) crSubtotalEl.parentElement.style.display = 'none';
+      if (crDiscRowEl)  crDiscRowEl.style.display = 'none';
 
       document.getElementById('crConsumed').innerHTML = sarFmtModal(r.refund_amount || r.amount_consumed);
       document.getElementById('crBalBefore').innerHTML = sarFmtModal(r.refund_old_balance != null ? r.refund_old_balance : r.balance_before);
@@ -245,7 +252,25 @@
       if (balBeforeLabel) balBeforeLabel.textContent = 'الرصيد قبل';
       if (balAfterLabel) balAfterLabel.textContent = 'الرصيد بعد';
 
-      document.getElementById('crConsumed').innerHTML = sarFmtModal(r.amount_consumed);
+      const _disc = Number(r.discount_amount || 0);
+      const _consumed = Number(r.amount_consumed || 0);
+      const _subtotalCR = Math.round((_consumed + _disc) * 100) / 100;
+      if (crSubtotalEl) {
+        crSubtotalEl.parentElement.style.display = '';
+        crSubtotalEl.innerHTML = sarFmtModal(_subtotalCR);
+      }
+      if (crDiscRowEl && crDiscValEl) {
+        if (_disc > 0) {
+          if (crDiscLblEl) crDiscLblEl.textContent = r.discount_label || 'خصم العميل';
+          crDiscValEl.innerHTML = sarFmtModal(_disc);
+          crDiscRowEl.style.display = '';
+        } else {
+          crDiscRowEl.style.display = 'none';
+          if (crSubtotalEl) crSubtotalEl.parentElement.style.display = 'none';
+        }
+      }
+
+      document.getElementById('crConsumed').innerHTML = sarFmtModal(_consumed);
       document.getElementById('crBalBefore').innerHTML = sarFmtModal(r.balance_before);
       document.getElementById('crBalAfter').innerHTML = sarFmtModal(r.balance_after);
     }

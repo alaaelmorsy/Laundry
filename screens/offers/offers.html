@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -31,7 +31,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        <span data-i18n="offers-btn-add">إنشاء عرض جديد</span>
+        <span id="btnAddLabel" data-i18n="offers-btn-add">إنشاء عرض جديد</span>
       </button>
       <button type="button" class="back-btn" id="btnBack">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -45,52 +45,76 @@
   <!-- ══════════ BODY ══════════ -->
   <div class="s-body">
 
-
-    <!-- ── Filter Bar ── -->
-    <div class="filter-bar">
-      <div class="filter-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" placeholder="بحث في العروض..." autocomplete="off" data-i18n-placeholder="offers-search-placeholder" />
-      </div>
-      <div class="filter-group">
-        <select id="filterStatus" class="filter-select">
-          <option value="all" data-i18n="offers-filter-all">جميع الحالات</option>
-          <option value="active" data-i18n="offers-filter-active">نشط</option>
-          <option value="scheduled" data-i18n="offers-filter-scheduled">مجدول</option>
-          <option value="expired" data-i18n="offers-filter-expired">منتهي</option>
-          <option value="disabled" data-i18n="offers-filter-disabled">معطل</option>
-        </select>
-      </div>
+    <!-- ── Tabs ── -->
+    <div class="tabs-bar">
+      <button type="button" class="tab-btn active" id="tabGeneral">العروض العامة</button>
+      <button type="button" class="tab-btn" id="tabProduct">عروض الأصناف</button>
     </div>
 
-    <!-- ── Table ── -->
-    <div class="table-wrap">
-      <table class="offers-table" id="offersTable">
-        <thead>
-          <tr>
-            <th data-i18n="offers-th-name">اسم العرض</th>
-            <th data-i18n="offers-th-type">نوع الخصم</th>
-            <th data-i18n="offers-th-value">القيمة</th>
-            <th data-i18n="offers-th-from">من</th>
-            <th data-i18n="offers-th-to">إلى</th>
-            <th data-i18n="offers-th-status">الحالة</th>
-            <th data-i18n="offers-th-actions">الإجراءات</th>
-          </tr>
-        </thead>
-        <tbody id="offersBody">
-        </tbody>
-      </table>
-      <div class="empty-state" id="emptyState" style="display:none">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-            <line x1="7" y1="7" x2="7.01" y2="7"/>
-          </svg>
+    <!-- ══ GENERAL OFFERS TAB ══ -->
+    <div id="generalOffersTab">
+      <!-- ── Table ── -->
+      <div class="table-wrap">
+        <table class="offers-table" id="offersTable">
+          <thead>
+            <tr>
+              <th data-i18n="offers-th-name">اسم العرض</th>
+              <th data-i18n="offers-th-type">نوع الخصم</th>
+              <th data-i18n="offers-th-value">القيمة</th>
+              <th data-i18n="offers-th-from">من</th>
+              <th data-i18n="offers-th-to">إلى</th>
+              <th data-i18n="offers-th-status">الحالة</th>
+              <th data-i18n="offers-th-actions">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="offersBody">
+          </tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display:none">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+          </div>
+          <h3 data-i18n="offers-empty-title">لا توجد عروض</h3>
+          <p data-i18n="offers-empty-desc">اضغط على "إنشاء عرض جديد" لإضافة أول عرض</p>
         </div>
-        <h3 data-i18n="offers-empty-title">لا توجد عروض</h3>
-        <p data-i18n="offers-empty-desc">اضغط على "إنشاء عرض جديد" لإضافة أول عرض</p>
       </div>
     </div>
+
+    <!-- ══ PRODUCT OFFERS TAB ══ -->
+    <div id="productOffersTab" style="display:none">
+      <div class="table-wrap">
+        <table class="offers-table" id="productOffersTable">
+          <thead>
+            <tr>
+              <th>اسم العرض</th>
+              <th>نوع الخصم</th>
+              <th>القيمة</th>
+              <th>عدد الأصناف</th>
+              <th>من</th>
+              <th>إلى</th>
+              <th>الحالة</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="productOffersBody">
+          </tbody>
+        </table>
+        <div class="empty-state" id="productEmptyState" style="display:none">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+          </div>
+          <h3>لا توجد عروض أصناف</h3>
+          <p>اضغط على "إضافة عرض" لإنشاء أول عرض</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -164,6 +188,89 @@
       <button type="button" class="btn-save" id="btnSaveOffer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
         <span id="btnSaveLabel" data-i18n="offers-btn-save">حفظ العرض</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PRODUCT OFFER MODAL ══════════ -->
+<div class="modal-overlay" id="productOfferModal" style="display:none">
+  <div class="modal-box po-modal-box">
+    <div class="modal-hdr">
+      <div class="modal-hdr-r">
+        <div class="modal-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+        </div>
+        <span class="modal-title" id="poModalTitle">إنشاء عرض أصناف جديد</span>
+      </div>
+      <button type="button" class="modal-close" id="btnClosePoModal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="poOfferId" />
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="fld f-full">
+          <label class="flbl">اسم العرض <span class="req">*</span></label>
+          <div class="fwrap"><input type="text" class="finp" id="poName" placeholder="مثال: عرض الصيف" autocomplete="off" /></div>
+        </div>
+        <div class="fld">
+          <label class="flbl">نوع الخصم <span class="req">*</span></label>
+          <div class="discount-type-toggle" id="poDiscountTypeToggle">
+            <button type="button" class="dt-btn active" data-type="percentage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+              نسبة %
+            </button>
+            <button type="button" class="dt-btn" data-type="fixed">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              مبلغ ثابت
+            </button>
+          </div>
+        </div>
+        <div class="fld">
+          <label class="flbl">قيمة الخصم <span class="req">*</span></label>
+          <div class="fwrap val-wrap">
+            <input type="number" class="finp" id="poDiscountValue" min="0" step="0.01" dir="ltr" style="text-align:left" placeholder="0" />
+            <span class="val-suffix" id="poValSuffix">%</span>
+          </div>
+        </div>
+        <div class="fld">
+          <label class="flbl">تاريخ البداية <span style="color:var(--tx4);font-weight:400">(اختياري)</span></label>
+          <div class="fwrap"><input type="datetime-local" class="finp" id="poStartDate" lang="en" dir="ltr" style="text-align:left" /></div>
+        </div>
+        <div class="fld">
+          <label class="flbl">تاريخ النهاية <span style="color:var(--tx4);font-weight:400">(اختياري)</span></label>
+          <div class="fwrap"><input type="datetime-local" class="finp" id="poEndDate" lang="en" dir="ltr" style="text-align:left" /></div>
+        </div>
+      </div>
+
+      <div class="po-products-section">
+        <div class="po-products-header">
+          <span class="po-products-label">الأصناف والعمليات <span class="req">*</span></span>
+          <span class="po-selected-count" id="poSelectedCount">لم يتم اختيار أصناف</span>
+        </div>
+
+        <!-- Search filter -->
+        <div class="po-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="poSearchProducts" placeholder="ابحث عن صنف..." autocomplete="off" />
+          <div class="po-suggestions" id="poSuggestions" style="display:none"></div>
+        </div>
+
+        <!-- Products list -->
+        <div class="po-products-list" id="poProductsList">
+          <div class="po-loading">جاري التحميل...</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" id="btnCancelPoModal">إلغاء</button>
+      <button type="button" class="btn-save" id="btnSaveProductOffer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="poSaveLabel">حفظ العرض</span>
       </button>
     </div>
   </div>

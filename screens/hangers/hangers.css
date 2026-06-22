@@ -1,4 +1,4 @@
-﻿@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Bold.woff2') format('woff2');font-weight:700}
 @font-face{font-family:'Cairo';src:url('../../assets/fonts/Cairo-Regular.woff2') format('woff2');font-weight:400}
 @font-face{font-family:'SaudiRiyal';src:url('../../assets/fonts/saudi-riyal.woff') format('woff');font-weight:400;font-style:normal}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif;font-weight:700}
