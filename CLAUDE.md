@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/025-fix-pos-invoice-alignment/plan.md](specs/025-fix-pos-invoice-alignment/plan.md)
+[specs/001-customer-discount/plan.md](specs/001-customer-discount/plan.md)
 <!-- SPECKIT END -->
 
 > **MANDATORY: Before doing anything else, read the full Project Constitution:**

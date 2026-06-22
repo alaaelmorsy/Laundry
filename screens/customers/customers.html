@@ -12,7 +12,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif;font-weight:700}
 html{height:100%;overflow-x:hidden}
 body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;overflow:hidden;background:var(--bg);color:var(--text);user-select:none;-webkit-app-region:no-drag;direction:rtl}
-.page-wrapper{display:flex;flex-direction:column;height:100%;max-height:100dvh;min-height:0;min-width:0;overflow-x:hidden}
+.page-wrapper{display:flex;flex-direction:column;height:100%;max-height:100dvh;min-height:0;min-width:0;overflow:clip}
 .header-bar{min-height:52px;background:var(--navy);border-bottom:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:max(8px,env(safe-area-inset-top,0)) max(12px,env(safe-area-inset-right,0)) 8px max(12px,env(safe-area-inset-left,0));flex-shrink:0;-webkit-app-region:drag;box-shadow:0 2px 16px rgba(30,27,75,.35)}
 .header-right,.header-left{display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag}
 .header-right{gap:20px}
@@ -23,7 +23,7 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .logo-icon{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--amber),var(--amber-dark));display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(245,158,11,.45)}
 .logo-icon svg{width:18px;height:18px;color:#fff}
 .header-title{font-size:16px;font-weight:700;color:#ffffff}
-.main-content{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:max(16px,env(safe-area-inset-top,0)) max(14px,env(safe-area-inset-right,0)) max(20px,env(safe-area-inset-bottom,0)) max(14px,env(safe-area-inset-left,0));display:flex;flex-direction:column;gap:16px}
+.main-content{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:clip;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:max(16px,env(safe-area-inset-top,0)) max(14px,env(safe-area-inset-right,0)) max(20px,env(safe-area-inset-bottom,0)) max(14px,env(safe-area-inset-left,0));display:flex;flex-direction:column;gap:16px}
 .main-content::-webkit-scrollbar{width:6px}
 .main-content::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;min-width:0;max-width:100%}
@@ -339,12 +339,13 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
               <th data-i18n="customers-col-city">المدينة</th>
               <th data-i18n="customers-col-status">الحالة</th>
               <th id="colLoyaltyHeader" style="display:none">النقاط</th>
+              <th>الخصم</th>
               <th data-i18n="customers-col-actions">الإجراءات</th>
             </tr>
           </thead>
           <tbody id="customersTableBody">
             <tr id="loadingRow">
-              <td colspan="9" class="loading-cell">
+              <td colspan="10" class="loading-cell">
                 <div class="spinner"></div>
                 <span data-i18n="customers-loading">جارٍ التحميل...</span>
               </td>
@@ -522,6 +523,38 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
               <span id="displayCustomerPoints" style="font-size:16px;font-weight:700;color:#d97706">0</span>
               <span style="color:#64748b;font-size:13px">نقطة</span>
               <span id="displayCustomerPointsValue" style="color:#64748b;font-size:12px;margin-right:4px"></span>
+            </div>
+          </div>
+
+          <!-- حقول الخصم -->
+          <div class="field-group">
+            <label class="field-label">نوع الخصم</label>
+            <div class="select-wrap">
+              <select id="inputDiscountType" class="field-select">
+                <option value="">— بدون خصم —</option>
+                <option value="percentage">نسبة مئوية (%)</option>
+                <option value="fixed">مبلغ ثابت (ر.س)</option>
+              </select>
+              <span class="select-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div id="discountValueGroup" class="field-group" style="display:none">
+            <label class="field-label" id="discountValueLabel">قيمة الخصم</label>
+            <div class="field-wrap">
+              <input id="inputDiscountValue" type="number" class="field-input" min="0" step="0.01"
+                placeholder="أدخل قيمة الخصم" autocomplete="off" dir="ltr" />
+            </div>
+          </div>
+
+          <div id="discountExpiryGroup" class="field-group" style="display:none">
+            <label class="field-label">تاريخ انتهاء الخصم <span style="color:var(--muted);font-size:11px">(اختياري)</span></label>
+            <div class="field-wrap">
+              <input id="inputDiscountExpiry" type="date" class="field-input" dir="ltr" />
             </div>
           </div>
 

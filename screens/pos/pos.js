@@ -22,6 +22,7 @@
     isMobileProductsView: true,
     appSettings: null,
     activeTab: 'sale',
+    customerDiscount: null,
     deferredInvoices: [],
     deferredPage: 1,
     deferredPageSize: 20,
@@ -163,6 +164,12 @@
     newCustomerStatusLabel: document.getElementById('newCustomerStatusLabel'),
     newCustomerAddress: document.getElementById('newCustomerAddress'),
     newCustomerNotes: document.getElementById('newCustomerNotes'),
+    newCustomerDiscountType: document.getElementById('newCustomerDiscountType'),
+    newCustomerDiscountValue: document.getElementById('newCustomerDiscountValue'),
+    newCustomerDiscountExpiry: document.getElementById('newCustomerDiscountExpiry'),
+    newDiscountValueGroup: document.getElementById('newDiscountValueGroup'),
+    newDiscountExpiryGroup: document.getElementById('newDiscountExpiryGroup'),
+    newDiscountValueLabel: document.getElementById('newDiscountValueLabel'),
     addCustomerError: document.getElementById('addCustomerError'),
     successModal: document.getElementById('successModal'),
     successOrderNum: document.getElementById('successOrderNum'),
@@ -202,6 +209,11 @@
     invItemsTbody: document.getElementById('invItemsTbody'),
     invSubtotalLabel: document.getElementById('invSubtotalLabel'),
     invSubtotal: document.getElementById('invSubtotal'),
+    invCustomerDiscRow:   document.getElementById('invCustomerDiscRow'),
+    invCustomerDisc:      document.getElementById('invCustomerDisc'),
+    invCustomerDiscLabel: document.getElementById('invCustomerDiscLabel'),
+    invManualDiscRow:     document.getElementById('invManualDiscRow'),
+    invManualDisc:        document.getElementById('invManualDisc'),
     invDiscRow: document.getElementById('invDiscRow'),
     invAfterDiscRow: document.getElementById('invAfterDiscRow'),
     invAfterDiscount: document.getElementById('invAfterDiscount'),
@@ -940,33 +952,26 @@
   /* ========== CART OPERATIONS ========== */
   function addToCart(product, priceLine) {
     const lang = getLang();
-    const key = `${product.id}_${priceLine.laundry_service_id}`;
-    const existing = state.cart.find((item) => item.key === key);
-
-    if (existing) {
-      existing.qty += 1;
-      existing.lineTotal = existing.qty * existing.unitPrice;
-    } else {
-      const unitPrice = parseFloat(priceLine.price);
-      const productNameAr = product.name_ar || product.name_en || '';
-      const productNameEn = product.name_en || product.name_ar || '';
-      const serviceNameAr = priceLine.service_name_ar || priceLine.service_name_en || '';
-      const serviceNameEn = priceLine.service_name_en || priceLine.service_name_ar || '';
-      const serviceName = lang === 'ar' ? (serviceNameAr || serviceNameEn) : (serviceNameEn || serviceNameAr);
-      state.cart.push({
-        key,
-        productId: product.id,
-        serviceId: priceLine.laundry_service_id,
-        productNameAr,
-        productNameEn,
-        serviceNameAr,
-        serviceNameEn,
-        serviceName,
-        unitPrice,
-        qty: 1,
-        lineTotal: unitPrice
-      });
-    }
+    const key = `${product.id}_${priceLine.laundry_service_id}_${Date.now()}`;
+    const unitPrice = parseFloat(priceLine.price);
+    const productNameAr = product.name_ar || product.name_en || '';
+    const productNameEn = product.name_en || product.name_ar || '';
+    const serviceNameAr = priceLine.service_name_ar || priceLine.service_name_en || '';
+    const serviceNameEn = priceLine.service_name_en || priceLine.service_name_ar || '';
+    const serviceName = lang === 'ar' ? (serviceNameAr || serviceNameEn) : (serviceNameEn || serviceNameAr);
+    state.cart.push({
+      key,
+      productId: product.id,
+      serviceId: priceLine.laundry_service_id,
+      productNameAr,
+      productNameEn,
+      serviceNameAr,
+      serviceNameEn,
+      serviceName,
+      unitPrice,
+      qty: 1,
+      lineTotal: unitPrice
+    });
 
     renderCart();
     updateMobileCartBadge();
@@ -1131,26 +1136,17 @@
     const newLine = product.priceLines.find((pl) => pl.laundry_service_id === newServiceId);
     if (!newLine) return;
 
-    const newKey = `${item.productId}_${newServiceId}`;
     const newUnitPrice = parseFloat(newLine.price);
     const newServiceNameAr = newLine.service_name_ar || newLine.service_name_en || '';
     const newServiceNameEn = newLine.service_name_en || newLine.service_name_ar || '';
     const newServiceName = lang === 'ar' ? (newServiceNameAr || newServiceNameEn) : (newServiceNameEn || newServiceNameAr);
 
-    const existingIdx = state.cart.findIndex((i) => i.key === newKey);
-    if (existingIdx !== -1 && existingIdx !== itemIdx) {
-      state.cart[existingIdx].qty += item.qty;
-      state.cart[existingIdx].lineTotal = state.cart[existingIdx].qty * state.cart[existingIdx].unitPrice;
-      state.cart.splice(itemIdx, 1);
-    } else {
-      item.key = newKey;
-      item.serviceId = newServiceId;
-      item.serviceNameAr = newServiceNameAr;
-      item.serviceNameEn = newServiceNameEn;
-      item.serviceName = newServiceName;
-      item.unitPrice = newUnitPrice;
-      item.lineTotal = item.qty * newUnitPrice;
-    }
+    item.serviceId = newServiceId;
+    item.serviceNameAr = newServiceNameAr;
+    item.serviceNameEn = newServiceNameEn;
+    item.serviceName = newServiceName;
+    item.unitPrice = newUnitPrice;
+    item.lineTotal = item.qty * newUnitPrice;
 
     renderCart();
     updateMobileCartBadge();
@@ -1171,34 +1167,43 @@
   function calcDiscount(subtotal) {
     // استخراج القاعدة الضريبية (قبل الضريبة) للخصم — متوافق مع هيئة الزكاة
     const base = getPreTaxBase(subtotal);
+    if (base <= 0) return 0;
 
-    // Manual discount (on pre-tax base)
-    let manualDisc = 0;
-    if (state.discountType === 'pct') {
-      manualDisc = Math.min(Math.max(0, state.discount) / 100 * base, base);
-    } else {
-      manualDisc = Math.min(Math.max(0, state.discount), base);
+    // 1. خصم العميل — على الأساس الكامل
+    let customerDisc = 0;
+    if (state.customerDiscount) {
+      const cd = state.customerDiscount;
+      customerDisc = cd.type === 'percentage'
+        ? Math.min(cd.value / 100 * base, base)
+        : Math.min(cd.value, base);
     }
 
-    // Offer discount (on pre-tax base)
+    // 2. خصم العرض — على الأساس الكامل
     let offerDisc = 0;
-    if (state.activeOffer && base > 0) {
+    if (state.activeOffer) {
       const offer = state.activeOffer;
-      if (offer.discount_type === 'percentage') {
-        offerDisc = Math.min(parseFloat(offer.discount_value) / 100 * base, base);
-      } else {
-        offerDisc = Math.min(parseFloat(offer.discount_value), base);
-      }
+      offerDisc = offer.discount_type === 'percentage'
+        ? Math.min(parseFloat(offer.discount_value) / 100 * base, base)
+        : Math.min(parseFloat(offer.discount_value), base);
     }
 
-    // Loyalty discount (capped: total all discounts ≤ 90% of base)
-    const loyaltyDisc = Math.max(0, state.loyaltyDiscount || 0);
-    const combinedBeforeLoyalty = manualDisc + offerDisc;
-    const maxTotal = base * 0.90;
-    const loyaltyCapped = Math.min(loyaltyDisc, Math.max(0, maxTotal - combinedBeforeLoyalty));
+    // 3. الخصم اليدوي — على المتبقي بعد خصم العميل والعرض (تسلسلي)
+    // هذا يضمن أن النسبة المعروضة تطابق المبلغ الفعلي
+    const remaining1 = Math.max(0, base - customerDisc - offerDisc);
+    let manualDisc = 0;
+    if (state.discount > 0) {
+      manualDisc = state.discountType === 'pct'
+        ? Math.min(Math.max(0, state.discount) / 100 * remaining1, remaining1)
+        : Math.min(Math.max(0, state.discount), remaining1);
+    }
 
-    // Total discount (capped at 90% of pre-tax base)
-    return Math.min(combinedBeforeLoyalty + loyaltyCapped, maxTotal);
+    // 4. خصم نقاط الولاء — على المتبقي بعد كل الخصومات السابقة
+    const remaining2 = Math.max(0, remaining1 - manualDisc);
+    const loyaltyDisc = Math.min(Math.max(0, state.loyaltyDiscount || 0), remaining2);
+
+    // سقف أقصى 90% من الأساس
+    const maxTotal = base * 0.90;
+    return Math.min(customerDisc + offerDisc + manualDisc + loyaltyDisc, maxTotal);
   }
 
   function getOfferDiscountAmount(subtotal) {
@@ -1281,6 +1286,26 @@
     return { subtotal, discount, extra, vatAmount, total };
   }
 
+  function getCustomerDiscountAmount(subtotal) {
+    if (!state.customerDiscount) return 0;
+    const base = getPreTaxBase(subtotal);
+    const cd = state.customerDiscount;
+    if (cd.type === 'percentage') return Math.min(cd.value / 100 * base, base);
+    return Math.min(cd.value, base);
+  }
+
+  function getManualDiscountAmount(subtotal) {
+    if (!state.discount || state.discount <= 0) return 0;
+    const base = getPreTaxBase(subtotal);
+    const customerDisc = getCustomerDiscountAmount(subtotal);
+    const offerDisc = getOfferDiscountAmount(subtotal);
+    const remaining = Math.max(0, base - customerDisc - offerDisc);
+    if (state.discountType === 'pct') {
+      return Math.min(Math.max(0, state.discount) / 100 * remaining, remaining);
+    }
+    return Math.min(Math.max(0, state.discount), remaining);
+  }
+
   function clampToTwo(n) {
     return Math.round((Number(n) || 0) * 100) / 100;
   }
@@ -1341,6 +1366,10 @@
       els.customerDropdown.style.display = 'none';
       return;
     }
+    // حفظ بيانات العملاء الكاملة للوصول إليها عند النقر (بما فيها بيانات الخصم)
+    const customerMap = {};
+    customers.forEach(c => { customerMap[c.id] = c; });
+
     els.customerDropdown.innerHTML = customers.map((c) => {
       const status = c.sub_display_status;
       const remaining = parseFloat(c.sub_credit_remaining) || 0;
@@ -1374,12 +1403,16 @@
 
     els.customerDropdown.querySelectorAll('.customer-option').forEach((opt) => {
       opt.addEventListener('click', () => {
+        const fullData = customerMap[parseInt(opt.dataset.id, 10)] || {};
         selectCustomer({
           id: parseInt(opt.dataset.id, 10),
           name: opt.dataset.name,
           phone: opt.dataset.phone,
           subscription_number: opt.dataset.sub,
-          taxNumber: opt.dataset.tax || ''
+          taxNumber: opt.dataset.tax || '',
+          discount_type: fullData.discount_type || null,
+          discount_value: fullData.discount_value != null ? fullData.discount_value : null,
+          discount_expiry: fullData.discount_expiry || null
         });
       });
     });
@@ -1455,11 +1488,28 @@
       } catch (_) {}
     }
     updateSkipSubscriptionBtn();
+
+    // خصم العميل — تطبيق أو إلغاء بناءً على الصلاحية وتاريخ الانتهاء
+    state.customerDiscount = null;
+    if (customer.discount_type && customer.discount_value != null && Number(customer.discount_value) > 0) {
+      const today = new Date(new Date().toDateString());
+      const expired = customer.discount_expiry && new Date(customer.discount_expiry) < today;
+      if (expired) {
+        showTopToast('خصم العميل منتهي الصلاحية — لن يُطبَّق', 'info');
+      } else {
+        state.customerDiscount = {
+          type: customer.discount_type,
+          value: Number(customer.discount_value)
+        };
+      }
+    }
+    updateSummary();
   }
 
   function clearCustomer() {
     state.selectedCustomer = null;
     state.customerLoyaltyBalance = 0;
+    state.customerDiscount = null;
     els.customerSearch.value = '';
     els.btnClearCustomer.style.display = 'none';
     els.selectedCustomerChip.style.display = 'none';
@@ -1569,7 +1619,15 @@
     els.newCustomerStatusLabel.textContent = I18N.t('pos-add-customer-status-active');
     els.newCustomerAddress.value = '';
     els.newCustomerNotes.value = '';
+    els.newCustomerDiscountType.value = '';
+    els.newCustomerDiscountValue.value = '';
+    els.newCustomerDiscountExpiry.value = '';
+    els.newDiscountValueGroup.style.display = 'none';
+    els.newDiscountExpiryGroup.style.display = 'none';
     els.addCustomerError.style.display = 'none';
+    // prefill phone from search box if it looks like a phone number
+    const searchVal = (els.customerSearch.value || '').trim();
+    if (/^\d+$/.test(searchVal)) els.newCustomerPhone.value = searchVal;
     els.addCustomerModal.style.display = 'flex';
     setTimeout(() => els.newCustomerName.focus(), 80);
   }
@@ -1598,6 +1656,24 @@
       return;
     }
 
+    const discountType = els.newCustomerDiscountType.value || null;
+    const discountValueRaw = els.newCustomerDiscountValue.value;
+    const discountValue = discountType && discountValueRaw !== '' ? parseFloat(discountValueRaw) : null;
+    const discountExpiry = discountType && els.newCustomerDiscountExpiry.value ? els.newCustomerDiscountExpiry.value : null;
+
+    if (discountType === 'percentage' && discountValue != null && (isNaN(discountValue) || discountValue <= 0 || discountValue > 100)) {
+      showFormError('نسبة الخصم يجب أن تكون بين 0.01 و 100');
+      return;
+    }
+    if (discountType === 'fixed' && discountValue != null && (isNaN(discountValue) || discountValue <= 0)) {
+      showFormError('مبلغ الخصم يجب أن يكون أكبر من صفر');
+      return;
+    }
+    if (discountType && (discountValue == null || isNaN(discountValue))) {
+      showFormError('أدخل قيمة الخصم');
+      return;
+    }
+
     els.btnAddCustomerSave.disabled = true;
     els.addCustomerError.style.display = 'none';
 
@@ -1612,7 +1688,10 @@
         customerType: els.newCustomerType.value || 'individual',
         address: els.newCustomerAddress.value.trim() || null,
         notes: els.newCustomerNotes.value.trim() || null,
-        isActive: els.newCustomerIsActive.checked ? 1 : 0
+        isActive: els.newCustomerIsActive.checked ? 1 : 0,
+        discountType: discountType || null,
+        discountValue: discountValue,
+        discountExpiry: discountExpiry
       });
 
       if (!res || !res.success) {
@@ -1626,7 +1705,12 @@
         return;
       }
 
-      selectCustomer({ id: res.id, name, phone });
+      selectCustomer({
+        id: res.id, name, phone,
+        discount_type: discountType || null,
+        discount_value: discountValue,
+        discount_expiry: discountExpiry
+      });
       closeAddCustomerModal();
       showToast('تم إضافة العميل بنجاح', 'success');
     } catch (_) {
@@ -2223,25 +2307,44 @@
     // subtotalA4 is already the correct pre-tax base (computed when building A4 data)
     var a4mSubtotalVal = data.subtotal;
     a4mHtml('a4mSubtotal', sarFmt(a4mSubtotalVal));
-    if (data.discount && data.discount > 0) {
-      a4mHtml('a4mDiscount', sarFmt(data.discount));
-      a4mShow('a4mDiscRow', true);
-      // Update A4 discount label with offer name
-      var a4mDiscLabel = document.querySelector('#a4mDiscRow span');
-      if (a4mDiscLabel && state.activeOffer) {
-        var ofName = state.activeOffer.name || '';
-        var ofVal = state.activeOffer.discount_type === 'percentage'
+    // فصل خصم العميل عن بقية الخصومات في فاتورة A4
+    var a4mCustDiscAmt = getCustomerDiscountAmount(data.subtotal);
+    var a4mOtherDiscAmt = Math.max(0, (data.discount || 0) - a4mCustDiscAmt);
+    if (a4mCustDiscAmt > 0 && state.customerDiscount) {
+      var a4mCd = state.customerDiscount;
+      var a4mCdLbl = 'خصم العميل (' + (a4mCd.type === 'percentage' ? a4mCd.value + '%' : a4mCd.value.toFixed(2) + ' ر.س') + ') / Customer Discount';
+      var a4mCdLblEl = document.getElementById('a4mCustomerDiscLabel');
+      if (a4mCdLblEl) a4mCdLblEl.textContent = a4mCdLbl;
+      a4mHtml('a4mCustomerDiscount', sarFmt(a4mCustDiscAmt));
+      a4mShow('a4mCustomerDiscRow', true);
+    } else { a4mShow('a4mCustomerDiscRow', false); }
+    if (a4mOtherDiscAmt > 0) {
+      var a4mOtherLblParts = [];
+      if (state.discount > 0) {
+        var a4mMdTxt = state.discountType === 'pct' ? state.discount + '%' : parseFloat(state.discount).toFixed(2) + ' ر.س';
+        a4mOtherLblParts.push('خصم إضافي (' + a4mMdTxt + ')');
+      }
+      if (state.activeOffer) {
+        var a4mOfName = state.activeOffer.name || '';
+        var a4mOfVal = state.activeOffer.discount_type === 'percentage'
           ? parseFloat(state.activeOffer.discount_value) + '%'
           : parseFloat(state.activeOffer.discount_value) + ' ر.س';
-        a4mDiscLabel.textContent = 'خصم عرض (' + ofName + ' ' + ofVal + ') / Discount';
+        a4mOtherLblParts.push('خصم عرض (' + a4mOfName + ' ' + a4mOfVal + ')');
       }
-    } else { a4mShow('a4mDiscRow', false); a4mShow('a4mAfterDiscRow', false); }
+      var a4mOtherLblFinal = (a4mOtherLblParts.length ? a4mOtherLblParts.join(' + ') : 'خصم إضافي') + ' / Discount';
+      var a4mOtherLblEl = document.getElementById('a4mOtherDiscLabel');
+      if (a4mOtherLblEl) a4mOtherLblEl.textContent = a4mOtherLblFinal;
+      a4mHtml('a4mOtherDiscount', sarFmt(a4mOtherDiscAmt));
+      a4mShow('a4mOtherDiscRow', true);
+    } else { a4mShow('a4mOtherDiscRow', false); }
+    // إخفاء السطر القديم (للاستخدام من الفواتير المحفوظة)
+    a4mShow('a4mDiscRow', false);
     // المجموع بعد الخصم — A4
     if (data.discount && data.discount > 0) {
       var a4mAfterDiscVal = a4mSubtotalVal - data.discount;
       a4mHtml('a4mAfterDiscount', sarFmt(a4mAfterDiscVal));
       a4mShow('a4mAfterDiscRow', true);
-    }
+    } else { a4mShow('a4mAfterDiscRow', false); }
     if (data.extra && data.extra > 0) {
       a4mHtml('a4mExtra', sarFmt(data.extra));
       a4mShow('a4mExtraRow', true);
@@ -2966,34 +3069,81 @@
     var discountLabel = 'الخصم';
     var loyaltyRedeemAmt = Number(totals.loyaltyDiscount || 0);
     var loyaltyRedeemedPts = Number(totals.loyaltyRedeemed || 0);
-    if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
-      discountLabel = 'خصم نقاط الولاء';
-    } else if (state.activeOffer && totals.discount > 0) {
+    var discLabelParts = [];
+    if (state.customerDiscount) {
+      var cd = state.customerDiscount;
+      discLabelParts.push('خصم العميل (' + (cd.type === 'percentage' ? cd.value + '%' : cd.value.toFixed(2) + ' ر.س') + ')');
+    }
+    if (state.activeOffer && totals.discount > 0) {
       var offerName = state.activeOffer.name || '';
       var offerValTxt = state.activeOffer.discount_type === 'percentage'
         ? parseFloat(state.activeOffer.discount_value) + '%'
         : parseFloat(state.activeOffer.discount_value) + ' ر.س';
-      discountLabel = 'خصم عرض (' + offerName + ' ' + offerValTxt + ')';
+      discLabelParts.push('خصم عرض (' + offerName + ' ' + offerValTxt + ')');
     }
+    if (loyaltyRedeemedPts > 0 && loyaltyRedeemAmt > 0) {
+      discLabelParts.push('خصم نقاط الولاء');
+    }
+    if (discLabelParts.length) discountLabel = discLabelParts.join(' + ');
 
     /* ── Totals ── */
     var displayMode = (state.viewingDeferredInvoice !== null)
       ? (state.appSettings && state.appSettings.priceDisplayMode === 'inclusive' ? 'inclusive' : 'exclusive')
       : state.priceDisplayMode;
+    /* ── فصل خصم العميل عن بقية الخصومات ── */
+    var customerDiscAmt = getCustomerDiscountAmount(totals.subtotal);
+    var otherDiscAmt = Math.max(0, totals.discount - customerDiscAmt);
+
+    /* ── تسمية خصم العميل ── */
+    if (customerDiscAmt > 0 && state.customerDiscount) {
+      var cd2 = state.customerDiscount;
+      var cdLabelTxt = 'خصم العميل (' + (cd2.type === 'percentage' ? cd2.value + '%' : cd2.value.toFixed(2) + ' ر.س') + ')';
+      if (els.invCustomerDiscLabel) els.invCustomerDiscLabel.textContent = cdLabelTxt;
+      els.invCustomerDisc.innerHTML = sarFmt(customerDiscAmt);
+      els.invCustomerDiscRow.style.display = '';
+    } else {
+      els.invCustomerDiscRow.style.display = 'none';
+    }
+
+    /* ── بقية الخصومات (يدوي + عروض + ولاء) في السطر الأصلي ── */
+    if (otherDiscAmt > 0) {
+      var otherLabelParts = [];
+      if (state.discount > 0) {
+        var mdTxt = state.discountType === 'pct'
+          ? state.discount + '%'
+          : parseFloat(state.discount).toFixed(2) + ' ر.س';
+        otherLabelParts.push('خصم إضافي (' + mdTxt + ')');
+      }
+      if (state.activeOffer) {
+        var ofv2 = state.activeOffer;
+        var ofTxt2 = ofv2.discount_type === 'percentage' ? parseFloat(ofv2.discount_value) + '%' : parseFloat(ofv2.discount_value) + ' ر.س';
+        otherLabelParts.push('خصم عرض (' + (ofv2.name || '') + ' ' + ofTxt2 + ')');
+      }
+      var loyaltyRedeemAmt2 = Number(state.loyaltyDiscount || 0);
+      var loyaltyRedeemedPts2 = Number(state.loyaltyPointsToRedeem || 0);
+      if (loyaltyRedeemedPts2 > 0 && loyaltyRedeemAmt2 > 0) {
+        otherLabelParts.push('خصم نقاط الولاء');
+      }
+      var otherLabel = otherLabelParts.length ? otherLabelParts.join(' + ') : 'خصم إضافي';
+      els.invDiscount.innerHTML = sarFmt(otherDiscAmt);
+      els.invDiscRow.style.display = '';
+      var discLabelElOther = els.invDiscRow.querySelector('.inv-total-label');
+      if (discLabelElOther) discLabelElOther.textContent = otherLabel;
+    } else {
+      els.invDiscRow.style.display = 'none';
+    }
+
+    /* ── سطر المجموع بعد الخصم ── */
+    var hasAnyDiscount = customerDiscAmt > 0 || otherDiscAmt > 0;
+
     if (displayMode === 'inclusive' && state.vatRate > 0) {
       var netBeforeTax = getPreTaxBase(totals.subtotal);
       els.invSubtotal.innerHTML = sarFmt(netBeforeTax);
-      if (totals.discount > 0) {
-        els.invDiscount.innerHTML = sarFmt(totals.discount);
-        els.invDiscRow.style.display = '';
-        var discLabelEl = els.invDiscRow.querySelector('.inv-total-label');
-        if (discLabelEl) discLabelEl.textContent = discountLabel;
-        // المجموع بعد الخصم
+      if (hasAnyDiscount) {
         var afterDiscAmt = netBeforeTax - totals.discount;
         els.invAfterDiscount.innerHTML = sarFmt(afterDiscAmt);
         els.invAfterDiscRow.style.display = '';
       } else {
-        els.invDiscRow.style.display = 'none';
         els.invAfterDiscRow.style.display = 'none';
       }
       if (totals.extra > 0) {
@@ -3014,17 +3164,11 @@
       if (els.invTotalLabel) els.invTotalLabel.textContent = 'الإجمالي شامل الضريبة';
     } else {
       els.invSubtotal.innerHTML = sarFmt(totals.subtotal);
-      if (totals.discount > 0) {
-        els.invDiscount.innerHTML = sarFmt(totals.discount);
-        els.invDiscRow.style.display = '';
-        var discLabelEl2 = els.invDiscRow.querySelector('.inv-total-label');
-        if (discLabelEl2) discLabelEl2.textContent = discountLabel;
-        // المجموع بعد الخصم
+      if (hasAnyDiscount) {
         var afterDiscAmt2 = totals.subtotal - totals.discount;
         els.invAfterDiscount.innerHTML = sarFmt(afterDiscAmt2);
         els.invAfterDiscRow.style.display = '';
       } else {
-        els.invDiscRow.style.display = 'none';
         els.invAfterDiscRow.style.display = 'none';
       }
       if (totals.extra > 0) {
@@ -3534,6 +3678,16 @@
         discountAmount: parseFloat(discount.toFixed(2)),
         discountLabel: (() => {
           const parts = [];
+          if (state.customerDiscount) {
+            const cd = state.customerDiscount;
+            parts.push('خصم العميل (' + (cd.type === 'percentage' ? cd.value + '%' : cd.value.toFixed(2) + ' ر.س') + ')');
+          }
+          if (state.discount > 0) {
+            const dTxt = state.discountType === 'pct'
+              ? state.discount + '%'
+              : parseFloat(state.discount).toFixed(2) + ' ر.س';
+            parts.push('خصم إضافي (' + dTxt + ')');
+          }
           if (state.activeOffer) {
             parts.push('خصم عرض (' + (state.activeOffer.name || '') + ' ' + (state.activeOffer.discount_type === 'percentage' ? parseFloat(state.activeOffer.discount_value) + '%' : parseFloat(state.activeOffer.discount_value) + ' ر.س') + ')');
           }
@@ -3542,6 +3696,8 @@
           }
           return parts.length ? parts.join(' + ') : null;
         })(),
+        customerDiscountAmount: parseFloat(getCustomerDiscountAmount(subtotal).toFixed(2)),
+        manualDiscountAmount: parseFloat(getManualDiscountAmount(subtotal).toFixed(2)),
         loyaltyPointsToRedeem: state.loyaltyPointsToRedeem || 0,
         extraAmount: parseFloat(extra.toFixed(2)),
         vatRate: state.vatRate,
@@ -4338,6 +4494,9 @@
 
     els.invSubtotal.innerHTML = sarFmt(cnDisplaySubtotal);
     if (els.invSubtotalLabel) els.invSubtotalLabel.textContent = vatRate > 0 ? 'المجموع قبل الضريبة' : 'المجموع';
+    // إخفاء سطرَي الخصم المنفصلَين — الفاتورة المؤجَّلة تستخدم invDiscRow فقط
+    if (els.invCustomerDiscRow) els.invCustomerDiscRow.style.display = 'none';
+    if (els.invManualDiscRow) els.invManualDiscRow.style.display = 'none';
     if (discAmt > 0) {
       els.invDiscount.innerHTML = sarFmt(discAmt);
       els.invDiscRow.style.display = '';
@@ -4965,6 +5124,24 @@
       if (e.target === els.addCustomerModal) closeAddCustomerModal();
     });
     els.btnAddCustomerSave.addEventListener('click', handleAddCustomer);
+
+    els.newCustomerDiscountType.addEventListener('change', function() {
+      const hasType = this.value === 'percentage' || this.value === 'fixed';
+      els.newDiscountValueGroup.style.display = hasType ? '' : 'none';
+      els.newDiscountExpiryGroup.style.display = hasType ? '' : 'none';
+      if (this.value === 'percentage') {
+        els.newDiscountValueLabel.textContent = 'قيمة الخصم (%)';
+        els.newCustomerDiscountValue.max = 100;
+        els.newCustomerDiscountValue.placeholder = 'مثال: 10';
+      } else if (this.value === 'fixed') {
+        els.newDiscountValueLabel.textContent = 'قيمة الخصم (ر.س)';
+        els.newCustomerDiscountValue.removeAttribute('max');
+        els.newCustomerDiscountValue.placeholder = 'مثال: 50';
+      } else {
+        els.newCustomerDiscountValue.value = '';
+        els.newCustomerDiscountExpiry.value = '';
+      }
+    });
 
     els.btnAddSubscription.addEventListener('click', () => openAddSubscriptionModal('new'));
     els.subTabNew.addEventListener('click', () => {

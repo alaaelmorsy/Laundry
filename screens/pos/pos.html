@@ -834,6 +834,24 @@
           <label class="form-label" data-i18n="pos-add-customer-address">العنوان</label>
           <input type="text" id="newCustomerAddress" class="form-input" data-i18n-placeholder="pos-add-customer-address-placeholder" placeholder="أدخل العنوان التفصيلي" autocomplete="off" />
         </div>
+        <div class="form-group">
+          <label class="form-label">نوع الخصم</label>
+          <div class="form-select-wrap">
+            <select id="newCustomerDiscountType" class="form-input form-select">
+              <option value="">— بدون خصم —</option>
+              <option value="percentage">نسبة مئوية (%)</option>
+              <option value="fixed">مبلغ ثابت (ر.س)</option>
+            </select>
+          </div>
+        </div>
+        <div id="newDiscountValueGroup" class="form-group" style="display:none">
+          <label class="form-label" id="newDiscountValueLabel">قيمة الخصم</label>
+          <input type="number" id="newCustomerDiscountValue" class="form-input" min="0" step="0.01" placeholder="أدخل قيمة الخصم" dir="ltr" autocomplete="off" />
+        </div>
+        <div id="newDiscountExpiryGroup" class="form-group" style="display:none">
+          <label class="form-label">تاريخ انتهاء الخصم <span style="opacity:.6;font-size:11px">(اختياري)</span></label>
+          <input type="date" id="newCustomerDiscountExpiry" class="form-input" dir="ltr" />
+        </div>
         <div class="form-group form-group-full">
           <label class="form-label" data-i18n="pos-add-customer-notes">ملاحظات</label>
           <textarea id="newCustomerNotes" class="form-input form-textarea" data-i18n-placeholder="pos-add-customer-notes-placeholder" placeholder="ملاحظات إضافية..." rows="2"></textarea>
@@ -1383,6 +1401,14 @@
             <span class="inv-total-label" id="invSubtotalLabel">المجموع قبل الضريبة</span>
             <span class="inv-total-val" id="invSubtotal" dir="ltr"></span>
           </div>
+          <div class="inv-total-row" id="invCustomerDiscRow" style="display:none">
+            <span class="inv-total-label" id="invCustomerDiscLabel">خصم العميل</span>
+            <span class="inv-total-val inv-disc-val" id="invCustomerDisc" dir="ltr"></span>
+          </div>
+          <div class="inv-total-row" id="invManualDiscRow" style="display:none">
+            <span class="inv-total-label">خصم إضافي</span>
+            <span class="inv-total-val inv-disc-val" id="invManualDisc" dir="ltr"></span>
+          </div>
           <div class="inv-total-row" id="invDiscRow" style="display:none">
             <span class="inv-total-label">الخصم</span>
             <span class="inv-total-val inv-disc-val" id="invDiscount" dir="ltr"></span>
@@ -1550,6 +1576,8 @@
           <div class="a4m-totals-col">
             <div class="a4m-totals">
               <div class="a4m-trow"><span id="a4mSubtotalLabel">المجموع قبل الضريبة / Subtotal</span><b id="a4mSubtotal" dir="ltr"></b></div>
+              <div class="a4m-trow" id="a4mCustomerDiscRow" style="display:none"><span id="a4mCustomerDiscLabel">خصم العميل / Customer Discount</span><b id="a4mCustomerDiscount" class="a4m-neg" dir="ltr"></b></div>
+              <div class="a4m-trow" id="a4mOtherDiscRow" style="display:none"><span id="a4mOtherDiscLabel">خصم إضافي / Discount</span><b id="a4mOtherDiscount" class="a4m-neg" dir="ltr"></b></div>
               <div class="a4m-trow" id="a4mDiscRow" style="display:none"><span>الخصم / Discount</span><b id="a4mDiscount" class="a4m-neg" dir="ltr"></b></div>
               <div class="a4m-trow" id="a4mAfterDiscRow" style="display:none"><span>المجموع بعد الخصم / After Discount</span><b id="a4mAfterDiscount" dir="ltr"></b></div>
               <div class="a4m-trow" id="a4mExtraRow" style="display:none"><span>الإضافي / Extra</span><b id="a4mExtra" dir="ltr"></b></div>

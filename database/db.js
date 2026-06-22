@@ -137,6 +137,9 @@ async function initialize() {
   await migrateAppSettingsTrialMode();
   await createAccountsTable();
   await createLicenseTable();
+  await migrateCustomerDiscountColumns();
+  await migrateOrdersCustomerDiscountAmount();
+  await migrateOrdersManualDiscountAmount();
 }
 
 async function createLicenseTable() {
@@ -149,6 +152,58 @@ async function createLicenseTable() {
       CONSTRAINT chk_single_row CHECK (id = 1)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+}
+
+async function migrateCustomerDiscountColumns() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'customers'
+       AND COLUMN_NAME IN ('discount_type','discount_value','discount_expiry')`
+    );
+    const existing = new Set(cols.map(r => r.COLUMN_NAME));
+    if (!existing.has('discount_type')) {
+      await pool.query(`ALTER TABLE customers ADD COLUMN discount_type ENUM('percentage','fixed') DEFAULT NULL`);
+    }
+    if (!existing.has('discount_value')) {
+      await pool.query(`ALTER TABLE customers ADD COLUMN discount_value DECIMAL(10,2) DEFAULT NULL`);
+    }
+    if (!existing.has('discount_expiry')) {
+      await pool.query(`ALTER TABLE customers ADD COLUMN discount_expiry DATE DEFAULT NULL`);
+    }
+  } catch (e) {
+    console.error('migrateCustomerDiscountColumns:', e);
+  }
+}
+
+async function migrateOrdersCustomerDiscountAmount() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders'
+       AND COLUMN_NAME = 'customer_discount_amount'`
+    );
+    if (!cols.length) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN customer_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    }
+  } catch (e) {
+    console.error('migrateOrdersCustomerDiscountAmount:', e);
+  }
+}
+
+async function migrateOrdersManualDiscountAmount() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'orders'
+       AND COLUMN_NAME = 'manual_discount_amount'`
+    );
+    if (!cols.length) {
+      await pool.query(`ALTER TABLE orders ADD COLUMN manual_discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    }
+  } catch (e) {
+    console.error('migrateOrdersManualDiscountAmount:', e);
+  }
 }
 
 async function isSerialLicensed(serials) {
@@ -1775,10 +1830,17 @@ async function createCustomer(data) {
     e.appCode = 'NAME_DUPLICATE';
     throw e;
   }
+  const { discountType, discountExpiry } = data;
+  let discountValue = data.discountValue != null ? Number(data.discountValue) : null;
+  const dbDiscountType = (discountType === 'percentage' || discountType === 'fixed') ? discountType : null;
+  if (dbDiscountType === null) { discountValue = null; }
+  if (dbDiscountType === 'percentage' && discountValue > 100) discountValue = 100;
+  if (dbDiscountType && discountValue <= 0) { discountValue = null; }
+  const dbDiscountExpiry = dbDiscountType && discountExpiry ? discountExpiry : null;
   const [result] = await pool.query(
-    `INSERT INTO customers (subscription_number, customer_name, phone, tax_number, national_id, address, city, email, customer_type, notes, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [null, customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1]
+    `INSERT INTO customers (subscription_number, customer_name, phone, tax_number, national_id, address, city, email, customer_type, notes, is_active, discount_type, discount_value, discount_expiry)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [null, customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1, dbDiscountType, discountValue, dbDiscountExpiry || null]
   );
   return { id: result.insertId, subscriptionNumber: null };
 }
@@ -1806,9 +1868,16 @@ async function updateCustomer(data) {
     e.appCode = 'NAME_DUPLICATE';
     throw e;
   }
+  const { discountType, discountExpiry } = data;
+  let discountValue = data.discountValue != null ? Number(data.discountValue) : null;
+  const dbDiscountType = (discountType === 'percentage' || discountType === 'fixed') ? discountType : null;
+  if (dbDiscountType === null) { discountValue = null; }
+  if (dbDiscountType === 'percentage' && discountValue > 100) discountValue = 100;
+  if (dbDiscountType && discountValue <= 0) { discountValue = null; }
+  const dbDiscountExpiry = dbDiscountType && discountExpiry ? discountExpiry : null;
   await pool.query(
-    `UPDATE customers SET customer_name=?, phone=?, tax_number=?, national_id=?, address=?, city=?, email=?, customer_type=?, notes=?, is_active=? WHERE id=?`,
-    [customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1, cid]
+    `UPDATE customers SET customer_name=?, phone=?, tax_number=?, national_id=?, address=?, city=?, email=?, customer_type=?, notes=?, is_active=?, discount_type=?, discount_value=?, discount_expiry=? WHERE id=?`,
+    [customerName, phone, taxNumber || null, nationalId || null, address || '', city || '', email || null, customerType || 'individual', notes || null, isActive !== undefined ? isActive : 1, dbDiscountType, discountValue, dbDiscountExpiry || null, cid]
   );
 }
 
@@ -4791,7 +4860,7 @@ async function getSubscriptionTransactions(subscriptionId) {
 async function createOrder({ orderNumber, customerId, items, subtotal, discountAmount, discountLabel, extraAmount = 0,
   vatRate, vatAmount, totalAmount, paymentMethod, paidCash = 0, paidCard = 0,
   starch, bluing, notes, createdBy, priceDisplayMode, hangerId, allowSubscriptionDebt,
-  loyaltyPointsToRedeem = 0 }) {
+  loyaltyPointsToRedeem = 0, customerDiscountAmount = 0, manualDiscountAmount = 0 }) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -4901,13 +4970,13 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
          (order_number, invoice_seq, order_type, subscription_period_id, customer_id, subtotal, discount_amount, discount_label, extra_amount, vat_rate, vat_amount,
          total_amount, paid_amount, remaining_amount, paid_cash, paid_card,
          payment_method, payment_status, paid_at, notes, created_by, price_display_mode, starch, bluing, hanger_id,
-         is_consumption_only, consumption_amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         is_consumption_only, consumption_amount, customer_discount_amount, manual_discount_amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [orderNumber, invoiceSeq, orderType, subscriptionPeriodId, customerId || null, dbSubtotal, discountAmount || 0, discountLabel || null, extraAmount || 0, dbVatRate,
         dbVatAmount, numTotal, paidAmount, remainingAmount, dbPaidCash, dbPaidCard,
         pm, payStatus, paidAt, notes || null, createdBy || null, pdm,
         starch || null, bluing || null, hangerId || null,
-        isConsumptionOnly ? 1 : 0, consumptionAmount]
+        isConsumptionOnly ? 1 : 0, consumptionAmount, Number(customerDiscountAmount) || 0, Number(manualDiscountAmount) || 0]
     );
     const orderId = result.insertId;
 

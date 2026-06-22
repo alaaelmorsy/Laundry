@@ -43,6 +43,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   const btnModalCancel      = document.getElementById('btnModalCancel');
   const btnModalSave        = document.getElementById('btnModalSave');
 
+  const inputDiscountType   = document.getElementById('inputDiscountType');
+  const inputDiscountValue  = document.getElementById('inputDiscountValue');
+  const inputDiscountExpiry = document.getElementById('inputDiscountExpiry');
+  const discountValueGroup  = document.getElementById('discountValueGroup');
+  const discountExpiryGroup = document.getElementById('discountExpiryGroup');
+  const discountValueLabel  = document.getElementById('discountValueLabel');
+
   let currentCustomers = [];
   let currentPage      = 1;
   let currentPageSize  = 50;
@@ -87,6 +94,26 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   btnBack.addEventListener('click', () => window.api.navigateBack());
 
+  // Fix vertical scroll inside horizontal-scroll table on mobile
+  const mainContent   = document.querySelector('.main-content');
+  const tableContainer = document.querySelector('.table-container');
+  if (mainContent && tableContainer) {
+    let touchStartX = 0, touchStartY = 0;
+    tableContainer.addEventListener('touchstart', e => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    tableContainer.addEventListener('touchmove', e => {
+      const dx = Math.abs(e.touches[0].clientX - touchStartX);
+      const dy = Math.abs(e.touches[0].clientY - touchStartY);
+      if (dy > dx) {
+        mainContent.scrollTop += touchStartY - e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+  }
+
   inputIsActive.addEventListener('change', () => {
     statusLabel.textContent = inputIsActive.checked
       ? I18N.t('customers-status-active')
@@ -105,6 +132,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   btnAddCustomer.addEventListener('click', () => openModal(null));
   btnModalClose.addEventListener('click', closeModal);
   btnModalCancel.addEventListener('click', closeModal);
+
+  inputDiscountType.addEventListener('change', function() {
+    const hasType = this.value === 'percentage' || this.value === 'fixed';
+    discountValueGroup.style.display = hasType ? '' : 'none';
+    discountExpiryGroup.style.display = hasType ? '' : 'none';
+    if (this.value === 'percentage') {
+      discountValueLabel.textContent = 'قيمة الخصم (%)';
+      inputDiscountValue.max = 100;
+      inputDiscountValue.placeholder = 'مثال: 10';
+    } else if (this.value === 'fixed') {
+      discountValueLabel.textContent = 'قيمة الخصم (ر.س)';
+      inputDiscountValue.removeAttribute('max');
+      inputDiscountValue.placeholder = 'مثال: 50';
+    } else {
+      inputDiscountValue.value = '';
+      inputDiscountExpiry.value = '';
+    }
+  });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
   btnModalSave.addEventListener('click', saveCustomer);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
@@ -187,6 +232,20 @@ window.addEventListener('DOMContentLoaded', async () => {
       catch { return dateStr; }
     };
 
+    const formatDiscountCell = (c) => {
+      if (!c.discount_type || c.discount_value == null) return '<span style="color:#94a3b8">—</span>';
+      const valTxt = c.discount_type === 'percentage'
+        ? `${parseFloat(c.discount_value)}%`
+        : `${parseFloat(c.discount_value).toFixed(2)} ر.س`;
+      const expired = c.discount_expiry && new Date(c.discount_expiry) < new Date(new Date().toDateString());
+      const expiryTxt = c.discount_expiry
+        ? ` — ينتهي ${formatDate(c.discount_expiry)}` : '';
+      if (expired) {
+        return `<span style="color:#94a3b8;text-decoration:line-through">${escHtml(valTxt)}</span><br><span style="color:#ef4444;font-size:11px">(منتهي)</span>`;
+      }
+      return `<span style="color:#7c3aed;font-weight:700">${escHtml(valTxt)}</span>${expiryTxt ? `<br><span style="color:#94a3b8;font-size:11px">${escHtml(expiryTxt)}</span>` : ''}`;
+    };
+
     customersTableBody.innerHTML = customers.map((c, i) => `
       <tr>
         <td class="index-cell">${indexStart + i + 1}</td>
@@ -208,6 +267,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         <td style="display:${loyaltyEnabled ? '' : 'none'}">
           ${loyaltyEnabled ? `<span style="font-weight:700;color:#d97706">${Number(c.loyalty_points || 0).toLocaleString()}</span>` : ''}
         </td>
+        <td>${formatDiscountCell(c)}</td>
         <td>
           <div class="actions-cell subs-actions">
             <div class="subs-action-row">
@@ -341,6 +401,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else if (loyaltyRow) {
       loyaltyRow.style.display = 'none';
     }
+    // حقول الخصم
+    const dt = customer ? (customer.discount_type || '') : '';
+    inputDiscountType.value = dt;
+    if (dt === 'percentage' || dt === 'fixed') {
+      discountValueGroup.style.display = '';
+      discountExpiryGroup.style.display = '';
+      discountValueLabel.textContent = dt === 'percentage' ? 'قيمة الخصم (%)' : 'قيمة الخصم (ر.س)';
+      if (dt === 'percentage') { inputDiscountValue.max = 100; } else { inputDiscountValue.removeAttribute('max'); }
+      inputDiscountValue.value = customer.discount_value != null ? customer.discount_value : '';
+      inputDiscountExpiry.value = customer.discount_expiry ? customer.discount_expiry.slice(0, 10) : '';
+    } else {
+      discountValueGroup.style.display = 'none';
+      discountExpiryGroup.style.display = 'none';
+      inputDiscountValue.value = '';
+      inputDiscountExpiry.value = '';
+    }
+
     statusLabel.textContent        = inputIsActive.checked
       ? I18N.t('customers-status-active')
       : I18N.t('customers-status-inactive');
@@ -380,7 +457,29 @@ window.addEventListener('DOMContentLoaded', async () => {
     btnModalSave.disabled = true;
     hideModalError();
 
-    const data = { customerName, phone, taxNumber, nationalId, address, city, email, customerType, notes, isActive };
+    const discountType  = inputDiscountType.value || null;
+    const discountValue = (discountType && inputDiscountValue.value !== '')
+      ? parseFloat(inputDiscountValue.value) : null;
+    const discountExpiry = (discountType && inputDiscountExpiry.value)
+      ? inputDiscountExpiry.value : null;
+
+    if (discountType === 'percentage' && discountValue != null && (discountValue <= 0 || discountValue > 100)) {
+      showModalError('نسبة الخصم يجب أن تكون بين 0.01 و 100');
+      return;
+    }
+    if (discountType === 'fixed' && discountValue != null && discountValue <= 0) {
+      showModalError('مبلغ الخصم يجب أن يكون أكبر من صفر');
+      return;
+    }
+    if (discountType && (discountValue == null || isNaN(discountValue))) {
+      showModalError('أدخل قيمة الخصم');
+      return;
+    }
+
+    const data = { customerName, phone, taxNumber, nationalId, address, city, email, customerType, notes, isActive,
+      discountType: discountType || null,
+      discountValue: discountValue,
+      discountExpiry: discountExpiry };
 
     try {
       const result = id
