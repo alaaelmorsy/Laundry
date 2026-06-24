@@ -197,6 +197,11 @@
                 <tbody id="invoicesTableBody"></tbody>
               </table>
             </div>
+            <div id="invoicesPager" class="inv-pager no-print" style="display:none">
+              <button id="invPrevBtn" class="pager-btn" onclick="renderInvoicesPage(invCurrentPage - 1)">&#8594;</button>
+              <span id="invPageInfo" class="pager-info"></span>
+              <button id="invNextBtn" class="pager-btn" onclick="renderInvoicesPage(invCurrentPage + 1)">&#8592;</button>
+            </div>
             <div class="section-footer" id="invoicesFooter"></div>
           </div>
         </div>

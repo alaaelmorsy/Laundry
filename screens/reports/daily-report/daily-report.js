@@ -396,23 +396,63 @@ window.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
 
+  const INV_PAGE_SIZE = 200;
+  let allInvoices = [];
+  let invCurrentPage = 1;
+
+  function buildInvoiceRow(inv) {
+    const dt = fmtDT(inv.created_at);
+    const dtParts = dt.split(', ');
+    const dateStr = dtParts[0] || dt;
+    const timeStr = dtParts[1] || '';
+    return `
+    <tr>
+      <td class="num-cell">${inv.invoice_seq || inv.order_number || inv.id}</td>
+      <td>${inv.phone || inv.customer_name || '—'}</td>
+      <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
+      <td>${payLabel(inv.payment_method)}</td>
+      <td class="num-cell">${SAR(inv.total_amount, false)}</td>
+      <td class="no-print"><button class="view-btn" onclick="showInvoiceModal(${inv.id})">${I18N.t('all-invoices-view')}</button></td>
+    </tr>`;
+  }
+
+  function renderInvoicesPage(page) {
+    const tbody = document.getElementById('invoicesTableBody');
+    const pager = document.getElementById('invoicesPager');
+    if (!tbody) return;
+    if (!allInvoices.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('daily-report-no-invoices')}</td></tr>`;
+      if (pager) pager.style.display = 'none';
+      return;
+    }
+    const totalPages = Math.ceil(allInvoices.length / INV_PAGE_SIZE);
+    invCurrentPage = Math.max(1, Math.min(page, totalPages));
+    const start = (invCurrentPage - 1) * INV_PAGE_SIZE;
+    const slice = allInvoices.slice(start, start + INV_PAGE_SIZE);
+    tbody.innerHTML = slice.map(buildInvoiceRow).join('');
+    if (pager) {
+      if (totalPages <= 1) { pager.style.display = 'none'; return; }
+      pager.style.display = 'flex';
+      document.getElementById('invPageInfo').textContent = `${invCurrentPage} / ${totalPages}`;
+      document.getElementById('invPrevBtn').disabled = invCurrentPage <= 1;
+      document.getElementById('invNextBtn').disabled = invCurrentPage >= totalPages;
+    }
+  }
+
+  function setInvoices(invoices) {
+    allInvoices = invoices || [];
+    invCurrentPage = 1;
+    renderInvoicesPage(1);
+  }
+
+  window.renderInvoicesPage = renderInvoicesPage;
+  Object.defineProperty(window, 'invCurrentPage', { get: () => invCurrentPage });
+
   function buildInvoicesTable(invoices) {
-    if (!invoices.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('daily-report-no-invoices')}</td></tr>`;
-    return invoices.map((inv) => {
-      const dt = fmtDT(inv.created_at);
-      const dtParts = dt.split(', ');
-      const dateStr = dtParts[0] || dt;
-      const timeStr = dtParts[1] || '';
-      return `
-      <tr>
-        <td class="num-cell">${inv.invoice_seq || inv.order_number || inv.id}</td>
-        <td>${inv.phone || inv.customer_name || '—'}</td>
-        <td>${dateStr}${timeStr ? '<br>' + timeStr : ''}</td>
-        <td>${payLabel(inv.payment_method)}</td>
-        <td class="num-cell">${SAR(inv.total_amount, false)}</td>
-        <td class="no-print"><button class="view-btn" onclick="showInvoiceModal(${inv.id})">${I18N.t('all-invoices-view')}</button></td>
-      </tr>`;
-    }).join('');
+    allInvoices = invoices || [];
+    invCurrentPage = 1;
+    if (!allInvoices.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">${I18N.t('daily-report-no-invoices')}</td></tr>`;
+    return allInvoices.slice(0, INV_PAGE_SIZE).map(buildInvoiceRow).join('');
   }
 
   function payBadge(pm) {
@@ -801,8 +841,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Barcode
     var invBarcodeEl = document.getElementById('invBarcode');
-    if (invBarcodeEl && order.invoice_seq) {
-      try { JsBarcode(invBarcodeEl, String(order.invoice_seq), { format: 'CODE128', width: 3, height: 50, displayValue: true, fontSize: 14, margin: 0, background: 'transparent' }); } catch(e) { invBarcodeEl.innerHTML = ''; }
+    var barcodeVal = order.invoice_seq || order.order_number || String(order.id || '');
+    if (invBarcodeEl && barcodeVal) {
+      try { JsBarcode(invBarcodeEl, String(barcodeVal), { format: 'CODE128', width: 3, height: 50, displayValue: true, fontSize: 14, margin: 0, background: 'transparent' }); } catch(e) { invBarcodeEl.innerHTML = ''; }
     } else if (invBarcodeEl) {
       invBarcodeEl.innerHTML = '';
     }
@@ -1124,7 +1165,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('expensesFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${res.expenses.length} &nbsp;|&nbsp; ${SAR(expTotal)}`;
 
       document.getElementById('badgeInvoices').textContent = res.invoices.length;
-      document.getElementById('invoicesTableBody').innerHTML = buildInvoicesTable(res.invoices);
+      setInvoices(res.invoices);
       const invTotal = res.invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
       document.getElementById('invoicesFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${res.invoices.length} &nbsp;|&nbsp; ${SAR(invTotal)}`;
 
@@ -1221,7 +1262,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('summaryTableBody').innerHTML = buildSummaryTable(reportData.summary);
     buildPaymentMethods(reportData.paymentMethods);
     document.getElementById('expensesTableBody').innerHTML = buildExpensesTable(reportData.expenses);
-    document.getElementById('invoicesTableBody').innerHTML = buildInvoicesTable(reportData.invoices);
+    setInvoices(reportData.invoices);
     const defBody = document.getElementById('deferredPaymentsTableBody');
     if (defBody) defBody.innerHTML = buildDeferredPaymentsTable(reportData.deferredPayments || []);
     const defTotal2 = (reportData.deferredPayments || []).reduce((s, p) => s + Number(p.payment_amount || 0), 0);

@@ -610,7 +610,8 @@
       } else if (res && (res.message === 'not_on_whatsapp' || res.error === 'not_on_whatsapp')) {
         showToast('⚠️ واتساب | ' + label + ' — الرقم غير مسجّل في واتساب', 'error');
       } else {
-        showToast('❌ واتساب | ' + label + ' — فشل الإرسال', 'error');
+        const _errMsg = (res && res.message) ? res.message : 'فشل الإرسال';
+        showToast('❌ واتساب | ' + label + ' — ' + _errMsg, 'error');
       }
     } catch (_) {
       showToast('❌ واتساب | فشل الإرسال', 'error');

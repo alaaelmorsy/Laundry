@@ -1725,7 +1725,8 @@ async function invoke(method, payload, reqUser) {
       const { phone, message } = payload || {};
       if (!phone || !message) return { success: false, message: 'الرجاء إدخال رقم الجوال والرسالة' };
       const quota = await db.getWhatsappQuota();
-      if (quota.quota_remaining <= 0) return { success: false, message: 'انتهت حصة الرسائل المتاحة' };
+      if (quota.quota_total === 0) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
+      if (quota.quota_remaining <= 0) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
       const result = await whatsappService.sendMessage(phone, message);
       if (result.success) {
         await db.incrementWhatsappUsed();
@@ -1752,7 +1753,8 @@ async function invoke(method, payload, reqUser) {
       if (!phone) return { success: false, message: 'رقم الجوال مطلوب' };
       if (!orderId) return { success: false, message: 'رقم الفاتورة مطلوب' };
       const quota = await db.getWhatsappQuota();
-      if (quota.quota_total > 0 && quota.quota_used >= quota.quota_total) return { success: false, message: 'تم استنفاد الحصة اليومية للواتساب' };
+      if (quota.quota_total === 0) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
+      if (quota.quota_used >= quota.quota_total) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
       const pdfResult = await exportsService.exportInvoicePdf(Number(orderId), paperType || 'thermal');
       const result = await whatsappService.sendDocument(phone, pdfResult.buffer, pdfResult.filename, caption || '');
       if (result.success) await db.incrementWhatsappUsed();
@@ -1764,7 +1766,8 @@ async function invoke(method, payload, reqUser) {
       if (!phone) return { success: false, message: 'رقم الجوال مطلوب' };
       if (!html)  return { success: false, message: 'محتوى الفاتورة مطلوب' };
       const quota = await db.getWhatsappQuota();
-      if (quota.quota_total > 0 && quota.quota_used >= quota.quota_total) return { success: false, message: 'تم استنفاد الحصة اليومية للواتساب' };
+      if (quota.quota_total === 0) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
+      if (quota.quota_used >= quota.quota_total) return { success: false, message: 'انتهت حصة رسائل الواتساب — يرجى التواصل مع الدعم الفني للتجديد' };
 
       // حقن QR في الـ HTML إذا كان العنصر فارغاً (ضمان ظهور QR في PDF)
       const _hasEmptyQr = /<div[^>]+id="invQR"[^>]*>\s*<\/div>/.test(html)

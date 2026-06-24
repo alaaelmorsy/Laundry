@@ -4058,6 +4058,8 @@
   // إرسال من HTML الشاشة (مطابق للطباعة تماماً)
   async function sendInvoiceWhatsAppFromHtml(html, paperType, phone, orderNum, zatcaPayload, stage, totalAmount) {
     if (!html || !phone) return;
+    // تأخير عشوائي بين 3 و 8 ثوانٍ قبل الإرسال
+    await new Promise(function(resolve) { setTimeout(resolve, 3000 + Math.random() * 5000); });
     const s = state.appSettings || {};
     const num = orderNum || '';
     const totalLine = totalAmount ? '\n*الإجمالي: ' + Number(totalAmount).toFixed(2) + ' SAR*' : '';
@@ -4089,7 +4091,8 @@
       } else if (_waRes && (_waRes.message === 'not_on_whatsapp' || _waRes.error === 'not_on_whatsapp')) {
         showTopToast('⚠️ واتساب | ' + _label + ' — الرقم غير مسجّل في واتساب', 'warning', 5000);
       } else {
-        showTopToast('❌ واتساب | ' + _label + ' — فشل الإرسال', 'error', 5000);
+        const _errMsg = (_waRes && _waRes.message) ? _waRes.message : 'فشل الإرسال';
+        showTopToast('❌ واتساب | ' + _label + ' — ' + _errMsg, 'error', 6000);
       }
     } catch (_) {}
   }
@@ -6455,6 +6458,8 @@
     const rcpt = (state.deferredInvoices || []).find(r => r.id === Number(receiptId) && r.rowType === 'receipt');
     if (!rcpt || !rcpt.phone) return;
     try {
+      // تأخير عشوائي بين 3 و 8 ثوانٍ قبل الإرسال
+      await new Promise(function(resolve) { setTimeout(resolve, 3000 + Math.random() * 5000); });
       const built = await _buildReceiptHtmlSilent(receiptId);
       if (!built || !built.html) return;
       const s = state.appSettings || {};
@@ -6479,7 +6484,8 @@
       } else if (_waRes && (_waRes.message === 'not_on_whatsapp' || _waRes.error === 'not_on_whatsapp')) {
         showTopToast('⚠️ واتساب | ' + _label + ' — الرقم غير مسجّل في واتساب', 'warning', 5000);
       } else {
-        showTopToast('❌ واتساب | ' + _label + ' — فشل الإرسال', 'error', 5000);
+        const _errMsg = (_waRes && _waRes.message) ? _waRes.message : 'فشل الإرسال';
+        showTopToast('❌ واتساب | ' + _label + ' — ' + _errMsg, 'error', 6000);
       }
     } catch (_) {}
   }

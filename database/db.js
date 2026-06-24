@@ -2891,7 +2891,7 @@ async function _createSubscriptionOrder(conn, {
   }
 
   // توليد invoice_seq
-  const [[seqRow]] = await conn.query('SELECT COALESCE(MAX(invoice_seq), 0) + 1 AS next_seq FROM orders');
+  const [[seqRow]] = await conn.query('SELECT GREATEST(COALESCE(MAX(invoice_seq), 0), COALESCE(MAX(id), 0)) + 1 AS next_seq FROM orders');
   const invoiceSeq = seqRow.next_seq;
 
   // توليد order_number
@@ -5012,7 +5012,7 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
     let invoiceSeq = null;
     if (!isConsumptionOnly) {
       const [[seqRow]] = await conn.query(
-        'SELECT COALESCE(MAX(invoice_seq), 0) AS mx FROM orders FOR UPDATE'
+        'SELECT GREATEST(COALESCE(MAX(invoice_seq), 0), COALESCE(MAX(id), 0)) AS mx FROM orders FOR UPDATE'
       );
       invoiceSeq = Number(seqRow.mx) + 1;
     }
