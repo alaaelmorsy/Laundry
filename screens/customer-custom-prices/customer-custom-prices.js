@@ -21,6 +21,16 @@
   let allCustomers = [];
   let custSugActiveIdx = -1;
 
+  function tr(key, fallback) {
+    return window.I18N && typeof window.I18N.t === 'function' ? window.I18N.t(key) : (fallback || key);
+  }
+
+  function formatMessage(key, vars, fallback) {
+    return Object.keys(vars || {}).reduce(function (msg, name) {
+      return msg.replace(new RegExp('\\{' + name + '\\}', 'g'), vars[name]);
+    }, tr(key, fallback));
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────────
   function init() {
     elBtnSave          = document.getElementById('btnSave');
@@ -40,6 +50,10 @@
     elCustSearchInput  = document.getElementById('customerSearchInput');
     elCustSuggestions  = document.getElementById('customerSuggestions');
     elCustClearBtn     = document.getElementById('customerClearBtn');
+
+    if (window.I18N && typeof window.I18N.apply === 'function') {
+      window.I18N.apply();
+    }
 
     elBtnBack.addEventListener('click', function () { history.back(); });
     elBtnSave.addEventListener('click', handleSave);
@@ -100,7 +114,16 @@
     });
 
     elBtnSave.disabled = true;
+    window.addEventListener('app-language-changed', rerenderTranslatedContent);
     loadCustomers();
+  }
+
+  function rerenderTranslatedContent() {
+    if (state.selectedCustomer) {
+      renderProductList(elSearchInput.value.trim());
+      const selected = state.products.find(function (p) { return p.id === state.selectedProductId; });
+      if (selected) renderServicesTable(selected);
+    }
   }
 
   // ── Load Customers ────────────────────────────────────────────────────────────
@@ -115,7 +138,7 @@
       if (preId) {
         const found = allCustomers.find(function (c) { return c.id === preId; });
         if (found) {
-          elCustSearchInput.value = found.customer_name + (found.phone ? ' — ' + found.phone : '');
+          elCustSearchInput.value = found.customer_name + (found.phone ? ' - ' + found.phone : '');
           elCustClearBtn.style.display = 'flex';
           selectCustomer(preId);
         }
@@ -134,7 +157,7 @@
         }).slice(0, 30);
 
     if (filtered.length === 0) {
-      elCustSuggestions.innerHTML = '<li class="customer-sug-empty">لا توجد نتائج</li>';
+      elCustSuggestions.innerHTML = '<li class="customer-sug-empty">' + tr('ccp-no-results', 'لا توجد نتائج') + '</li>';
     } else {
       elCustSuggestions.innerHTML = filtered.map(function (c) {
         return '<li class="customer-sug-item" data-id="' + c.id + '">' +
@@ -147,7 +170,7 @@
           const id = parseInt(li.getAttribute('data-id'));
           const cust = allCustomers.find(function (c) { return c.id === id; });
           if (cust) {
-            elCustSearchInput.value = cust.customer_name + (cust.phone ? ' — ' + cust.phone : '');
+            elCustSearchInput.value = cust.customer_name + (cust.phone ? ' - ' + cust.phone : '');
             elCustClearBtn.style.display = 'flex';
           }
           closeSuggestions();
@@ -183,7 +206,7 @@
 
       const res = await window.api.getCustomPricesScreenData({ customerId: customerId });
       if (!res || !res.success) {
-        showToast(res && res.message ? res.message : 'فشل تحميل البيانات', 'error');
+        showToast(res && res.message ? res.message : tr('ccp-load-error', 'فشل تحميل البيانات'), 'error');
         return;
       }
 
@@ -218,7 +241,7 @@
 
     } catch (e) {
       console.error('[CCP] selectCustomer error', e);
-      showToast('فشل تحميل بيانات العميل', 'error');
+      showToast(tr('ccp-load-customer-error', 'فشل تحميل بيانات العميل'), 'error');
     }
   }
 
@@ -237,7 +260,7 @@
     });
 
     if (filtered.length === 0) {
-      elProductList.innerHTML = '<div class="empty-state small"><p>لا توجد أصناف</p></div>';
+      elProductList.innerHTML = '<div class="empty-state small"><p>' + tr('ccp-no-products', 'لا توجد أصناف') + '</p></div>';
       return;
     }
 
@@ -250,7 +273,7 @@
         '<div class="product-item-info">' +
           '<div class="product-item-name">' + escHtml(p.name_ar) + '</div>' +
           '<div class="product-item-badge' + (hasCustom ? ' has-custom' : '') + '">' +
-            (hasCustom ? customCount + ' خدمة مخصصة' : 'لا توجد أسعار خاصة') +
+            getCustomBadgeText(customCount) +
           '</div>' +
         '</div>' +
       '</div>';
@@ -320,7 +343,7 @@
         '<td class="diff-cell">' + diffHtml + '</td>' +
         '<td>' +
           '<button class="clear-btn" data-pid="' + product.id + '" data-sid="' + s.laundryServiceId + '"' +
-            (hasCustom ? '' : ' disabled') + ' title="حذف السعر الخاص">' +
+            (hasCustom ? '' : ' disabled') + ' title="' + tr('ccp-delete-custom-price', 'حذف السعر الخاص') + '">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>' +
           '</button>' +
         '</td>' +
@@ -414,15 +437,15 @@
 
   function buildDiffBadge(customVal, generalPrice) {
     if (customVal === 0) {
-      return '<span class="diff-badge zero">مجاني</span>';
+      return '<span class="diff-badge zero">' + tr('ccp-free', 'مجاني') + '</span>';
     }
     if (generalPrice <= 0) return '';
     const diff = generalPrice - customVal;
     const pct = (diff / generalPrice * 100).toFixed(1);
     if (customVal > generalPrice) {
-      return '<span class="diff-badge higher">⚠ أعلى بـ ' + Math.abs(pct) + '%</span>';
+      return '<span class="diff-badge higher">' + formatMessage('ccp-higher-by', { pct: Math.abs(pct) }, 'أعلى بـ {pct}%') + '</span>';
     }
-    return '<span class="diff-badge saving">وفّر ' + pct + '%</span>';
+    return '<span class="diff-badge saving">' + formatMessage('ccp-save-percent', { pct: pct }, 'وفر {pct}%') + '</span>';
   }
 
   function fmtPrice(v) {
@@ -460,7 +483,14 @@
 
     elSumTotal.textContent = totalServices;
     elSumCustom.textContent = customServices;
-    elSumAvg.textContent = diffCount > 0 ? (totalDiffPct / diffCount).toFixed(1) + '%' : '—';
+    elSumAvg.textContent = diffCount > 0 ? (totalDiffPct / diffCount).toFixed(1) + '%' : '-';
+  }
+
+  function getCustomBadgeText(customCount) {
+    if (customCount > 0) {
+      return formatMessage('ccp-custom-count', { count: customCount }, '{count} خدمة مخصصة');
+    }
+    return tr('ccp-no-custom-prices', 'لا توجد أسعار خاصة');
   }
 
   // ── Product List Indicators (without full re-render) ─────────────────────────
@@ -474,7 +504,7 @@
       if (dot) { dot.className = 'dot-indicator' + (hasCustom ? ' has-custom' : ''); }
       if (badge) {
         badge.className = 'product-item-badge' + (hasCustom ? ' has-custom' : '');
-        badge.textContent = hasCustom ? customCount + ' خدمة مخصصة' : 'لا توجد أسعار خاصة';
+        badge.textContent = getCustomBadgeText(customCount);
       }
     });
   }
@@ -491,7 +521,7 @@
     // Check for zero prices
     const zeroKeys = Object.keys(state.customPrices).filter(function (k) { return state.customPrices[k] === 0; });
     if (zeroKeys.length > 0) {
-      const confirmed = confirm('يوجد ' + zeroKeys.length + ' سعر(أسعار) بقيمة صفر — هل تريد المتابعة؟');
+      const confirmed = confirm(formatMessage('ccp-confirm-zero-count', { count: zeroKeys.length }, 'يوجد {count} سعر بقيمة صفر، هل تريد المتابعة؟'));
       if (!confirmed) return;
     }
 
@@ -518,7 +548,7 @@
     });
 
     if (changes.length === 0 && deletes.length === 0) {
-      showToast('لا توجد تغييرات للحفظ', 'error');
+      showToast(tr('ccp-no-changes', 'لا توجد تغييرات للحفظ'), 'error');
       return;
     }
 
@@ -537,14 +567,14 @@
           inp.classList.remove('dirty');
         });
         renderProductList(elSearchInput.value.trim());
-        showToast('تم حفظ الأسعار بنجاح (' + (res.saved || 0) + ' محفوظة، ' + (res.deleted || 0) + ' محذوفة)', 'success');
+        showToast(formatMessage('ccp-saved-counts', { saved: res.saved || 0, deleted: res.deleted || 0 }, 'تم حفظ الأسعار بنجاح ({saved} محفوظة، {deleted} محذوفة)'), 'success');
       } else {
-        showToast(res && res.message ? res.message : 'فشل في حفظ الأسعار', 'error');
+        showToast(res && res.message ? res.message : tr('ccp-save-error', 'فشل في حفظ الأسعار'), 'error');
         elBtnSave.disabled = false;
       }
     } catch (e) {
       console.error('[CCP] save error', e);
-      showToast('فشل في حفظ الأسعار', 'error');
+      showToast(tr('ccp-save-error', 'فشل في حفظ الأسعار'), 'error');
       elBtnSave.disabled = false;
     }
   }

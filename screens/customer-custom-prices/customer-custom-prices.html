@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="customer-custom-prices.css" />
   <link rel="stylesheet" href="../../assets/sidebar.css" />
 </head>
-<body>
+<body data-page-title="page-title-customer-custom-prices">
 
   <div class="page-wrapper">
 
@@ -20,8 +20,8 @@
       <div class="header-center">
         <div class="customer-autocomplete-wrap" id="customerAutoWrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="select-icon"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <input type="text" id="customerSearchInput" class="customer-search-input" placeholder="اختر العميل..." autocomplete="off" />
-          <button class="customer-clear-btn" id="customerClearBtn" style="display:none" title="مسح">
+          <input type="text" id="customerSearchInput" class="customer-search-input" placeholder="اختر العميل..." data-i18n-placeholder="ccp-select-customer" autocomplete="off" />
+          <button class="customer-clear-btn" id="customerClearBtn" style="display:none" title="مسح" data-i18n-title="ccp-clear">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
           <ul class="customer-suggestions" id="customerSuggestions" style="display:none"></ul>

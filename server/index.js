@@ -134,7 +134,7 @@ async function start() {
     res.redirect('/screens/login/login.html');
   });
 
-  app.use(express.static(ROOT, { index: false }));
+  app.use(express.static(ROOT, { index: false, etag: false, lastModified: false, setHeaders: (res) => { res.setHeader('Cache-Control', 'no-store'); } }));
 
   app.get('/api/accounts/trial-status', async (req, res) => {
     try {

@@ -390,6 +390,12 @@
     return window.I18N ? window.I18N.t(key) : key;
   }
 
+  function tf(key, vars) {
+    return Object.keys(vars || {}).reduce((msg, name) => {
+      return msg.replace(new RegExp('\\{' + name + '\\}', 'g'), vars[name]);
+    }, t(key));
+  }
+
   function getLang() {
     return window.I18N ? window.I18N.getLang() : 'ar';
   }
@@ -1204,7 +1210,7 @@
                 <button class="qty-btn minus" data-key="${escHtml(item.key)}" type="button">−</button>
               </div>
               <span class="ci-line-total">${plainMoneyHtml(fmtLtr(item.lineTotal))}</span>
-              <button class="ci-remove" data-key="${escHtml(item.key)}" type="button">حذف</button>
+              <button class="ci-remove" data-key="${escHtml(item.key)}" type="button">${t('pos-remove-item')}</button>
             </div>
           `;
 
@@ -1967,8 +1973,8 @@
     const isRenew = mode === 'renew';
     els.subTabNew.classList.toggle('active', !isRenew);
     els.subTabRenew.classList.toggle('active', isRenew);
-    els.subModalTitle.textContent = isRenew ? 'تجديد اشتراك' : 'اشتراك جديد';
-    els.subSaveBtnLabel.textContent = isRenew ? 'تجديد الاشتراك' : 'حفظ الاشتراك';
+    els.subModalTitle.textContent = isRenew ? t('pos-add-sub-tab-renew') : t('pos-add-sub-tab-new');
+    els.subSaveBtnLabel.textContent = isRenew ? t('pos-add-sub-save-renew') : t('pos-add-sub-save');
     els.subRenewSubGroup.style.display = isRenew ? '' : 'none';
   }
 
@@ -1996,19 +2002,19 @@
     els.subPeriodType.value = 'unlimited';
     syncSubscriptionPeriodFields();
     els.subEndDate.value = ''; // تاريخ الانتهاء فارغ (باقة مفتوحة)
-    els.subRenewSubSelect.innerHTML = '<option value="">— اختر اشتراك —</option>';
+    els.subRenewSubSelect.innerHTML = `<option value="">${t('pos-add-sub-renew-select-placeholder')}</option>`;
     subSetMode(mode);
 
-    els.subPackageSelect.innerHTML = '<option value="">— جارٍ التحميل... —</option>';
+    els.subPackageSelect.innerHTML = `<option value="">${t('pos-add-sub-loading')}</option>`;
     els.addSubscriptionModal.style.display = 'flex';
 
     try {
       const res = await window.api.getPrepaidPackages({ activeOnly: true });
       const packages = (res && res.success && res.packages) ? res.packages.filter((p) => p.is_active) : [];
-      els.subPackageSelect.innerHTML = '<option value="">— اختر الباقة —</option>' +
+      els.subPackageSelect.innerHTML = `<option value="">${t('pos-add-sub-package-placeholder')}</option>` +
         packages.map((pkg) => `<option value="${pkg.id}">${escHtml(pkg.name_ar || pkg.name_en || '')} — ${fmtLtr(pkg.prepaid_price || 0)} ريال</option>`).join('');
     } catch (_) {
-      els.subPackageSelect.innerHTML = '<option value="">— فشل تحميل الباقات —</option>';
+      els.subPackageSelect.innerHTML = `<option value="">${t('pos-add-sub-load-failed')}</option>`;
     }
 
     if (state.selectedCustomer) {
@@ -2049,19 +2055,19 @@
   }
 
   async function loadCustomerSubscriptions(customerId) {
-    els.subRenewSubSelect.innerHTML = '<option value="">— جارٍ التحميل... —</option>';
+    els.subRenewSubSelect.innerHTML = `<option value="">${t('pos-add-sub-loading')}</option>`;
     try {
       const res = await window.api.getCustomerSubscriptionsList({ customerId, page: 1, pageSize: 20 });
       const subs = (res && res.success) ? (res.subscriptions || []) : [];
       if (!subs.length) {
-        els.subRenewSubSelect.innerHTML = '<option value="">— لا يوجد اشتراك —</option>';
+        els.subRenewSubSelect.innerHTML = `<option value="">${t('pos-add-sub-no-subscriptions')}</option>`;
         return;
       }
-      els.subRenewSubSelect.innerHTML = '<option value="">— اختر اشتراك —</option>' +
+      els.subRenewSubSelect.innerHTML = `<option value="">${t('pos-add-sub-renew-select-placeholder')}</option>` +
         subs.map((s) => `<option value="${s.id}">${escHtml(s.package_name || s.subscription_ref || '')} — ${escHtml(s.display_status || '')}</option>`).join('');
       if (subs.length === 1) els.subRenewSubSelect.value = String(subs[0].id);
     } catch (_) {
-      els.subRenewSubSelect.innerHTML = '<option value="">— فشل التحميل —</option>';
+      els.subRenewSubSelect.innerHTML = `<option value="">${t('pos-add-sub-load-failed')}</option>`;
     }
   }
 
@@ -3038,15 +3044,15 @@
 
   function buildRefundSearchItemsPreview(items) {
     // Reuse POS items renderer for a compact preview.
-    if (!Array.isArray(items) || items.length === 0) return '—';
+    if (!Array.isArray(items) || items.length === 0) return '-';
     return `
       <table class="inv-table" style="width:100%;margin-top:10px">
         <thead>
           <tr>
-            <th class="inv-th-name">النوع</th>
-            <th class="inv-th-num">عدد</th>
-            <th class="inv-th-num">الإجمالي</th>
-            <th class="inv-th-name">العملية</th>
+            <th class="inv-th-name">${t('invoice-item')}</th>
+            <th class="inv-th-num">${t('invoice-qty')}</th>
+            <th class="inv-th-num">${t('invoice-total')}</th>
+            <th class="inv-th-name">${t('invoice-service')}</th>
           </tr>
         </thead>
         <tbody>
@@ -3060,18 +3066,18 @@
     if (!els.refundReceiptSearchInput) return;
     const q = els.refundReceiptSearchInput.value.trim();
     if (!q) {
-      showTopToast('أدخل رقم الإيصال أو رقم الاشتراك للبحث', 'error');
+      showTopToast(t('pos-refund-search-required'), 'error');
       return;
     }
 
-    if (els.refundSearchResult) els.refundSearchResult.innerHTML = 'جارٍ البحث...';
+    if (els.refundSearchResult) els.refundSearchResult.innerHTML = t('pos-refund-searching');
     if (els.refundSearchConfirmArea) els.refundSearchConfirmArea.style.display = 'none';
     if (els.btnRefundConfirmReceipt) els.btnRefundConfirmReceipt.disabled = false;
 
     try {
       const res = await window.api.searchConsumptionReceiptForRefund({ q });
       if (!res || !res.success || !res.receipt) {
-        const msg = (res && res.message) ? res.message : 'فشل البحث';
+        const msg = (res && res.message) ? res.message : t('pos-refund-search-failed');
         showTopToast(msg, 'error');
         if (els.refundSearchResult) els.refundSearchResult.innerHTML = msg;
         return;
@@ -3083,7 +3089,7 @@
 
       const alreadyHtml = already
         ? `<div style="margin-top:8px;color:#b91c1c;font-weight:800">
-            تم إرجاع هذا الإيصال مسبقًا بتاريخ ${String(already.refundedAt || '').slice(0, 10) || '—'}
+            ${tf('pos-refund-already-date', { date: String(already.refundedAt || '').slice(0, 10) || '-' })}
           </div>`
         : '';
 
@@ -3095,28 +3101,28 @@
         els.refundSearchResult.innerHTML = `
           <div style="font-size:13px; color: #000; font-weight: 700;">
             <div class="inv-meta-row">
-              <span class="inv-meta-label">الإيصال:</span>
+              <span class="inv-meta-label">${t('pos-refund-receipt-label')}</span>
               <span class="inv-meta-val" dir="ltr">${escHtml(receipt.receiptSeqLabel || ('C-' + receipt.receiptSeq))}</span>
             </div>
             <div class="inv-meta-row">
-              <span class="inv-meta-label">العميل:</span>
-              <span class="inv-meta-val">${escHtml(receipt.customer?.name || '—')}</span>
+              <span class="inv-meta-label">${t('refund-customer')}:</span>
+              <span class="inv-meta-val">${escHtml(receipt.customer?.name || '-')}</span>
             </div>
             <div class="inv-meta-row">
-              <span class="inv-meta-label">الباقة:</span>
-              <span class="inv-meta-val">${escHtml(receipt.packageName || '—')}</span>
+              <span class="inv-meta-label">${t('pos-refund-package-label')}</span>
+              <span class="inv-meta-val">${escHtml(receipt.packageName || '-')}</span>
             </div>
             <div class="inv-divider-thick inv-sep"></div>
             <div class="inv-meta-row">
-              <span class="inv-meta-label">المبلغ المستهلك:</span>
+              <span class="inv-meta-label">${t('pos-refund-amount-consumed')}</span>
               <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.amountConsumed || 0))}</span>
             </div>
             <div class="inv-meta-row">
-              <span class="inv-meta-label">الرصيد قبل:</span>
+              <span class="inv-meta-label">${t('pos-refund-balance-before')}</span>
               <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.balanceBefore || 0))}</span>
             </div>
             <div class="inv-meta-row">
-              <span class="inv-meta-label">الرصيد بعد:</span>
+              <span class="inv-meta-label">${t('pos-refund-balance-after')}</span>
               <span class="inv-meta-val" dir="ltr">${riyalHtml(fmtLtr(receipt.balanceAfter || 0))}</span>
             </div>
             <div class="inv-divider-thick inv-sep"></div>
@@ -3126,8 +3132,8 @@
         `;
       }
     } catch (err) {
-      showTopToast(err.message || 'حدث خطأ أثناء البحث', 'error');
-      if (els.refundSearchResult) els.refundSearchResult.innerHTML = err.message || 'حدث خطأ أثناء البحث';
+      showTopToast(err.message || t('pos-refund-search-error'), 'error');
+      if (els.refundSearchResult) els.refundSearchResult.innerHTML = err.message || t('pos-refund-search-error');
     }
   }
 
@@ -3135,13 +3141,13 @@
     if (!state.refundSearchTarget || !state.refundSearchTarget.receipt) return;
     const target = state.refundSearchTarget;
     if (target.alreadyRefunded) {
-      showTopToast('هذا الإيصال تم إرجاعه مسبقًا', 'error');
+      showTopToast(t('refund-err-already'), 'error');
       return;
     }
 
     if (els.btnRefundConfirmReceipt) {
       els.btnRefundConfirmReceipt.disabled = true;
-      els.btnRefundConfirmReceipt.innerHTML = '<span>جارٍ تنفيذ المرتجع...</span>';
+      els.btnRefundConfirmReceipt.innerHTML = '<span>' + t('pos-refund-running') + '</span>';
     }
 
     try {
@@ -3151,18 +3157,18 @@
         reason
       });
       if (!res || !res.success) {
-        throw new Error(res && res.message ? res.message : 'فشل تنفيذ المرتجع');
+        throw new Error(res && res.message ? res.message : t('pos-refund-failed'));
       }
 
       hideRefundSearchModal();
       // Open and print the refund receipt.
       showRefundReceiptModal(res, true);
     } catch (err) {
-      showTopToast(err.message || 'فشل تنفيذ المرتجع', 'error');
+      showTopToast(err.message || t('pos-refund-failed'), 'error');
     } finally {
       if (els.btnRefundConfirmReceipt) {
         els.btnRefundConfirmReceipt.disabled = false;
-        els.btnRefundConfirmReceipt.innerHTML = '<span>تأكيد المرتجع</span>';
+        els.btnRefundConfirmReceipt.innerHTML = '<span>' + t('refund-confirm') + '</span>';
       }
     }
   }
@@ -3202,7 +3208,7 @@
 
     // Title
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
-    if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
+    if (titleEl) titleEl.textContent = t('refund-receipt-title');
 
     // Ensure refund-only UI is visible
     if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = '';
@@ -3231,9 +3237,9 @@
     document.getElementById('crModalPackage').textContent = receipt.packageName || '—';
 
     // Amounts & balances
-    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المسترجع';
-    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
-    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+    if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = t('pos-refund-amount-label');
+    if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = t('pos-refund-balance-before-label');
+    if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = t('pos-refund-balance-after-label');
 
     // إخفاء صفوف الخصم في المرتجع
     var _refSubtotalEl = document.getElementById('crModalSubtotal');
@@ -4565,7 +4571,7 @@
     const isSubInv = invoice.order_type === 'subscription_new' || invoice.order_type === 'subscription_renewal';
     const subPkgName = isSubInv ? (invoice.notes || 'باقة اشتراك') : '';
     const subSvcLabel = isSubInv
-      ? (invoice.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد')
+      ? (invoice.order_type === 'subscription_renewal' ? t('pos-add-sub-tab-renew') : t('pos-add-sub-tab-new'))
       : '';
 
     const cartItems = (items && items.length > 0) ? items
@@ -4909,7 +4915,7 @@
 
     var isCNSubInvoice = inv.order_type === 'subscription_new' || inv.order_type === 'subscription_renewal';
     var cnSubPkgName = isCNSubInvoice ? (inv.notes || '') : '';
-    var cnSubSvcLabel = isCNSubInvoice ? (inv.order_type === 'subscription_renewal' ? 'تجديد اشتراك' : 'اشتراك جديد') : '';
+    var cnSubSvcLabel = isCNSubInvoice ? (inv.order_type === 'subscription_renewal' ? t('pos-add-sub-tab-renew') : t('pos-add-sub-tab-new')) : '';
     var cnDisplayItems = (items && items.length > 0) ? items
       : (isCNSubInvoice ? [{ product_name_ar: '', service_name_ar: '', quantity: 1, line_total: parseFloat(inv.total_amount || 0) }] : []);
     els.invItemsTbody.innerHTML = cnDisplayItems.map(function(it) {
@@ -6015,12 +6021,12 @@
           <button class="def-tbl-btn def-tbl-clean ${isRefunded ? 'def-tbl-disabled' : (hasCleaned ? 'def-tbl-done' : '')}"
             onclick="${cleanOnclick}" ${hasCleaned || isRefunded ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-clean')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-            ${isRefunded ? 'مرتجع' : (hasCleaned ? t('pos-deferred-badge-cleaned') : t('pos-deferred-btn-clean'))}
+            ${isRefunded ? t('refund-badge') : (hasCleaned ? t('pos-deferred-badge-cleaned') : t('pos-deferred-btn-clean'))}
           </button>
           <button class="def-tbl-btn def-tbl-deliver ${isRefunded ? 'def-tbl-disabled' : (hasDelivered ? 'def-tbl-done' : '')}"
             onclick="${deliverOnclick}" ${hasDelivered || isRefunded ? 'disabled' : ''} type="button" title="${t('pos-deferred-btn-deliver')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            ${isRefunded ? 'مرتجع' : (hasDelivered ? t('pos-deferred-badge-delivered') : t('pos-deferred-btn-deliver'))}
+            ${isRefunded ? t('refund-badge') : (hasDelivered ? t('pos-deferred-badge-delivered') : t('pos-deferred-btn-deliver'))}
           </button>
         </td>
       </tr>`;
@@ -6481,13 +6487,13 @@
 
     const titleEl = document.querySelector('#consumptionReceiptModal .cr-receipt-title');
     if (r.refund_id) {
-      if (titleEl) titleEl.textContent = 'مرتجع / REFUND';
+      if (titleEl) titleEl.textContent = t('refund-receipt-title');
       if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = '';
       if (els.crModalRefundReasonRow) els.crModalRefundReasonRow.style.display = r.refund_reason ? '' : 'none';
       if (els.crModalRefundReason) els.crModalRefundReason.textContent = r.refund_reason || '';
-      if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = 'المبلغ المسترجع';
-      if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = 'الرصيد قبل الإرجاع';
-      if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = 'الرصيد بعد الإرجاع';
+      if (els.crModalAmountLabel) els.crModalAmountLabel.textContent = t('pos-refund-amount-label');
+      if (els.crModalBalBeforeLabel) els.crModalBalBeforeLabel.textContent = t('pos-refund-balance-before-label');
+      if (els.crModalBalAfterLabel) els.crModalBalAfterLabel.textContent = t('pos-refund-balance-after-label');
     } else {
       if (titleEl) titleEl.textContent = 'إيصال استهلاك';
       if (els.crModalRefundNumRow) els.crModalRefundNumRow.style.display = 'none';

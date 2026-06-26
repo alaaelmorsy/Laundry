@@ -184,7 +184,8 @@ body {
   border: 1px solid #ccfbf1 !important;
   border-radius: 16px !important;
   box-shadow: 0 3px 16px rgba(13,148,136,0.09), 0 1px 4px rgba(0,0,0,0.05) !important;
-  overflow: hidden !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
 }
 
 /* ??? ?????? */
