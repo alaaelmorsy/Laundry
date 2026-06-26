@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 التوثيق
+    url: https://github.com/alaaelmorsy/Laundry/blob/main/PROJECT_CONSTITUTION.md
+    about: اقرأ دستور المشروع والقواعد التقنية
+  - name: 💬 نقاش عام
+    url: https://github.com/alaaelmorsy/Laundry/discussions
+    about: للأسئلة والنقاشات العامة
+  - name: 🔐 الإبلاغ عن ثغرة أمنية
+    url: https://github.com/alaaelmorsy/Laundry/blob/main/SECURITY.md
+    about: لا تفتح Issue عامة للثغرات — اتبع سياسة الأمان

@@ -1,27 +1,53 @@
+# ── Dependencies ────────────────────────────────────
 node_modules/
-ssl/
+
+# ── Environment & Secrets ────────────────────────────
 .env
 .env.*
 !.env.example
 installer/.env
+
+# ── SSL / Certificates ───────────────────────────────
+ssl/
+*.pem
+*.key
+*.crt
+*.pfx
+
+# ── Logs ─────────────────────────────────────────────
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-.DS_Store
-Thumbs.db
-*.log
 logs/
-coverage/
-.tmp/
-tmp/
+
+# ── Build Outputs ─────────────────────────────────────
 dist/
 build/
 .cache/
 .parcel-cache/
-backup/
-data/update-log.txt
-data/update-status.json
-data/whatsapp_session/
-data/logs/
+coverage/
+.tmp/
+tmp/
+
+# ── Runtime Data (writable on-device) ────────────────
 data/
+backup/
+
+# ── WhatsApp Session (sensitive) ─────────────────────
+data/whatsapp_session/
+
+# ── Generated ────────────────────────────────────────
+generated/
+
+# ── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Editors ──────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
