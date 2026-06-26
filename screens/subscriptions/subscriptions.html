@@ -2565,16 +2565,23 @@ body { background: #eef2f7 !important; }
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             الفترة الزمنية
           </div>
+          <div class="field-group">
+            <span class="date-sublabel">نوع الباقة</span>
+            <select id="newSubPeriodType" class="field-select">
+              <option value="unlimited">غير محدود</option>
+              <option value="limited">محدود</option>
+            </select>
+          </div>
           <div class="dates-grid">
-            <div>
+            <div id="newSubStartGroup" style="display:none">
               <span class="date-sublabel" data-i18n="subscriptions-label-start-date">تاريخ البداية</span>
               <input type="date" id="newSubStart" class="field-input" lang="en-US" />
               <span style="font-size:11px;color:#94a3b8;display:block;margin-top:3px" data-i18n="subscriptions-label-start-hint"></span>
             </div>
-            <div>
+            <div id="newSubEndGroup" style="display:none">
               <span class="date-sublabel" data-i18n="subscriptions-label-end-date">تاريخ الانتهاء</span>
               <input type="date" id="newSubEnd" class="field-input" lang="en-US" />
-              <span style="font-size:11px;color:#94a3b8;display:block;margin-top:3px" data-i18n="subscriptions-label-end-hint">اتركه فارغاً للمفتوحة</span>
+              <span style="font-size:11px;color:#94a3b8;display:block;margin-top:3px">يظهر فقط عند اختيار باقة محدودة</span>
             </div>
           </div>
         </div>
@@ -2652,8 +2659,20 @@ body { background: #eef2f7 !important; }
           </div>
         </div>
         <div class="field-group">
+          <label class="field-label">نوع الباقة</label>
+          <select id="renewPeriodType" class="field-select">
+            <option value="unlimited">غير محدود</option>
+            <option value="limited">محدود</option>
+          </select>
+        </div>
+        <div class="field-group" id="renewStartGroup" style="display:none">
           <label class="field-label" data-i18n="subscriptions-label-start-date">تاريخ بداية الفترة</label>
           <input type="date" id="renewStart" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+        </div>
+        <div class="field-group" id="renewEndGroup" style="display:none">
+          <label class="field-label" for="renewEndDate" data-i18n="subscriptions-label-end-date">تاريخ الانتهاء</label>
+          <input type="date" id="renewEndDate" class="field-input" lang="en-US" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-family:'Segoe UI',Arial,sans-serif" />
+          <span style="font-size:11px;color:#94a3b8">يظهر فقط عند اختيار باقة محدودة</span>
         </div>
         <div class="field-group">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">

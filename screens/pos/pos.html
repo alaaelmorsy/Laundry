@@ -281,8 +281,12 @@
             <div class="discount-label-group">
               <span class="summary-label" data-i18n="pos-discount">الخصم</span>
               <div class="disc-type-toggle">
-                <button class="disc-type-btn active" id="btnDiscFlat" data-type="flat" type="button"><span class="sar">&#xE900;</span></button>
-                <button class="disc-type-btn" id="btnDiscPct" data-type="pct" type="button">%</button>
+                <button class="disc-type-btn disc-type-btn-flat active" id="btnDiscFlat" data-type="flat" type="button" title="خصم نقدي">
+                  <span class="disc-type-btn-text"><span class="sar">&#xE900;</span> نقدي</span>
+                </button>
+                <button class="disc-type-btn disc-type-btn-pct" id="btnDiscPct" data-type="pct" type="button" title="خصم نسبة">
+                  <span class="disc-type-btn-text">% نسبة</span>
+                </button>
               </div>
               <input id="discountInput" type="number" class="discount-input"
                 min="0" step="0.01" value="" placeholder="0" />
@@ -1048,13 +1052,22 @@
           </div>
         </div>
         <div class="form-group">
+          <label class="form-label">نوع الباقة</label>
+          <div class="form-select-wrap">
+            <select id="subPeriodType" class="form-input form-select">
+              <option value="unlimited">غير محدود</option>
+              <option value="limited">محدود</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="subStartDateGroup" style="display:none">
           <label class="form-label" data-i18n="pos-add-sub-start-date">تاريخ البداية</label>
           <input type="date" id="subStartDate" class="form-input" lang="en" />
         </div>
-        <div class="form-group">
+        <div class="form-group" id="subEndDateGroup" style="display:none">
           <label class="form-label" data-i18n="pos-add-sub-end-date">تاريخ الانتهاء</label>
           <input type="date" id="subEndDate" class="form-input" lang="en" placeholder="اتركه فارغاً للباقة المفتوحة" />
-          <small class="form-hint" data-i18n="pos-add-sub-end-date-hint">اتركه فارغاً للباقة المفتوحة (بدون تاريخ انتهاء)</small>
+          <small class="form-hint">يظهر فقط عند اختيار باقة محدودة</small>
         </div>
         <!-- Renew only: carry over (hidden - always enabled) -->
         <input type="hidden" id="subCarryOver" value="true" />

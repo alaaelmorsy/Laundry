@@ -4,7 +4,7 @@
 
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Note**: This template is filled in by the `/speckit-plan` command.
 
 ## Summary
 
@@ -12,35 +12,80 @@
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: Node.js 20 (CommonJS), Vanilla JS (no framework)
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Backend**: Express.js + `mysql2/promise` — no ORM
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Frontend**: Vanilla JS + Tailwind CSS — no bundler, no TypeScript
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Storage**: MySQL/MariaDB — InnoDB, utf8mb4, `DECIMAL(10,2)` for money
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**MySQL Compatibility**: MySQL 5.7 — all SQL MUST be compatible with MySQL 5.7.
+MySQL 5.7 does NOT support window functions. Do not use `ROW_NUMBER()`, `RANK()`,
+`DENSE_RANK()`, `OVER()`, `WITH`/CTEs, `WITH RECURSIVE`, `JSON_TABLE`, `LATERAL`,
+or invisible columns. Use subqueries, derived tables, joins, temporary tables, or
+application-side logic instead.
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Target Platform**: Windows 10/11 — bundled as `.exe` via `@yao-pkg/pkg`
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Deployment**: Windows Service (NSSM) — single-tenant on-premise
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**API Pattern**: `POST /api/invoke` → `invokeHandlers.js` → `db.js`
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+**Screen Pattern**: `screens/<feature>/<feature>.{html,js,css}` (self-contained)
 
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Constraints**: No ES modules server-side. No shared components across screens.
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+### Priority Order Compliance
+
+| Priority | Concern | Impact on This Feature |
+|----------|---------|----------------------|
+| 1 | Data integrity | [describe] |
+| 2 | ZATCA compliance | [describe or N/A] |
+| 3 | Workflow stability | [describe] |
+| 4 | Backward compatibility | [describe] |
+| 5 | Correct business behavior | [describe] |
+
+### 4-Step API Checklist
+
+For each new API method, confirm all 4 steps are planned:
+
+| Method Name | db.js | invokeHandlers.js | web-api.js | Screen JS |
+|-------------|-------|-------------------|------------|-----------|
+| [methodName] | ☐ | ☐ | ☐ | ☐ |
+
+### Forbidden Changes Proximity
+
+List any forbidden change areas (PROJECT_CONSTITUTION.md §19) that this
+feature works near. If none apply, write "None".
+
+| # | Forbidden Area | Proximity | Mitigation |
+|---|---------------|-----------|------------|
+| [e.g., 7] | ZATCA submission | [near/touching] | [describe] |
+
+### MySQL 5.7 Compatibility
+
+- [ ] All SQL uses only MySQL 5.7 compatible syntax
+- [ ] No window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `OVER`) — use subqueries or derived tables
+- [ ] No `WITH`/CTEs, `WITH RECURSIVE`, `JSON_TABLE`, `LATERAL`, or invisible columns
+
+## Feature Impact Checklist
+
+*Complete this before writing any code. Re-verify before marking done.*
+
+| Area | Affected? | What Changes / What to Verify |
+|------|-----------|-------------------------------|
+| **Database** | ☐ Yes / ☐ No | New tables/columns; all migrations additive + try/catch + registered |
+| **POS Checkout** | ☐ Yes / ☐ No | `createOrder` flow intact; cart, payment, receipt unaffected |
+| **ZATCA** | ☐ Yes / ☐ No | `orders` ZATCA columns untouched; submission/retry unaffected |
+| **Subscriptions** | ☐ Yes / ☐ No | `credit_remaining >= 0`; one active period; balance deduction logic intact |
+| **Payments** | ☐ Yes / ☐ No | Invoice total formula unchanged; mixed payment tolerance intact |
+| **Printing** | ☐ Yes / ☐ No | Thermal: `76mm / margin: 0 auto`; print zone pattern intact |
+| **Backward Compatibility** | ☐ Yes / ☐ No | Existing deployments safe; no breaking schema changes; existing API callers unaffected |
 
 ## Project Structure
 
@@ -48,60 +93,27 @@
 
 ```text
 specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+├── plan.md              # This file (/speckit-plan output)
+├── research.md          # Phase 0 output
+├── data-model.md        # Phase 1 output
+├── quickstart.md        # Phase 1 output
+└── tasks.md             # Phase 2 output (/speckit-tasks)
 ```
 
-### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
+### Source Code (this feature)
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+screens/[feature-name]/
+├── [feature-name].html
+├── [feature-name].js
+└── [feature-name].css
 
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+database/db.js           — add migration function(s) + query function(s)
+server/invokeHandlers.js — add case(s) in switch(m)
+assets/web-api.js        — add api.method = (p) => invoke('method', p)
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+[Describe any additional files if needed]
 
 ## Complexity Tracking
 
@@ -109,5 +121,4 @@ directories captured above]
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| [describe] | [need] | [reason] |

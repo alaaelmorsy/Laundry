@@ -965,8 +965,10 @@
       const nameEn = escHtml(item.product_name_en || '');
       const svcAr  = escHtml(item.service_name_ar || '');
       const svcEn  = escHtml(item.service_name_en || '');
+      const merzam = escHtml(item.merzam_type_name || '');
       const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-      const serviceCell = svcAr  + (svcEn  && svcEn !== svcAr   ? `<span class="inv-td-en">${svcEn}</span>`  : '');
+      const serviceCell = svcAr  + (svcEn  && svcEn !== svcAr   ? `<span class="inv-td-en">${svcEn}</span>`  : '')
+        + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
       return `<tr>
         <td class="inv-td-name">${productCell}</td>
         <td class="inv-td-num">${item.quantity}</td>
@@ -1106,6 +1108,7 @@
       items: (items || []).map(item => ({
         productAr: item.product_name_ar || '', productEn: item.product_name_en || '',
         serviceAr: item.service_name_ar || '', serviceEn: item.service_name_en || '',
+        merzam: item.merzam_type_name || '',
         qty: item.quantity, unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0)
       })),
       subtotal: subtotalA4, discount, discountLabel: order.discount_label || '', extra, vatRate, vatAmount, total,
@@ -1390,6 +1393,7 @@
       items: (items || []).map(item => ({
         productAr: item.product_name_ar || '', productEn: item.product_name_en || '',
         serviceAr: item.service_name_ar || '', serviceEn: item.service_name_en || '',
+        merzam: item.merzam_type_name || '',
         qty: item.quantity, unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0)
       })),
       subtotal: subtotalA4, discount, discountLabel: cn.discount_label || '', extra, vatRate, vatAmount, total,
@@ -1437,8 +1441,10 @@
     return n;
   }
 
-  function printByCopies() {
-    const copies = getPrintCopies();
+  function printByCopies(options) {
+    options = options || {};
+    let copies = getPrintCopies();
+    if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
     if (copies === 0) return;
     const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
 
@@ -1593,7 +1599,7 @@
     /* Original invoice modal events */
     els.btnInvClose.addEventListener('click', () => closeModal('invoice'));
     els.invoiceViewModal.addEventListener('click', e => { if (e.target === els.invoiceViewModal) closeModal('invoice'); });
-    els.btnInvPrint.addEventListener('click', () => printByCopies());
+    els.btnInvPrint.addEventListener('click', () => printByCopies({ forceAtLeastOneCopy: true }));
     els.btnInvExportPdf.addEventListener('click', () => {
       const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
       const paperEl = paperType === 'a4' ? document.getElementById('invoicePaperA4m') : document.getElementById('invoicePaper');
@@ -1617,7 +1623,7 @@
     /* Credit note modal events */
     els.btnCnClose.addEventListener('click', () => closeModal('creditNote'));
     els.cnViewModal.addEventListener('click', e => { if (e.target === els.cnViewModal) closeModal('creditNote'); });
-    els.btnCnPrint.addEventListener('click', () => printByCopies());
+    els.btnCnPrint.addEventListener('click', () => printByCopies({ forceAtLeastOneCopy: true }));
     els.btnCnExportPdf.addEventListener('click', () => {
       const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
       const paperEl = paperType === 'a4' ? document.getElementById('cnPaperA4m') : document.getElementById('cnPaper');

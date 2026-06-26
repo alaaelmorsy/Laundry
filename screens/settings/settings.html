@@ -843,6 +843,7 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
           </span>
           <span class="tab-lbl" data-i18n="settings-update-tab">التحديثات</span>
         </button>
+
       </nav>
 
     </aside>
@@ -1722,8 +1723,16 @@ html[dir="ltr"] .payment-menu{right:0;left:0}
               <input type="checkbox" id="rcSubscriptions" />
               <span class="restore-check"></span>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--tx1)" data-i18n="settings-rc-subscriptions-label">حذف الاشتراكات وايصالات الاستهلاك</div>
-                <div style="font-size:11px;color:var(--tx4);margin-top:2px" data-i18n="settings-rc-subscriptions-desc">الاشتراكات، الدورات، إيصالات الاستهلاك، نقاط الولاء</div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف الاشتراكات</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px">الاشتراكات، الدورات، نقاط الولاء</div>
+              </div>
+            </label>
+            <label class="restore-option">
+              <input type="checkbox" id="rcConsumptionReceipts" />
+              <span class="restore-check"></span>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--tx1)">حذف إيصالات الاستهلاك</div>
+                <div style="font-size:11px;color:var(--tx4);margin-top:2px">جميع إيصالات استهلاك الاشتراكات</div>
               </div>
             </label>
             <label class="restore-option" id="rcCustomersOption" style="opacity:.5;cursor:not-allowed">

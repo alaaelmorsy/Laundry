@@ -292,6 +292,13 @@ window.addEventListener('DOMContentLoaded', async () => {
                 }
                 <span>${c.is_active ? I18N.t('customers-btn-deactivate-title') : I18N.t('customers-btn-activate-title')}</span>
               </button>
+              <button type="button" class="action-btn-label action-btn-label--teal" title="أسعار خاصة" data-action="custom-prices" data-id="${c.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+                <span>أسعار خاصة</span>
+              </button>
               <button type="button" class="action-btn-label action-btn-label--red-del" title="${I18N.t('customers-btn-delete')}" data-action="delete" data-id="${c.id}" data-name="${escHtml(c.customer_name || '')}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <polyline points="3 6 5 6 21 6"/>
@@ -312,6 +319,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       btn.addEventListener('click', () => {
         const customer = currentCustomers.find(c => c.id == btn.dataset.id);
         if (customer) openModal(customer);
+      });
+    });
+
+    customersTableBody.querySelectorAll('[data-action="custom-prices"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.id);
+        location.href = '/screens/customer-custom-prices/customer-custom-prices.html?customer_id=' + id;
       });
     });
 

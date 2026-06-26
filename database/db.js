@@ -20,6 +20,18 @@ function toSqlDateTime(v) {
   }
   return String(v).replace('T', ' ').slice(0, 19);
 }
+function normalizeExpenseDateFrom(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s} 00:00:00` : toSqlDateTime(s);
+}
+function normalizeExpenseDateTo(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s} 23:59:59` : toSqlDateTime(s);
+}
 const bcrypt = require('bcryptjs');
 
 const BCRYPT_ROUNDS = 10;
@@ -128,6 +140,7 @@ async function initialize() {
   await migrateSubscriptionInvoicesTable();
   await migrateOrderTypeColumn();
   await migrateOrderItemsNullable();
+  await migrateExpensesDateTime();
   await migrateSubscriptionPeriodsOrderId();
   await migrateOrdersRefundColumns();
   await fixSubscriptionLedgerNotesEncoding();
@@ -143,6 +156,39 @@ async function initialize() {
   await migrateOrdersCustomerDiscountAmount();
   await migrateOrdersManualDiscountAmount();
   await fixSubscriptionVatAmounts();
+  await createMerzamTypesTable();
+  await migrateMerzamEnabled();
+  await migrateMerzamOrderItems();
+  await createCustomerCustomPricesTable();
+}
+
+async function createCustomerCustomPricesTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_custom_prices (
+        id                 INT AUTO_INCREMENT PRIMARY KEY,
+        customer_id        INT NOT NULL,
+        product_id         INT NOT NULL,
+        laundry_service_id INT NOT NULL,
+        custom_price       DECIMAL(10,2) NOT NULL,
+        created_by         INT NULL,
+        updated_by         INT NULL,
+        created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ccp (customer_id, product_id, laundry_service_id),
+        KEY idx_ccp_customer   (customer_id),
+        KEY idx_ccp_product_svc (product_id, laundry_service_id),
+        CONSTRAINT fk_ccp_customer FOREIGN KEY (customer_id)
+          REFERENCES customers(id) ON DELETE CASCADE,
+        CONSTRAINT fk_ccp_product FOREIGN KEY (product_id)
+          REFERENCES products(id) ON DELETE CASCADE,
+        CONSTRAINT fk_ccp_service FOREIGN KEY (laundry_service_id)
+          REFERENCES laundry_services(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+  } catch (e) {
+    console.log('[DB] createCustomerCustomPricesTable:', e.message);
+  }
 }
 
 async function createLicenseTable() {
@@ -1230,7 +1276,7 @@ async function createTables() {
       tax_rate      DECIMAL(5,2) DEFAULT 15.00,
       tax_amount    DECIMAL(10,2) DEFAULT 0.00,
       total_amount  DECIMAL(10,2) NOT NULL,
-      expense_date  DATE NOT NULL,
+      expense_date  DATETIME NOT NULL,
       notes         TEXT DEFAULT NULL,
       created_by    VARCHAR(100) DEFAULT NULL,
       created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1943,11 +1989,11 @@ async function getAllExpenses(filters = {}) {
   }
   if (dateFrom) {
     whereClauses += ' AND expense_date >= ?';
-    params.push(dateFrom);
+    params.push(normalizeExpenseDateFrom(dateFrom));
   }
   if (dateTo) {
     whereClauses += ' AND expense_date <= ?';
-    params.push(dateTo);
+    params.push(normalizeExpenseDateTo(dateTo));
   }
 
   const baseFrom = `FROM expenses WHERE 1=1${whereClauses}`;
@@ -1988,11 +2034,11 @@ async function getExpensesSummary(filters = {}) {
   }
   if (dateFrom) {
     whereClauses += ' AND expense_date >= ?';
-    params.push(dateFrom);
+    params.push(normalizeExpenseDateFrom(dateFrom));
   }
   if (dateTo) {
     whereClauses += ' AND expense_date <= ?';
-    params.push(dateTo);
+    params.push(normalizeExpenseDateTo(dateTo));
   }
 
   const [rows] = await pool.query(`
@@ -2011,7 +2057,7 @@ async function createExpense(data) {
   const [result] = await pool.query(
     `INSERT INTO expenses (title, category, amount, is_taxable, tax_rate, tax_amount, total_amount, expense_date, notes, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [title, category, amount, isTaxable ? 1 : 0, taxRate || 15.00, taxAmount || 0, totalAmount, expenseDate, notes || null, createdBy || null]
+    [title, category, amount, isTaxable ? 1 : 0, taxRate || 15.00, taxAmount || 0, totalAmount, toSqlDateTime(expenseDate), notes || null, createdBy || null]
   );
   return result.insertId;
 }
@@ -2020,7 +2066,7 @@ async function updateExpense(data) {
   const { id, title, category, amount, isTaxable, taxRate, taxAmount, totalAmount, expenseDate, notes } = data;
   await pool.query(
     `UPDATE expenses SET title=?, category=?, amount=?, is_taxable=?, tax_rate=?, tax_amount=?, total_amount=?, expense_date=?, notes=? WHERE id=?`,
-    [title, category, amount, isTaxable ? 1 : 0, taxRate || 15.00, taxAmount || 0, totalAmount, expenseDate, notes || null, id]
+    [title, category, amount, isTaxable ? 1 : 0, taxRate || 15.00, taxAmount || 0, totalAmount, toSqlDateTime(expenseDate), notes || null, id]
   );
 }
 
@@ -2230,7 +2276,7 @@ async function getProducts(filters = {}) {
   if (page && pageSize) {
     const countSql = `SELECT COUNT(*) as total FROM products p WHERE 1=1${whereClauses}`;
     const dataSql = `
-      SELECT p.id, p.name_ar, p.name_en, p.is_active, p.created_at, p.sort_order,
+      SELECT p.id, p.name_ar, p.name_en, p.is_active, p.merzam_enabled, p.created_at, p.sort_order,
         (p.image_blob IS NOT NULL) AS has_image,
         COUNT(ppl.id) AS price_line_count
       FROM products p
@@ -2256,7 +2302,7 @@ async function getProducts(filters = {}) {
   }
 
   const [rows] = await pool.query(
-    `SELECT p.id, p.name_ar, p.name_en, p.is_active, p.created_at, p.sort_order,
+    `SELECT p.id, p.name_ar, p.name_en, p.is_active, p.merzam_enabled, p.created_at, p.sort_order,
        (p.image_blob IS NOT NULL) AS has_image,
        COUNT(ppl.id) AS price_line_count
      FROM products p
@@ -2271,7 +2317,7 @@ async function getProducts(filters = {}) {
 
 async function getProductById(id) {
   const [[product]] = await pool.query(
-    'SELECT id, name_ar, name_en, is_active, created_at, sort_order, image_mime FROM products WHERE id=?',
+    'SELECT id, name_ar, name_en, is_active, merzam_enabled, created_at, sort_order, image_mime FROM products WHERE id=?',
     [id]
   );
   if (!product) return null;
@@ -2301,6 +2347,7 @@ async function saveProduct(data) {
     nameAr,
     nameEn,
     isActive,
+    merzamEnabled,
     priceLines,
     imageGzipBuffer,
     imageMime,
@@ -2308,6 +2355,7 @@ async function saveProduct(data) {
   } = data;
   const lines = Array.isArray(priceLines) ? priceLines : [];
   const nameEnVal = nameEn && String(nameEn).trim() ? String(nameEn).trim() : null;
+  const merzam = merzamEnabled ? 1 : 0;
 
   const conn = await pool.getConnection();
   try {
@@ -2322,19 +2370,19 @@ async function saveProduct(data) {
       if (touchImage) {
         if (clearImage === true) {
           await conn.query(
-            'UPDATE products SET name_ar=?, name_en=?, is_active=?, image_blob=NULL, image_mime=NULL WHERE id=?',
-            [nameAr, nameEnVal, active, productId]
+            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=NULL, image_mime=NULL WHERE id=?',
+            [nameAr, nameEnVal, active, merzam, productId]
           );
         } else {
           await conn.query(
-            'UPDATE products SET name_ar=?, name_en=?, is_active=?, image_blob=?, image_mime=? WHERE id=?',
-            [nameAr, nameEnVal, active, imageGzipBuffer, imageMime || 'application/octet-stream', productId]
+            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=?, image_mime=? WHERE id=?',
+            [nameAr, nameEnVal, active, merzam, imageGzipBuffer, imageMime || 'application/octet-stream', productId]
           );
         }
       } else {
         await conn.query(
-          'UPDATE products SET name_ar=?, name_en=?, is_active=? WHERE id=?',
-          [nameAr, nameEnVal, active, productId]
+          'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=? WHERE id=?',
+          [nameAr, nameEnVal, active, merzam, productId]
         );
       }
     } else {
@@ -2344,8 +2392,8 @@ async function saveProduct(data) {
         'SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM products'
       );
       const [ins] = await conn.query(
-        'INSERT INTO products (name_ar, name_en, image_blob, image_mime, is_active, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [nameAr, nameEnVal, blob, mime, active, m.n]
+        'INSERT INTO products (name_ar, name_en, image_blob, image_mime, is_active, merzam_enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [nameAr, nameEnVal, blob, mime, active, merzam, m.n]
       );
       productId = ins.insertId;
     }
@@ -4220,7 +4268,8 @@ async function generateOrderNumber() {
 async function getPosProducts() {
   const [products] = await pool.query(`
     SELECT p.id, p.name_ar, p.name_en, p.sort_order, p.image_mime,
-           (p.image_blob IS NOT NULL AND LENGTH(p.image_blob) > 0) AS has_image
+           (p.image_blob IS NOT NULL AND LENGTH(p.image_blob) > 0) AS has_image,
+           p.merzam_enabled
     FROM products p
     WHERE p.is_active = 1
     ORDER BY p.sort_order ASC, p.id ASC
@@ -4432,9 +4481,27 @@ async function getConsumptionReceiptById(receiptId) {
     WHERE cr.id = ?
   `, [receiptId]);
   if (!row) return null;
+  let items = row.items_json ? (typeof row.items_json === 'string' ? JSON.parse(row.items_json) : row.items_json) : [];
+  if (row.order_id && Array.isArray(items) && items.length) {
+    try {
+      const [orderItems] = await pool.query(
+        `SELECT id, merzam_type_name
+           FROM order_items
+          WHERE order_id = ?
+          ORDER BY id ASC`,
+        [row.order_id]
+      );
+      if (Array.isArray(orderItems) && orderItems.length) {
+        items = items.map((it, idx) => ({
+          ...it,
+          merzamTypeName: it.merzamTypeName || it.merzam_type_name || (orderItems[idx] ? orderItems[idx].merzam_type_name || null : null)
+        }));
+      }
+    } catch (_) {}
+  }
   return {
     ...row,
-    items: row.items_json ? (typeof row.items_json === 'string' ? JSON.parse(row.items_json) : row.items_json) : []
+    items
   };
 }
 
@@ -4787,15 +4854,21 @@ async function createRefund({ originalOrderId, reason, createdBy }) {
 
     const refundNumber = await generateRefundNumber();
     const totalAmount = Number(original.total_amount) || 0;
+    const originalPaymentMethod = String(original.payment_method || 'cash');
+    const originalPaidCash = Math.round(Number(original.paid_cash || 0) * 100) / 100;
+    const originalPaidCard = Math.round(Number(original.paid_card || 0) * 100) / 100;
+    const refundPaidCash = originalPaymentMethod === 'mixed' ? -originalPaidCash : 0;
+    const refundPaidCard = originalPaymentMethod === 'mixed' ? -originalPaidCard : 0;
+    const refundPaymentMethod = originalPaymentMethod === 'mixed' ? 'mixed' : originalPaymentMethod;
 
     const [insertRes] = await conn.query(
       `INSERT INTO orders (
         order_number, customer_id, subscription_period_id,
         subtotal, discount_amount, extra_amount, vat_rate, vat_amount, total_amount,
-        paid_amount, remaining_amount,
+        paid_amount, remaining_amount, paid_cash, paid_card,
         payment_method, payment_status, notes, created_by, created_at,
         is_refund, refund_of_order_id, refund_reason, refunded_at, refunded_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, ?, ?, NOW(), ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, ?, ?, NOW(), ?)`,
       [
         refundNumber,
         original.customer_id,
@@ -4807,7 +4880,9 @@ async function createRefund({ originalOrderId, reason, createdBy }) {
         -(Number(original.vat_amount) || 0),
         -totalAmount,
         -totalAmount, 0,
-        original.payment_method, 'paid',
+        refundPaidCash,
+        refundPaidCard,
+        refundPaymentMethod, 'paid',
         `مرتجع إيصال رقم ${original.order_number}`,
         createdBy || null,
         original.id,
@@ -5080,15 +5155,17 @@ async function createOrder({ orderNumber, customerId, items, subtotal, discountA
       productNameAr: it.productNameAr || null,
       productNameEn: it.productNameEn || null,
       serviceNameAr: it.serviceNameAr || null,
-      serviceNameEn: it.serviceNameEn || null
+      serviceNameEn: it.serviceNameEn || null,
+      merzamTypeName: it.merzamTypeName || null
     }));
 
     for (const item of (items || [])) {
       await conn.query(
         `INSERT INTO order_items
-           (order_id, product_id, laundry_service_id, quantity, unit_price, line_total)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.productId || null, item.serviceId || null, item.quantity, item.unitPrice, item.lineTotal]
+           (order_id, product_id, laundry_service_id, quantity, unit_price, line_total, merzam_type_id, merzam_type_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, item.productId || null, item.serviceId || null, item.quantity, item.unitPrice, item.lineTotal,
+         item.merzamTypeId || null, item.merzamTypeName || null]
       );
     }
 
@@ -5371,7 +5448,8 @@ async function getOrderById(id) {
            COALESCE(oi.product_name_ar, p.name_ar) AS product_name_ar,
            COALESCE(oi.product_name_en, p.name_en) AS product_name_en,
            COALESCE(oi.service_name_ar, ls.name_ar) AS service_name_ar,
-           COALESCE(oi.service_name_en, ls.name_en) AS service_name_en
+           COALESCE(oi.service_name_en, ls.name_en) AS service_name_en,
+           oi.merzam_type_name
     FROM order_items oi
     LEFT JOIN products p ON p.id = oi.product_id
     LEFT JOIN laundry_services ls ON ls.id = oi.laundry_service_id
@@ -5460,6 +5538,22 @@ async function migrateOrdersDeferredColumns() {
     }
   } catch (e) {
     console.error('migrateOrdersDeferredColumns:', e);
+  }
+}
+
+async function migrateExpensesDateTime() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'expenses'`
+    );
+    const colMap = new Map(cols.map(c => [c.COLUMN_NAME, String(c.COLUMN_TYPE).toLowerCase()]));
+    const expenseDateType = colMap.get('expense_date') || '';
+    if (expenseDateType === 'date') {
+      await pool.query(`ALTER TABLE expenses MODIFY COLUMN expense_date DATETIME NOT NULL`);
+    }
+  } catch (e) {
+    console.error('migrateExpensesDateTime:', e);
   }
 }
 
@@ -7667,8 +7761,6 @@ async function expireLoyaltyPoints() {
 async function getZakatReport({ dateFrom, dateTo }) {
   const fromTs = dateFrom.includes('T') ? dateFrom.replace('T', ' ') + ':00' : `${dateFrom} 00:00:00`;
   const toTs   = dateTo.includes('T')   ? dateTo.replace('T', ' ')   + ':00' : `${dateTo} 23:59:59`;
-  const fromDate = dateFrom.substring(0, 10);
-  const toDate   = dateTo.substring(0, 10);
 
   const [ordersRows] = await pool.query(
     `SELECT o.id, o.invoice_seq, o.order_number,
@@ -7702,11 +7794,21 @@ async function getZakatReport({ dateFrom, dateTo }) {
      FROM expenses
      WHERE expense_date BETWEEN ? AND ?
      ORDER BY expense_date ASC`,
-    [fromDate, toDate]
+    [fromTs, toTs]
   );
 
-  const orders      = ordersRows.map(r => ({ ...r, subtotal: Number(r.subtotal), vat_amount: Number(r.vat_amount), total_amount: Number(r.total_amount) }));
-  const creditNotes = cnRows.map(r => ({ ...r, subtotal: Number(r.subtotal), vat_amount: Number(r.vat_amount), total_amount: Number(r.total_amount) }));
+  const orders      = ordersRows.map(r => ({
+    ...r,
+    subtotal:     Math.round((Number(r.total_amount) - Number(r.vat_amount)) * 100) / 100,
+    vat_amount:   Number(r.vat_amount),
+    total_amount: Number(r.total_amount),
+  }));
+  const creditNotes = cnRows.map(r => ({
+    ...r,
+    subtotal:     Math.round((Number(r.total_amount) - Number(r.vat_amount)) * 100) / 100,
+    vat_amount:   Number(r.vat_amount),
+    total_amount: Number(r.total_amount),
+  }));
   const expenses    = expRows.map(r => ({ ...r, amount: Number(r.amount), tax_amount: Number(r.tax_amount), total_amount: Number(r.total_amount) }));
 
   const ordersSubtotal      = Math.round(orders.reduce((s, r) => s + r.subtotal,      0) * 100) / 100;
@@ -8016,6 +8118,275 @@ async function getCustomerAccountStatement({ customerId, dateFrom, dateTo }) {
   };
 }
 
+// ── Merzam Types ─────────────────────────────────────────────────────────────
+
+async function createMerzamTypesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS merzam_types (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      name_ar    VARCHAR(100) NOT NULL,
+      name_en    VARCHAR(100) DEFAULT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      is_active  TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // seed defaults if table is empty
+  const [[{ cnt }]] = await pool.query('SELECT COUNT(*) AS cnt FROM merzam_types');
+  if (cnt === 0) {
+    const defaults = [
+      ['مزرام', 'Merzam', 1],
+      ['مربع', 'Moraba3', 2],
+      ['بدون مزرام', 'Bdon Merzam', 3],
+      ['قطري', 'Qatary', 4],
+      ['كويتي', 'Kuwaity', 5],
+      ['مزرام مقلوب', 'Merzam Maklob', 6],
+      ['مثلث', 'Triangle', 7],
+      ['دوبل مزرام', 'Double Merzam', 8],
+    ];
+    for (const [nameAr, nameEn, sortOrder] of defaults) {
+      await pool.query(
+        'INSERT IGNORE INTO merzam_types (name_ar, name_en, sort_order) VALUES (?, ?, ?)',
+        [nameAr, nameEn, sortOrder]
+      );
+    }
+  }
+}
+
+async function migrateMerzamEnabled() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'products' AND column_name = 'merzam_enabled'`
+    );
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE products ADD COLUMN merzam_enabled TINYINT(1) NOT NULL DEFAULT 0`);
+    }
+  } catch (e) {
+    console.error('migrateMerzamEnabled:', e);
+  }
+}
+
+async function migrateMerzamOrderItems() {
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'order_items' AND column_name = 'merzam_type_id'`
+    );
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE order_items ADD COLUMN merzam_type_id INT NULL`);
+    }
+  } catch (e) {
+    console.error('migrateMerzamOrderItems merzam_type_id:', e);
+  }
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'order_items' AND column_name = 'merzam_type_name'`
+    );
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE order_items ADD COLUMN merzam_type_name VARCHAR(100) NULL`);
+    }
+  } catch (e) {
+    console.error('migrateMerzamOrderItems merzam_type_name:', e);
+  }
+}
+
+async function getMerzamTypes() {
+  const [rows] = await pool.query(
+    `SELECT id, name_ar, name_en, sort_order FROM merzam_types WHERE is_active = 1 ORDER BY sort_order ASC, id ASC`
+  );
+  return rows;
+}
+
+async function saveMerzamType({ id, nameAr, nameEn, sortOrder, isActive }) {
+  const nameEnVal = nameEn && String(nameEn).trim() ? String(nameEn).trim() : null;
+  const active = isActive !== undefined ? (isActive ? 1 : 0) : 1;
+  const order = Number(sortOrder) || 0;
+  if (id) {
+    await pool.query(
+      'UPDATE merzam_types SET name_ar=?, name_en=?, sort_order=?, is_active=? WHERE id=?',
+      [nameAr, nameEnVal, order, active, Number(id)]
+    );
+    return { id: Number(id) };
+  } else {
+    const [result] = await pool.query(
+      'INSERT INTO merzam_types (name_ar, name_en, sort_order, is_active) VALUES (?, ?, ?, ?)',
+      [nameAr, nameEnVal, order, active]
+    );
+    return { id: result.insertId };
+  }
+}
+
+async function deleteMerzamType(id) {
+  await pool.query('DELETE FROM merzam_types WHERE id = ?', [Number(id)]);
+}
+
+// ── Customer Custom Prices ────────────────────────────────────────────────────
+
+async function getCustomPricesScreenData(customerId) {
+  const id = Number(customerId);
+
+  // Validate customer exists
+  const [custRows] = await pool.query(
+    'SELECT id, customer_name AS name, phone FROM customers WHERE id = ? LIMIT 1',
+    [id]
+  );
+  if (!custRows.length) return { success: false, message: 'العميل غير موجود' };
+  const customer = custRows[0];
+
+  // JOIN: products × product_price_lines × laundry_services LEFT JOIN customer_custom_prices
+  const [rows] = await pool.query(`
+    SELECT
+      p.id           AS product_id,
+      p.name_ar,
+      p.name_en,
+      p.sort_order   AS product_sort,
+      ppl.laundry_service_id,
+      ls.name_ar     AS service_name_ar,
+      ls.name_en     AS service_name_en,
+      ls.sort_order  AS service_sort,
+      ppl.price      AS general_price,
+      ccp.custom_price
+    FROM products p
+    JOIN product_price_lines ppl ON ppl.product_id = p.id
+    JOIN laundry_services ls ON ls.id = ppl.laundry_service_id AND ls.is_active = 1
+    LEFT JOIN customer_custom_prices ccp
+      ON ccp.product_id = p.id
+      AND ccp.laundry_service_id = ppl.laundry_service_id
+      AND ccp.customer_id = ?
+    WHERE p.is_active = 1
+    ORDER BY p.sort_order, p.id, ls.sort_order, ls.id
+  `, [id]);
+
+  // Group by product in JS
+  const productMap = {};
+  const productOrder = [];
+  rows.forEach(function (r) {
+    if (!productMap[r.product_id]) {
+      productMap[r.product_id] = {
+        id: r.product_id,
+        name_ar: r.name_ar,
+        name_en: r.name_en,
+        services: []
+      };
+      productOrder.push(r.product_id);
+    }
+    productMap[r.product_id].services.push({
+      laundryServiceId: r.laundry_service_id,
+      serviceName_ar: r.service_name_ar,
+      serviceName_en: r.service_name_en,
+      generalPrice: parseFloat(r.general_price),
+      customPrice: r.custom_price !== null ? parseFloat(r.custom_price) : null
+    });
+  });
+
+  const products = productOrder.map(function (pid) {
+    const p = productMap[pid];
+    const customCount = p.services.filter(function (s) { return s.customPrice !== null; }).length;
+    return Object.assign({}, p, { totalServices: p.services.length, customCount: customCount });
+  });
+
+  // Summary
+  let totalServices = 0;
+  let customServices = 0;
+  let totalDiffPct = 0;
+  let diffCount = 0;
+  products.forEach(function (p) {
+    totalServices += p.totalServices;
+    customServices += p.customCount;
+    p.services.forEach(function (s) {
+      if (s.customPrice !== null && s.generalPrice > 0 && s.customPrice < s.generalPrice) {
+        totalDiffPct += (s.generalPrice - s.customPrice) / s.generalPrice * 100;
+        diffCount++;
+      }
+    });
+  });
+
+  return {
+    success: true,
+    customer: customer,
+    products: products,
+    summary: {
+      totalServices: totalServices,
+      customServices: customServices,
+      averageDifferencePercent: diffCount > 0 ? parseFloat((totalDiffPct / diffCount).toFixed(2)) : 0
+    }
+  };
+}
+
+async function saveCustomerCustomPrices(customerId, changes, deletes, userId) {
+  const cid = Number(customerId);
+  const uid = userId ? Number(userId) : null;
+
+  // Validate all (productId, laundryServiceId) pairs exist in product_price_lines
+  const allPairs = (changes || []).concat(deletes || []);
+  for (const pair of allPairs) {
+    const [check] = await pool.query(
+      'SELECT 1 FROM product_price_lines WHERE product_id = ? AND laundry_service_id = ? LIMIT 1',
+      [Number(pair.productId), Number(pair.laundryServiceId)]
+    );
+    if (!check.length) {
+      return { success: false, message: 'خط سعر غير صحيح: صنف ' + pair.productId + ' / خدمة ' + pair.laundryServiceId };
+    }
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    let saved = 0;
+    for (const c of (changes || [])) {
+      const price = parseFloat(c.customPrice);
+      if (isNaN(price) || price < 0) continue;
+      await conn.query(`
+        INSERT INTO customer_custom_prices
+          (customer_id, product_id, laundry_service_id, custom_price, created_by, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          custom_price = VALUES(custom_price),
+          updated_by   = VALUES(updated_by),
+          updated_at   = CURRENT_TIMESTAMP
+      `, [cid, Number(c.productId), Number(c.laundryServiceId), price, uid, uid]);
+      saved++;
+    }
+
+    let deleted = 0;
+    for (const d of (deletes || [])) {
+      const [res] = await conn.query(
+        'DELETE FROM customer_custom_prices WHERE customer_id = ? AND product_id = ? AND laundry_service_id = ?',
+        [cid, Number(d.productId), Number(d.laundryServiceId)]
+      );
+      deleted += res.affectedRows;
+    }
+
+    await conn.commit();
+    return { success: true, saved: saved, deleted: deleted };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getCustomerPosCustomPrices(customerId) {
+  const id = Number(customerId);
+  const [rows] = await pool.query(
+    'SELECT product_id, laundry_service_id, custom_price FROM customer_custom_prices WHERE customer_id = ?',
+    [id]
+  );
+  const prices = {};
+  rows.forEach(function (r) {
+    prices[r.product_id + ':' + r.laundry_service_id] = {
+      productId: r.product_id,
+      laundryServiceId: r.laundry_service_id,
+      customPrice: parseFloat(r.custom_price)
+    };
+  });
+  return { success: true, prices: prices };
+}
+
 module.exports = {
   initialize, findUser, query, buildAllPermissions,
   getAllUsers, createUser, updateUser, toggleUserStatus, deleteUser,
@@ -8089,25 +8460,31 @@ module.exports = {
   registerAccount, checkTrialAccess,
   // License
   isSerialLicensed,
+  // Merzam Types
+  getMerzamTypes, saveMerzamType, deleteMerzamType,
+  // Customer Custom Prices
+  getCustomPricesScreenData, saveCustomerCustomPrices, getCustomerPosCustomPrices,
 };
 
 // ── System Restore ───────────────────────────────────────────────────────────
 
-async function systemRestore({ invoices, subscriptions, customers, services, expenses, garments } = {}) {
-  const invoiceTables      = ['credit_note_items','credit_notes','refunds','subscription_invoices','order_items','invoice_payments','orders'];
-  const subscriptionTables = ['loyalty_transactions','consumption_receipts','subscription_ledger','subscription_periods','customer_subscriptions'];
-  const customerTables     = ['customers'];
-  const serviceTables      = ['product_price_lines','products','offers','prepaid_packages','laundry_services'];
-  const expenseTables      = ['expenses'];
-  const garmentTables      = ['hangers'];
+async function systemRestore({ invoices, subscriptions, consumptionReceipts, customers, services, expenses, garments } = {}) {
+  const invoiceTables             = ['credit_note_items','credit_notes','refunds','subscription_invoices','order_items','invoice_payments','orders'];
+  const subscriptionTables        = ['loyalty_transactions','subscription_ledger','subscription_periods','customer_subscriptions'];
+  const consumptionReceiptTables  = ['consumption_receipts'];
+  const customerTables            = ['customers'];
+  const serviceTables             = ['product_price_lines','products','offers','prepaid_packages','laundry_services'];
+  const expenseTables             = ['expenses'];
+  const garmentTables             = ['hangers'];
 
   const selected = [];
-  if (invoices)      invoiceTables.forEach(t      => selected.push(t));
-  if (subscriptions) subscriptionTables.forEach(t => selected.push(t));
-  if (customers)     customerTables.forEach(t     => selected.push(t));
-  if (services)      serviceTables.forEach(t      => selected.push(t));
-  if (expenses)      expenseTables.forEach(t      => selected.push(t));
-  if (garments)      garmentTables.forEach(t      => selected.push(t));
+  if (invoices)             invoiceTables.forEach(t            => selected.push(t));
+  if (subscriptions)        subscriptionTables.forEach(t       => selected.push(t));
+  if (consumptionReceipts)  consumptionReceiptTables.forEach(t => selected.push(t));
+  if (customers)            customerTables.forEach(t           => selected.push(t));
+  if (services)             serviceTables.forEach(t            => selected.push(t));
+  if (expenses)             expenseTables.forEach(t            => selected.push(t));
+  if (garments)             garmentTables.forEach(t            => selected.push(t));
 
   if (selected.length === 0) return { success: true, deleted: [] };
 
@@ -8238,9 +8615,10 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   }
 
   const dateOrdersWhere = dateWhere.replace(/\bcreated_at\b/g, 'o.created_at');
-  // استثناء الفواتير التي سُدِّدت عبر invoice_payments لأن مدفوعاتها تُحسب في partialWhere
   const invoicesWhere   = `WHERE 1=1${dateOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription') AND o.order_type NOT IN ('subscription_new','subscription_renewal') AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex WHERE ip_ex.order_id = o.id)`;
-  const pmWhere         = `WHERE 1=1${dateOrdersWhere} AND NOT EXISTS (SELECT 1 FROM credit_notes cn_chk WHERE cn_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM refunds rf_chk WHERE rf_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex2 WHERE ip_ex2.order_id = o.id)`;
+  // Allow refunded orders to remain in payment-method aggregation so the negative
+  // refund row offsets the original paid invoice in the same report window.
+  const pmWhere         = `WHERE 1=1${dateOrdersWhere} AND NOT EXISTS (SELECT 1 FROM credit_notes cn_chk WHERE cn_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex2 WHERE ip_ex2.order_id = o.id)`;
   const invoicesParams  = [...params];
   const pmParams        = [...params];
   const expWhere        = `WHERE 1=1${dateWhere.replace(/\bcreated_at\b/g, 'expense_date')}`;
@@ -8305,13 +8683,13 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
         o.paid_cash,
         o.paid_cash - o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
-      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_cash > 0
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND (o.paid_cash > 0 OR COALESCE(o.is_refund, 0) = 1)
       UNION ALL
       SELECT 'card', 1,
         o.paid_card,
         o.paid_card - o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
-      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_card > 0
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND (o.paid_card > 0 OR COALESCE(o.is_refund, 0) = 1)
     ) AS pm_rows
     GROUP BY method
     ORDER BY total_after_tax DESC
@@ -8471,6 +8849,40 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
   const netTax       = totalNetTax + subTax - expTax + partialTax;
   const netAfterTax  = totalNetAfterTax + subAfterTax - expAfterTax + partialAfterTax;
 
+  // إشعارات دائنة صدرت في الفترة لفواتير آجلة مدفوعة → لخصم مبالغها من طرق الدفع
+  const cnOffsetDateWhere = dateWhere.replace(/\bcreated_at\b/g, 'cn.created_at');
+  const [cnPaymentOffsets] = await pool.query(`
+    SELECT method,
+      COALESCE(SUM(deduct_amount), 0) AS deduct_amount,
+      COALESCE(SUM(deduct_tax), 0)    AS deduct_tax
+    FROM (
+      SELECT ip.payment_method AS method,
+        ip.payment_amount AS deduct_amount,
+        ip.payment_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)) AS deduct_tax
+      FROM credit_notes cn
+      INNER JOIN orders o ON o.id = cn.original_order_id
+      INNER JOIN invoice_payments ip ON ip.order_id = o.id
+      WHERE 1=1${cnOffsetDateWhere} AND ip.payment_method != 'mixed'
+      UNION ALL
+      SELECT 'cash',
+        ip.cash_amount,
+        ip.cash_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM credit_notes cn
+      INNER JOIN orders o ON o.id = cn.original_order_id
+      INNER JOIN invoice_payments ip ON ip.order_id = o.id
+      WHERE 1=1${cnOffsetDateWhere} AND ip.payment_method = 'mixed' AND ip.cash_amount > 0
+      UNION ALL
+      SELECT 'card',
+        ip.card_amount,
+        ip.card_amount*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
+      FROM credit_notes cn
+      INNER JOIN orders o ON o.id = cn.original_order_id
+      INNER JOIN invoice_payments ip ON ip.order_id = o.id
+      WHERE 1=1${cnOffsetDateWhere} AND ip.payment_method = 'mixed' AND ip.card_amount > 0
+    ) AS cn_offsets
+    GROUP BY method
+  `, [...params, ...params, ...params]);
+
   // دمج الدفعات الجزئية مع طرق الدفع
   const pmMap = new Map(paymentMethods.map(r => [r.method, {
     method: r.method, count: Number(r.count),
@@ -8495,6 +8907,20 @@ async function getReportData({ dateFrom = '', dateTo = '' } = {}) {
       });
     }
   }
+  // خصم مدفوعات الفواتير الآجلة التي صدرت لها إشعارات دائنة في نفس الفترة
+  for (const off of cnPaymentOffsets) {
+    const m = off.method || 'cash';
+    const deduct = Number(off.deduct_amount || 0);
+    const deductTax = Number(off.deduct_tax || 0);
+    if (deduct === 0) continue;
+    if (pmMap.has(m)) {
+      const ex = pmMap.get(m);
+      ex.totalAfterTax  = Math.round((ex.totalAfterTax  - deduct) * 100) / 100;
+      ex.totalTax       = Math.round((ex.totalTax       - deductTax) * 100) / 100;
+      ex.totalBeforeTax = Math.round((ex.totalBeforeTax - (deduct - deductTax)) * 100) / 100;
+    }
+  }
+
   // أضف المبلغ الآجل المتبقي إلى بطاقة الفواتير الآجلة
   const drCount = Number(deferredRemainingRow.cnt || 0);
   const drAfterTax = Number(deferredRemainingRow.total_after_tax || 0);
@@ -8565,7 +8991,9 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
 
   const dateOrdersWhere = dateWhere.replace(/\bcreated_at\b/g, 'o.created_at');
   const invoicesWhere   = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND o.payment_status = 'paid' AND COALESCE(o.payment_method,'cash') NOT IN ('credit','subscription') AND o.order_type NOT IN ('subscription_new','subscription_renewal') AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex WHERE ip_ex.order_id = o.id)`;
-  const pmWhere         = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND NOT EXISTS (SELECT 1 FROM credit_notes cn_chk WHERE cn_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM refunds rf_chk WHERE rf_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex2 WHERE ip_ex2.order_id = o.id)`;
+  // Keep refunded orders in the payment aggregation so refund rows can net out
+  // the original invoice's payment method totals.
+  const pmWhere         = `WHERE 1=1${dateOrdersWhere}${userOrdersWhere} AND NOT EXISTS (SELECT 1 FROM credit_notes cn_chk WHERE cn_chk.original_order_id = o.id) AND NOT EXISTS (SELECT 1 FROM invoice_payments ip_ex2 WHERE ip_ex2.order_id = o.id)`;
   const invoicesParams  = [...params];
   const pmParams        = [...params];
   if (userId) { invoicesParams.push(userId); pmParams.push(userId); }
@@ -8633,13 +9061,13 @@ async function getWorkerReportData({ dateFrom = '', dateTo = '', userId = '' } =
         o.paid_cash,
         o.paid_cash - o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
-      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_cash > 0
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND (o.paid_cash > 0 OR COALESCE(o.is_refund, 0) = 1)
       UNION ALL
       SELECT 'card', 1,
         o.paid_card,
         o.paid_card - o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
-      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND o.paid_card > 0
+      FROM orders o ${pmWhere} AND o.payment_method = 'mixed' AND (o.paid_card > 0 OR COALESCE(o.is_refund, 0) = 1)
     ) AS pm_rows
     GROUP BY method
     ORDER BY total_after_tax DESC
@@ -8944,6 +9372,8 @@ async function getAllInvoicesReport({ dateFrom = '', dateTo = '', customerId = '
     ORDER BY cr.id DESC
   `, crParams);
 
+  // Keep refunded orders in payment-method totals so the refund row can offset
+  // the original paid invoice in the same report window.
   const pmBaseWhere = `WHERE 1=1${dateWhere}${customerWhere}`;
   const [paymentMethods] = await pool.query(`
     SELECT method, COUNT(*) AS count,
@@ -8968,14 +9398,14 @@ async function getAllInvoicesReport({ dateFrom = '', dateTo = '', customerId = '
         o.paid_cash - o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_cash*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
-      ${pmBaseWhere} AND o.payment_method = 'mixed' AND o.paid_cash > 0
+      ${pmBaseWhere} AND o.payment_method = 'mixed' AND (o.paid_cash > 0 OR COALESCE(o.is_refund, 0) = 1)
       UNION ALL
       SELECT 'card', 1,
         o.paid_card,
         o.paid_card - o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0)),
         o.paid_card*IFNULL(o.vat_rate,0)/(100+IFNULL(o.vat_rate,0))
       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
-      ${pmBaseWhere} AND o.payment_method = 'mixed' AND o.paid_card > 0
+      ${pmBaseWhere} AND o.payment_method = 'mixed' AND (o.paid_card > 0 OR COALESCE(o.is_refund, 0) = 1)
     ) AS pm_rows
     GROUP BY method
     ORDER BY total_after_tax DESC

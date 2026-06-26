@@ -1,10 +1,6 @@
 (function () {
   'use strict';
 
-  /* ═══════════════════════════════════════════════════
-     Global Sidebar Navigation — sidebar.js
-     ═══════════════════════════════════════════════════ */
-
   var SIDEBAR_ITEMS = [
     {
       group: 'gsb-section-main',
@@ -37,6 +33,13 @@
           label: { ar: 'العملاء', en: 'Customers' },
           permission: 'customers',
           svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+        },
+        {
+          screen: 'customer-custom-prices',
+          labelKey: 'gsb-nav-customer-custom-prices',
+          label: { ar: 'الأسعار المخصصة', en: 'Custom Prices' },
+          permission: 'customer_custom_prices',
+          svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
         },
         {
           screen: 'reports',
@@ -147,18 +150,19 @@
     }
   ];
 
-  /* ── helpers ───────────────────────────────────── */
   function getLang() {
     try {
       return (document.documentElement.lang || 'ar').substring(0, 2);
-    } catch (e) { return 'ar'; }
+    } catch (e) {
+      return 'ar';
+    }
   }
 
   function getLabel(item) {
     var lang = getLang();
     if (window.I18N && window.I18N.t) {
-      var t = window.I18N.t(item.labelKey);
-      if (t && t !== item.labelKey) return t;
+      var translated = window.I18N.t(item.labelKey);
+      if (translated && translated !== item.labelKey) return translated;
     }
     return item.label[lang] || item.label.ar;
   }
@@ -166,30 +170,57 @@
   function getGroupLabel(group) {
     var lang = getLang();
     if (window.I18N && window.I18N.t) {
-      var t = window.I18N.t(group.group);
-      if (t && t !== group.group) return t;
+      var translated = window.I18N.t(group.group);
+      if (translated && translated !== group.group) return translated;
     }
     return group.groupLabel[lang] || group.groupLabel.ar;
   }
 
+  function getSidebarTitle() {
+    if (window.I18N && window.I18N.t) {
+      var translated = window.I18N.t('gsb-menu');
+      if (translated && translated !== 'gsb-menu') return translated;
+    }
+    return getLang() === 'en' ? 'Menu' : 'القائمة';
+  }
+
+  function getToggleTitle() {
+    if (window.I18N && window.I18N.t) {
+      var translated = window.I18N.t('gsb-toggle');
+      if (translated && translated !== 'gsb-toggle') return translated;
+    }
+    return getLang() === 'en' ? 'Toggle sidebar' : 'طي القائمة';
+  }
+
   function isActive(screen) {
-    var p = location.pathname.replace(/\\/g, '/');
-    return p.indexOf('/screens/' + screen + '/') !== -1 ||
-           p.indexOf('/screens/' + screen + '.html') !== -1;
+    var path = location.pathname.replace(/\\/g, '/');
+    return path.indexOf('/screens/' + screen + '/') !== -1 ||
+      path.indexOf('/screens/' + screen + '.html') !== -1;
   }
 
   function loadCollapsed() {
-    try { return localStorage.getItem('sidebar_collapsed') === '1'; } catch (e) { return false; }
+    try {
+      return localStorage.getItem('sidebar_collapsed') === '1';
+    } catch (e) {
+      return false;
+    }
   }
 
   function saveCollapsed(val) {
-    try { localStorage.setItem('sidebar_collapsed', val ? '1' : '0'); } catch (e) {}
+    try {
+      localStorage.setItem('sidebar_collapsed', val ? '1' : '0');
+    } catch (e) {}
   }
 
-  /* ── render ────────────────────────────────────── */
-  function buildHTML(collapsed) {
-    var dir = document.documentElement.getAttribute('dir') || 'rtl';
+  function escHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
+  function buildHTML() {
     var itemsHTML = '';
     for (var g = 0; g < SIDEBAR_ITEMS.length; g++) {
       var group = SIDEBAR_ITEMS[g];
@@ -197,10 +228,10 @@
       for (var i = 0; i < group.items.length; i++) {
         var item = group.items[i];
         var active = isActive(item.screen) ? ' active' : '';
-        var lbl = getLabel(item);
-        itemsHTML += '<button type="button" class="gsb-item' + active + '" data-screen="' + item.screen + '" data-tooltip="' + escHtml(lbl) + '">' +
+        var label = getLabel(item);
+        itemsHTML += '<button type="button" class="gsb-item' + active + '" data-screen="' + item.screen + '" data-tooltip="' + escHtml(label) + '">' +
           '<span class="gsb-ico">' + item.svg + '</span>' +
-          '<span class="gsb-lbl">' + escHtml(lbl) + '</span>' +
+          '<span class="gsb-lbl">' + escHtml(label) + '</span>' +
           '</button>';
       }
     }
@@ -208,90 +239,22 @@
     var toggleSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>';
 
     return '<div class="gsb-hdr">' +
-      '<span class="gsb-label">القائمة</span>' +
-      '<button type="button" class="gsb-toggle" id="gsbToggle" title="طي القائمة">' + toggleSvg + '</button>' +
+      '<span class="gsb-label">' + escHtml(getSidebarTitle()) + '</span>' +
+      '<button type="button" class="gsb-toggle" id="gsbToggle" title="' + escHtml(getToggleTitle()) + '">' + toggleSvg + '</button>' +
       '</div>' +
       '<nav class="gsb-nav">' + itemsHTML + '</nav>';
-  }
-
-  function escHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  /* ── init ──────────────────────────────────────── */
-  function init() {
-    /* Don't inject on excluded pages */
-    var path = location.pathname.replace(/\\/g, '/');
-    var excluded = ['/screens/login/', '/screens/installing/', '/screens/invoice-a4/', '/screens/payment/', '/screens/settings/'];
-    for (var x = 0; x < excluded.length; x++) {
-      if (path.indexOf(excluded[x]) !== -1) return;
-    }
-
-    var collapsed = loadCollapsed();
-
-    /* Build sidebar element */
-    var aside = document.createElement('aside');
-    aside.id = 'globalSidebar';
-    if (collapsed) aside.classList.add('gsb-collapsed');
-    aside.innerHTML = buildHTML(collapsed);
-
-    /* Wrap body children in layout */
-    var layout = document.createElement('div');
-    layout.className = 'gsb-layout';
-
-    /* Move all existing body children into content wrapper */
-    var content = document.createElement('div');
-    content.className = 'gsb-content';
-    while (document.body.firstChild) {
-      content.appendChild(document.body.firstChild);
-    }
-
-    /* RTL: sidebar on right, content on left */
-    var dir = document.documentElement.getAttribute('dir') || 'rtl';
-    if (dir === 'rtl') {
-      layout.appendChild(aside);
-      layout.appendChild(content);
-    } else {
-      layout.appendChild(content);
-      layout.appendChild(aside);
-    }
-
-    document.body.appendChild(layout);
-
-    /* Move print-root elements back to body so print CSS selectors work */
-    var printRoots = document.querySelectorAll('[data-print-root]');
-    for (var pr = 0; pr < printRoots.length; pr++) {
-      document.body.appendChild(printRoots[pr]);
-    }
-
-    /* Apply permissions — items start hidden if no user yet */
-    applyPermissions();
-
-    /* Listen for userReady from auth-guard.js */
-    window.addEventListener('userReady', function () {
-      applyPermissions();
-    });
-
-    /* Navigation clicks */
-    setupNavigation(aside);
-
-    /* Toggle button */
-    var toggleBtn = aside.querySelector('#gsbToggle');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', function () { toggle(aside); });
-    }
   }
 
   function applyPermissions() {
     var sidebar = document.getElementById('globalSidebar');
     if (!sidebar) return;
 
-    var u = window.__currentUser;
-    var isAdmin = u && (u.role === 'admin' || u.role === 'superadmin');
-
+    var user = window.__currentUser;
+    var isAdmin = user && (user.role === 'admin' || user.role === 'superadmin');
     var buttons = sidebar.querySelectorAll('.gsb-item[data-screen]');
-    for (var b = 0; b < buttons.length; b++) {
-      var btn = buttons[b];
+
+    for (var i = 0; i < buttons.length; i++) {
+      var btn = buttons[i];
       var screen = btn.getAttribute('data-screen');
       var itemDef = findItem(screen);
       if (!itemDef) continue;
@@ -302,6 +265,7 @@
       } else if (itemDef.permission && typeof window.hasPermission === 'function') {
         show = window.hasPermission(itemDef.permission);
       }
+
       btn.style.display = show ? '' : 'none';
     }
   }
@@ -320,8 +284,10 @@
     aside.addEventListener('click', function (e) {
       var btn = e.target.closest('.gsb-item[data-screen]');
       if (!btn) return;
+
       var screen = btn.getAttribute('data-screen');
       if (!screen) return;
+
       if (screen === 'dashboard') {
         location.href = '/screens/dashboard/dashboard.html';
       } else if (window.api && window.api.navigateTo) {
@@ -337,13 +303,85 @@
     saveCollapsed(isCollapsed);
   }
 
-  /* ── Boot ──────────────────────────────────────── */
+  function bindSidebarEvents(aside) {
+    setupNavigation(aside);
+
+    var toggleBtn = aside.querySelector('#gsbToggle');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function () {
+        toggle(aside);
+      });
+    }
+  }
+
+  function rerenderSidebar() {
+    var aside = document.getElementById('globalSidebar');
+    if (!aside) return;
+
+    aside.innerHTML = buildHTML();
+    bindSidebarEvents(aside);
+    applyPermissions();
+  }
+
+  function init() {
+    var path = location.pathname.replace(/\\/g, '/');
+    var excluded = ['/screens/login/', '/screens/installing/', '/screens/invoice-a4/', '/screens/payment/', '/screens/settings/'];
+    for (var i = 0; i < excluded.length; i++) {
+      if (path.indexOf(excluded[i]) !== -1) return;
+    }
+
+    var aside = document.createElement('aside');
+    aside.id = 'globalSidebar';
+    if (loadCollapsed()) aside.classList.add('gsb-collapsed');
+    aside.innerHTML = buildHTML();
+
+    var layout = document.createElement('div');
+    layout.className = 'gsb-layout';
+
+    var content = document.createElement('div');
+    content.className = 'gsb-content';
+    while (document.body.firstChild) {
+      content.appendChild(document.body.firstChild);
+    }
+
+    var dir = document.documentElement.getAttribute('dir') || 'rtl';
+    if (dir === 'rtl') {
+      layout.appendChild(aside);
+      layout.appendChild(content);
+    } else {
+      layout.appendChild(content);
+      layout.appendChild(aside);
+    }
+
+    document.body.appendChild(layout);
+
+    var printRoots = document.querySelectorAll('[data-print-root]');
+    for (var pr = 0; pr < printRoots.length; pr++) {
+      document.body.appendChild(printRoots[pr]);
+    }
+
+    applyPermissions();
+
+    window.addEventListener('userReady', function () {
+      applyPermissions();
+    });
+
+    window.addEventListener('app-language-changed', function () {
+      rerenderSidebar();
+    });
+
+    bindSidebarEvents(aside);
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
 
-  window.Sidebar = { toggle: toggle, applyPermissions: applyPermissions };
-
+  window.Sidebar = {
+    toggle: toggle,
+    applyPermissions: applyPermissions,
+    rerender: rerenderSidebar
+  };
 })();

@@ -796,10 +796,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const invItemsTbody = el('invItemsTbody');
     if (invItemsTbody) {
       invItemsTbody.innerHTML = (items || []).map(item => `<tr>
-        <td class="inv-td-name">${escHtml(item.product_name_ar || '')}</td>
+        <td class="inv-td-name">${escHtml(item.product_name_ar || '')}${item.product_name_en && item.product_name_en !== item.product_name_ar ? `<span class="inv-td-en">${escHtml(item.product_name_en)}</span>` : ''}</td>
         <td class="inv-td-num">${item.quantity}</td>
         <td class="inv-td-amt">${fmtLtr(item.line_total || 0)}</td>
-        <td class="inv-td-name">${escHtml(item.service_name_ar || '—')}</td>
+        <td class="inv-td-name">${escHtml(item.service_name_ar || '-')}${item.service_name_en && item.service_name_en !== item.service_name_ar ? `<span class="inv-td-en">${escHtml(item.service_name_en)}</span>` : ''}${item.merzam_type_name ? `<span class="inv-td-merzam">${escHtml(item.merzam_type_name)}</span>` : ''}</td>
       </tr>`).join('');
     }
 
@@ -1100,10 +1100,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const cnItemsTbody = el('cnItemsTbody');
     if (cnItemsTbody) {
       cnItemsTbody.innerHTML = (items || []).map(item => `<tr>
-        <td class="inv-td-name">${escHtml(item.product_name_ar || '')}</td>
+        <td class="inv-td-name">${escHtml(item.product_name_ar || '')}${item.product_name_en && item.product_name_en !== item.product_name_ar ? `<span class="inv-td-en">${escHtml(item.product_name_en)}</span>` : ''}</td>
         <td class="inv-td-num">${item.quantity}</td>
         <td class="inv-td-amt">${fmtLtr(item.line_total)}</td>
-        <td class="inv-td-name">${escHtml(item.service_name_ar || '—')}</td>
+        <td class="inv-td-name">${escHtml(item.service_name_ar || '-')}${item.service_name_en && item.service_name_en !== item.service_name_ar ? `<span class="inv-td-en">${escHtml(item.service_name_en)}</span>` : ''}${item.merzam_type_name ? `<span class="inv-td-merzam">${escHtml(item.merzam_type_name)}</span>` : ''}</td>
       </tr>`).join('');
     }
 
@@ -1438,8 +1438,11 @@ window.addEventListener('DOMContentLoaded', () => {
       const nameAr = escHtml(it.productNameAr || it.product_name_ar || it.name || '');
       const nameEn = escHtml(it.productNameEn || it.product_name_en || '');
       const svcAr  = escHtml(it.serviceNameAr || it.service_name_ar || it.service || '');
+      const svcEn  = escHtml(it.serviceNameEn || it.service_name_en || '');
+      const merzam = escHtml(it.merzamTypeName || it.merzam_type_name || it.merzam || '');
       const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<br><span class="inv-td-en">${nameEn}</span>` : '');
-      return `<tr><td class="inv-td-name">${productCell||'—'}</td><td class="inv-td-num">${escHtml(String(it.quantity||''))}</td><td class="inv-td-amt">${fmtLtr(it.lineTotal||it.line_total||0)}</td><td class="inv-td-name">${svcAr||'—'}</td></tr>`;
+      const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<br><span class="inv-td-en">${svcEn}</span>` : '') + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
+      return `<tr><td class="inv-td-name">${productCell||'—'}</td><td class="inv-td-num">${escHtml(String(it.quantity||''))}</td><td class="inv-td-amt">${fmtLtr(it.lineTotal||it.line_total||0)}</td><td class="inv-td-name">${svcAr ? serviceCell : '—'}</td></tr>`;
     }).join('');
   }
 
@@ -1527,7 +1530,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const orderRes = await window.api.getOrderById({ id: r.order_id });
         if (orderRes && orderRes.success && orderRes.items && orderRes.items.length) {
-          items = orderRes.items.map((it) => ({ productNameAr: it.product_name_ar, productNameEn: it.product_name_en, serviceNameAr: it.service_name_ar, quantity: it.quantity, lineTotal: it.line_total }));
+          items = orderRes.items.map((it) => ({ productNameAr: it.product_name_ar, productNameEn: it.product_name_en, serviceNameAr: it.service_name_ar, serviceNameEn: it.service_name_en, merzamTypeName: it.merzam_type_name, quantity: it.quantity, lineTotal: it.line_total }));
         }
       } catch (_) {}
     }
@@ -1604,3 +1607,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (typeof I18N !== 'undefined') I18N.apply();
 });
+
+
+

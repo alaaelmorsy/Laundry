@@ -223,18 +223,6 @@
 
           <div class="field-group">
             <label class="field-label">
-              <span data-i18n="expenses-label-category">الفئة</span>
-              <span class="required-star"> *</span>
-            </label>
-            <div class="field-wrap">
-              <input id="inputCategory" type="text" class="field-input"
-                data-i18n-placeholder="expenses-placeholder-category"
-                placeholder="مثال: إيجار، رواتب، مواد..." autocomplete="off" />
-            </div>
-          </div>
-
-          <div class="field-group">
-            <label class="field-label">
               <span data-i18n="expenses-label-amount">المبلغ الإجمالي (<span class="sar">&#xE900;</span>)</span>
               <span class="required-star"> *</span>
             </label>
@@ -251,11 +239,11 @@
               <span class="required-star"> *</span>
             </label>
             <div class="field-wrap">
-              <input id="inputDate" type="date" class="field-input" />
+              <input id="inputDate" type="datetime-local" class="field-input" step="60" />
             </div>
           </div>
 
-          <div class="field-group field-group-full">
+          <div class="field-group">
             <label class="field-label" data-i18n="expenses-label-is-taxable">خاضع لضريبة القيمة المضافة (15%)</label>
             <div class="toggle-wrap">
               <label class="toggle-switch">

@@ -216,6 +216,9 @@
         if (it.serviceEn && it.serviceEn !== it.serviceAr) {
           svcCell += '<span class="a4-td-en">' + esc(it.serviceEn) + '</span>';
         }
+        if (it.merzam) {
+          svcCell += '<span class="a4-td-merzam">' + esc(it.merzam) + '</span>';
+        }
         return '<tr>'
           + '<td class="a4-td-num">' + (i + 1) + '</td>'
           + '<td class="a4-td-name">' + nameCell + '</td>'

@@ -141,6 +141,30 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
+  function syncNewSubscriptionPeriodFields() {
+    const typeEl = document.getElementById('newSubPeriodType');
+    const startGroupEl = document.getElementById('newSubStartGroup');
+    const endGroupEl = document.getElementById('newSubEndGroup');
+    const endInputEl = document.getElementById('newSubEnd');
+    if (!typeEl || !startGroupEl || !endGroupEl || !endInputEl) return;
+    const isLimited = typeEl.value === 'limited';
+    startGroupEl.style.display = isLimited ? '' : 'none';
+    endGroupEl.style.display = isLimited ? '' : 'none';
+    if (!isLimited) endInputEl.value = '';
+  }
+
+  function syncRenewSubscriptionPeriodFields() {
+    const typeEl = document.getElementById('renewPeriodType');
+    const startGroupEl = document.getElementById('renewStartGroup');
+    const endGroupEl = document.getElementById('renewEndGroup');
+    const endInputEl = document.getElementById('renewEndDate');
+    if (!typeEl || !startGroupEl || !endGroupEl || !endInputEl) return;
+    const isLimited = typeEl.value === 'limited';
+    startGroupEl.style.display = isLimited ? '' : 'none';
+    endGroupEl.style.display = isLimited ? '' : 'none';
+    if (!isLimited) endInputEl.value = '';
+  }
+
   function fmtLtr(n) {
     return Number(n || 0).toFixed(2);
   }
@@ -1584,7 +1608,9 @@ window.addEventListener('DOMContentLoaded', () => {
     resetNewSubCustomerPicker();
     await fillPackageSelect('newSub', true);
     document.getElementById('newSubStart').value = '';
+    document.getElementById('newSubPeriodType').value = 'unlimited';
     document.getElementById('newSubEnd').value = '';
+    syncNewSubscriptionPeriodFields();
     modalNewSub.style.display = 'flex';
     if (filterCustomerId) {
       const pre = newSubEligibleCustomers.find((c) => Number(c.id) === Number(filterCustomerId));
@@ -1595,13 +1621,25 @@ window.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnCloseNewSub').addEventListener('click', () => { modalNewSub.style.display = 'none'; });
   document.getElementById('btnCancelNewSub').addEventListener('click', () => { modalNewSub.style.display = 'none'; });
+  document.getElementById('newSubPeriodType').addEventListener('change', syncNewSubscriptionPeriodFields);
   document.getElementById('btnSaveNewSub').addEventListener('click', async () => {
     const customerId = document.getElementById('newSubCustomerId').value;
     const packageId = document.getElementById('newSubPackage').value;
+    const periodType = document.getElementById('newSubPeriodType').value;
     const periodFrom = document.getElementById('newSubStart').value || undefined;
-    const endDate = document.getElementById('newSubEnd').value || undefined;
+    const endDate = periodType === 'limited' ? (document.getElementById('newSubEnd').value || undefined) : undefined;
     if (!customerId || !packageId) {
       document.getElementById('errNewSub').textContent = I18N.t('subscriptions-err-pick-customer-package');
+      document.getElementById('errNewSub').style.display = 'block';
+      return;
+    }
+    if (periodType === 'limited' && !endDate) {
+      document.getElementById('errNewSub').textContent = 'يرجى تحديد تاريخ الانتهاء للباقة المحدودة';
+      document.getElementById('errNewSub').style.display = 'block';
+      return;
+    }
+    if (periodFrom && endDate && new Date(endDate) <= new Date(periodFrom)) {
+      document.getElementById('errNewSub').textContent = 'تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية';
       document.getElementById('errNewSub').style.display = 'block';
       return;
     }
@@ -1611,6 +1649,7 @@ window.addEventListener('DOMContentLoaded', () => {
       customerId: Number(customerId),
       packageId: Number(packageId),
       periodFrom,
+      periodTo: endDate,
       endDate,
       paymentMethod: currentPaymentMethod || 'cash',
       paidCash:      mixedCashAmount || 0,
@@ -1635,6 +1674,9 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('renewSubId').value = String(subId);
     document.getElementById('errRenew').style.display = 'none';
     document.getElementById('renewStart').value = '';
+    document.getElementById('renewPeriodType').value = 'unlimited';
+    document.getElementById('renewEndDate').value = '';
+    syncRenewSubscriptionPeriodFields();
     document.getElementById('renewCarry').checked = true;
     const infoEl = document.getElementById('renewSubInfo');
     if (infoEl) {
@@ -1706,13 +1748,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnCloseRenew').addEventListener('click', () => { modalRenew.style.display = 'none'; });
   document.getElementById('btnCancelRenew').addEventListener('click', () => { modalRenew.style.display = 'none'; });
+  document.getElementById('renewPeriodType').addEventListener('change', syncRenewSubscriptionPeriodFields);
   document.getElementById('btnSaveRenew').addEventListener('click', async () => {
     const subscriptionId = Number(document.getElementById('renewSubId').value);
     const packageId = document.getElementById('renewPackage').value;
+    const periodType = document.getElementById('renewPeriodType').value;
     const periodFrom = document.getElementById('renewStart').value || undefined;
+    const periodTo = periodType === 'limited' ? (document.getElementById('renewEndDate').value || undefined) : undefined;
     const carryOverRemaining = document.getElementById('renewCarry').checked;
     if (!packageId) {
       document.getElementById('errRenew').textContent = I18N.t('subscriptions-err-pick-customer-package');
+      document.getElementById('errRenew').style.display = 'block';
+      return;
+    }
+    if (periodType === 'limited' && !periodTo) {
+      document.getElementById('errRenew').textContent = 'يرجى تحديد تاريخ الانتهاء للباقة المحدودة';
+      document.getElementById('errRenew').style.display = 'block';
+      return;
+    }
+    if (periodFrom && periodTo && new Date(periodTo) <= new Date(periodFrom)) {
+      document.getElementById('errRenew').textContent = 'تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية';
       document.getElementById('errRenew').style.display = 'block';
       return;
     }
@@ -1722,6 +1777,7 @@ window.addEventListener('DOMContentLoaded', () => {
       subscriptionId,
       packageId: Number(packageId),
       periodFrom,
+      periodTo,
       carryOverRemaining,
       paymentMethod: currentRenewPaymentMethod || 'cash',
       paidCash:      renewMixedCash || 0,

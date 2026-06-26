@@ -129,7 +129,7 @@
     },
 
     openMain: () => {
-      location.href = '/screens/dashboard/dashboard.html';
+      location.href = '/screens/pos/pos.html';
     },
 
     logout: async () => {
@@ -441,6 +441,14 @@
     getSupportStatus:  ()        => invoke('getSupportStatus'),
     downloadUpdate:    ()        => invoke('downloadUpdate'),
     installUpdate:     ()        => invoke('installUpdate'),
+
+    getMerzamTypes:   ()       => invoke('getMerzamTypes'),
+    saveMerzamType:   (p)      => invoke('saveMerzamType', p),
+    deleteMerzamType: (p)      => invoke('deleteMerzamType', p),
+
+    getCustomPricesScreenData:  (p) => invoke('getCustomPricesScreenData', p),
+    saveCustomerCustomPrices:   (p) => invoke('saveCustomerCustomPrices', p),
+    getCustomerPosCustomPrices: (p) => invoke('getCustomerPosCustomPrices', p),
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

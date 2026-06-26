@@ -614,6 +614,7 @@ async function openCrViewer(receiptId) {
             receipt.items = orderRes.items.map(it => ({
               productNameAr: it.product_name_ar, productNameEn: it.product_name_en,
               serviceNameAr: it.service_name_ar, serviceNameEn: it.service_name_en,
+              merzamTypeName: it.merzam_type_name,
               quantity: it.quantity, lineTotal: it.line_total
             }));
           }
@@ -681,13 +682,15 @@ function populateCrViewer(r, s) {
     ? items.map(it => {
         const name = it.productNameAr || it.product_name_ar || it.productNameEn || it.product_name_en || it.name || '—';
         const svc  = it.serviceNameAr || it.service_name_ar || it.serviceNameEn || it.service_name_en || '—';
+        const svcEn = it.serviceNameEn || it.service_name_en || '';
+        const merzam = it.merzamTypeName || it.merzam_type_name || it.merzam || '';
         const qty  = it.quantity || it.qty || 1;
         const tot  = it.lineTotal != null ? it.lineTotal : (it.line_total != null ? it.line_total : null);
         return `<tr>
           <td class="inv-td-name">${escHtml(String(name))}</td>
           <td class="inv-td-num">${escHtml(String(qty))}</td>
           <td class="inv-td-num">${tot != null ? SAR(tot) : '—'}</td>
-          <td class="inv-td-name">${escHtml(String(svc))}</td>
+          <td class="inv-td-name">${escHtml(String(svc))}${svcEn && svcEn !== svc ? `<span class="inv-td-en">${escHtml(String(svcEn))}</span>` : ''}${merzam ? `<span class="inv-td-merzam">${escHtml(String(merzam))}</span>` : ''}</td>
         </tr>`;
       }).join('')
     : `<tr><td colspan="4" style="text-align:center;padding:8px;color:#888">—</td></tr>`;

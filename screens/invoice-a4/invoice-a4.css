@@ -304,6 +304,15 @@ html, body {
   direction: ltr;
 }
 
+.a4-td-merzam {
+  display: block;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin-top: 0;
+}
+
 /* ===== QR row (centered on page) ===== */
 .a4-qr-row {
   display: flex;

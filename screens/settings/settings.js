@@ -490,7 +490,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (tabClosing) tabClosing.addEventListener('click', () => setPanel('closing'));
   if (tabSystemRestore) tabSystemRestore.addEventListener('click', () => setPanel('systemRestore'));
   if (tabUpdate) tabUpdate.addEventListener('click', () => { setPanel('update'); initUpdatePanel(); });
-
   window.addEventListener('userReady', (e) => {
     const user = e.detail;
     if (!user || user.role !== 'superadmin') {
@@ -770,14 +769,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnCloseSystemRestoreModal = document.getElementById('btnCloseSystemRestoreModal');
   const btnCancelSystemRestore     = document.getElementById('btnCancelSystemRestore');
   const btnConfirmSystemRestore    = document.getElementById('btnConfirmSystemRestore');
-  const rcInvoices      = document.getElementById('rcInvoices');
-  const rcSubscriptions = document.getElementById('rcSubscriptions');
-  const rcCustomers     = document.getElementById('rcCustomers');
-  const rcCustomersOption = document.getElementById('rcCustomersOption');
-  const rcServices      = document.getElementById('rcServices');
-  const rcExpenses      = document.getElementById('rcExpenses');
-  const rcGarments      = document.getElementById('rcGarments');
-  const rcCheckboxes = [rcInvoices, rcSubscriptions, rcCustomers, rcServices, rcExpenses, rcGarments].filter(Boolean);
+  const rcInvoices            = document.getElementById('rcInvoices');
+  const rcSubscriptions       = document.getElementById('rcSubscriptions');
+  const rcConsumptionReceipts = document.getElementById('rcConsumptionReceipts');
+  const rcCustomers           = document.getElementById('rcCustomers');
+  const rcCustomersOption     = document.getElementById('rcCustomersOption');
+  const rcServices            = document.getElementById('rcServices');
+  const rcExpenses            = document.getElementById('rcExpenses');
+  const rcGarments            = document.getElementById('rcGarments');
+  const rcCheckboxes = [rcInvoices, rcSubscriptions, rcConsumptionReceipts, rcCustomers, rcServices, rcExpenses, rcGarments].filter(Boolean);
 
   function updateRestoreConfirmBtn() {
     const anyChecked = rcCheckboxes.some(cb => cb.checked);
@@ -787,7 +787,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function syncCustomersOption() {
-    const subChecked = rcSubscriptions && rcSubscriptions.checked;
+    const subChecked = (rcSubscriptions && rcSubscriptions.checked) && (rcConsumptionReceipts && rcConsumptionReceipts.checked);
     if (rcCustomers) {
       rcCustomers.disabled = !subChecked;
       if (!subChecked) rcCustomers.checked = false;
@@ -810,7 +810,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   rcCheckboxes.forEach(cb => cb.addEventListener('change', updateRestoreConfirmBtn));
-  if (rcSubscriptions) rcSubscriptions.addEventListener('change', () => { syncCustomersOption(); updateRestoreConfirmBtn(); });
+  if (rcSubscriptions)       rcSubscriptions.addEventListener('change',       () => { syncCustomersOption(); updateRestoreConfirmBtn(); });
+  if (rcConsumptionReceipts) rcConsumptionReceipts.addEventListener('change', () => { syncCustomersOption(); updateRestoreConfirmBtn(); });
 
   if (btnOpenSystemRestoreModal)    btnOpenSystemRestoreModal.addEventListener('click', openSystemRestoreModal);
   if (btnCloseSystemRestoreModal)   btnCloseSystemRestoreModal.addEventListener('click', closeSystemRestoreModal);
@@ -826,12 +827,13 @@ window.addEventListener('DOMContentLoaded', () => {
       btnConfirmSystemRestore.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${window.I18N.t('settings-restore-running')}`;
       try {
         const res = await window.api.systemRestore({
-          invoices:      rcInvoices      ? rcInvoices.checked      : false,
-          subscriptions: rcSubscriptions ? rcSubscriptions.checked : false,
-          customers:     rcCustomers     ? rcCustomers.checked     : false,
-          services:      rcServices      ? rcServices.checked      : false,
-          expenses:      rcExpenses      ? rcExpenses.checked      : false,
-          garments:      rcGarments      ? rcGarments.checked      : false,
+          invoices:             rcInvoices            ? rcInvoices.checked            : false,
+          subscriptions:        rcSubscriptions       ? rcSubscriptions.checked       : false,
+          consumptionReceipts:  rcConsumptionReceipts ? rcConsumptionReceipts.checked : false,
+          customers:            rcCustomers           ? rcCustomers.checked           : false,
+          services:             rcServices            ? rcServices.checked            : false,
+          expenses:             rcExpenses            ? rcExpenses.checked            : false,
+          garments:             rcGarments            ? rcGarments.checked            : false,
         });
         closeSystemRestoreModal();
         if (!res || !res.success) {
@@ -1126,6 +1128,7 @@ window.addEventListener('DOMContentLoaded', () => {
     setPanel('update');
     initUpdatePanel();
   }
+
 
   I18N.apply();
   loadSettings();

@@ -38,6 +38,27 @@ window.addEventListener('DOMContentLoaded', () => {
   let reportData = null;
   let colSetup = false;
   let _reportAppSettings = null;
+  function rt(key, ar, en) {
+    const value = I18N.t(key);
+    if (value && value !== key) return value;
+    return I18N.getLang() === 'en' ? en : ar;
+  }
+  function applyReportStaticTranslations() {
+    const consumptionTitle = document.querySelector('#sectionConsumption .section-title');
+    const consumptionNote = document.querySelector('#sectionConsumption .section-note');
+    const a4Titles = document.querySelectorAll('.a4m-title');
+    const a4MetaInvoice = document.querySelector('.a4m-meta-lbl');
+    const a4CashierLabel = document.querySelector('#a4mRowCashier span');
+    const a4DiscountLabel = document.querySelector('#a4mDiscRow span');
+    const a4AfterDiscountLabel = document.querySelector('#a4mAfterDiscRow span');
+    if (consumptionTitle) consumptionTitle.textContent = rt('report-consumption-title', 'إيصالات الاستهلاك', 'Consumption Receipts');
+    if (consumptionNote) consumptionNote.textContent = rt('report-consumption-note', 'فواتير مدفوعة باشتراك - لا تدخل في الحسابات', 'Invoices paid by subscription - not included in totals');
+    if (a4Titles.length) a4Titles.forEach((el) => { el.textContent = rt('report-simplified-tax-invoice', 'فاتورة ضريبية مبسطة', 'Simplified Tax Invoice'); });
+    if (a4MetaInvoice) a4MetaInvoice.textContent = I18N.getLang() === 'en' ? 'Invoice #' : 'رقم الفاتورة';
+    if (a4CashierLabel) a4CashierLabel.textContent = I18N.getLang() === 'en' ? 'Cashier' : 'الكاشير';
+    if (a4DiscountLabel) a4DiscountLabel.textContent = rt('report-discount-short', 'الخصم', 'Discount');
+    if (a4AfterDiscountLabel) a4AfterDiscountLabel.textContent = rt('report-after-discount-short', 'المجموع بعد الخصم', 'After Discount');
+  }
 
   function fmtLtr(n) { return Number(n || 0).toFixed(2); }
   function sarHtml(amountStr) { return `<span class="sar">&#xE900;</span> ${amountStr}`; }
@@ -84,8 +105,8 @@ window.addEventListener('DOMContentLoaded', () => {
     a4mText('a4mShopNameEn',    data.shopNameEn);
     a4mText('a4mShopAddressEn', data.shopAddressEn);
     a4mText('a4mShopEmail',     data.shopEmail);
-    a4mText('a4mVatEn',         data.vatNumber ? 'VAT No: ' + data.vatNumber : '');
-    a4mText('a4mCrEn',          data.commercialRegister ? 'CR No: ' + data.commercialRegister : '');
+    a4mText('a4mVatEn',         data.vatNumber ? rt('report-vat-number-short', 'رقم ضريبة القيمة المضافة', 'VAT No.') + ': ' + data.vatNumber : '');
+    a4mText('a4mCrEn',          data.commercialRegister ? rt('report-cr-number-short', 'رقم السجل التجاري', 'CR No.') + ': ' + data.commercialRegister : '');
 
     /* Custom fields (A4) */
     const prA4mCFElAr = document.getElementById('a4mCustomFieldsAr');
@@ -158,7 +179,7 @@ window.addEventListener('DOMContentLoaded', () => {
         } else { net = lineTotal; itemVat = 0; gross = lineTotal; }
 
         const nameCell = escHtml(it.productAr || '') + (it.productEn && it.productEn !== it.productAr ? `<span class="a4m-td-en">${escHtml(it.productEn)}</span>` : '');
-        const svcCell  = escHtml(it.serviceAr || '—') + (it.serviceEn && it.serviceEn !== it.serviceAr ? `<span class="a4m-td-en">${escHtml(it.serviceEn)}</span>` : '');
+        const svcCell  = escHtml(it.serviceAr || '-') + (it.serviceEn && it.serviceEn !== it.serviceAr ? `<span class="a4m-td-en">${escHtml(it.serviceEn)}</span>` : '') + (it.merzam ? `<span class="a4m-td-merzam">${escHtml(it.merzam)}</span>` : '');
 
         return `<tr>
           <td class="a4m-td-num">${i + 1}</td>
@@ -179,7 +200,7 @@ window.addEventListener('DOMContentLoaded', () => {
       a4mShow('a4mDiscRow', true);
       if (data.discountLabel) {
         var a4mDiscLabel = document.querySelector('#a4mDiscRow span');
-        if (a4mDiscLabel) a4mDiscLabel.innerHTML = data.discountLabel.split(' + ').join('<br>') + '<br>/ Discount';
+        if (a4mDiscLabel) a4mDiscLabel.innerHTML = escHtml(data.discountLabel).split(' + ').join('<br>');
       }
       var afterDiscInv = Number(data.subtotal || 0) - Number(data.discount || 0);
       a4mHtml('a4mAfterDiscount', sarFmt(afterDiscInv));
@@ -344,6 +365,28 @@ window.addEventListener('DOMContentLoaded', () => {
           ${m.method === 'subscription' ? '<div class="pay-card-note">(لا يدخل في الحساب)</div>' : ''}
         </div>`;
     }).join('');
+  }
+
+  function localizeDynamicReportContent() {
+    document.querySelectorAll('.pay-subscription .pay-card-label').forEach((el) => {
+      el.textContent = rt('report-consumption-title', 'إيصالات الاستهلاك', 'Consumption Receipts');
+    });
+    document.querySelectorAll('.pay-subscription .pay-card-note').forEach((el) => {
+      el.textContent = rt('report-consumption-card-note', '(لا يدخل في الحساب)', '(Not included in totals)');
+    });
+  }
+
+  function refreshReportLocaleBits() {
+    applyReportStaticTranslations();
+    localizeDynamicReportContent();
+    if (!reportData) return;
+    const consInvs = reportData.consumptionReceipts || [];
+    const consTotal = consInvs.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const consFooter = document.getElementById('consumptionFooter');
+    if (consFooter) consFooter.innerHTML = `${rt('report-count-label', 'العدد', 'Count')}: ${consInvs.length} &nbsp;|&nbsp; ${SAR(consTotal)}`;
+    document.querySelectorAll('.btn-view-sub').forEach((el) => {
+      el.title = rt('report-view-subscription-title', 'عرض الاشتراك', 'View subscription');
+    });
   }
 
   function buildExpensesTable(expenses) {
@@ -636,9 +679,10 @@ window.addEventListener('DOMContentLoaded', () => {
         const nameEn = escHtml(item.product_name_en || '');
         const svcAr  = escHtml(item.service_name_ar || '');
         const svcEn  = escHtml(item.service_name_en || '');
+        const merzam = escHtml(item.merzam_type_name || '');
 
         const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-        const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '');
+        const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '') + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
 
         return `<tr>
           <td class="inv-td-name">${productCell}</td>
@@ -861,6 +905,7 @@ window.addEventListener('DOMContentLoaded', () => {
         productEn:  item.product_name_en || '',
         serviceAr:  item.service_name_ar || '',
         serviceEn:  item.service_name_en || '',
+        merzam:     item.merzam_type_name || '',
         qty:        item.quantity,
         unitPrice:  parseFloat(item.unit_price || 0),
         lineTotal:  parseFloat(item.line_total || 0)
@@ -981,8 +1026,9 @@ window.addEventListener('DOMContentLoaded', () => {
       const nameEn = escHtml(it.productNameEn || it.product_name_en || '');
       const svcAr  = escHtml(it.serviceNameAr  || it.service_name_ar  || '—');
       const svcEn  = escHtml(it.serviceNameEn  || it.service_name_en  || '');
+      const merzam = escHtml(it.merzamTypeName || it.merzam_type_name || it.merzam || '');
       const nameCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-      const svcCell  = svcAr  + (svcEn  && svcEn  !== svcAr  ? `<span class="inv-td-en">${svcEn}</span>`  : '');
+      const svcCell  = svcAr  + (svcEn  && svcEn  !== svcAr  ? `<span class="inv-td-en">${svcEn}</span>`  : '') + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
       return `<tr>
         <td class="inv-td-name">${nameCell || '—'}</td>
         <td class="inv-td-num">${it.quantity || it.qty || 1}</td>
@@ -1252,6 +1298,7 @@ window.addEventListener('DOMContentLoaded', () => {
       reportContent.style.display = 'flex';
       reportContent.style.flexDirection = 'column';
       reportContent.style.gap = '16px';
+      refreshReportLocaleBits();
     } catch (err) {
       showToast(I18N.t('all-invoices-err-load'), 'error');
       loadingState.style.display = 'none';
@@ -1298,6 +1345,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (reportData.subscriptions.length) {
       document.getElementById('subscriptionsFooter').innerHTML = `${I18N.t('all-invoices-total-after-tax')}: ${reportData.subscriptions.length} &nbsp;|&nbsp; ${SAR(subTotal)}`;
     }
+    refreshReportLocaleBits();
   }
 
   btnPrint.addEventListener('click', () => {
@@ -1665,6 +1713,12 @@ window.addEventListener('DOMContentLoaded', () => {
   /* ── Print translation: rebuild dynamic content in Arabic ── */
   window.addEventListener('print-translate', () => rebuildReportContent());
   window.addEventListener('print-restore', () => rebuildReportContent());
+  window.addEventListener('app-language-changed', () => {
+    rebuildReportContent();
+    refreshReportLocaleBits();
+  });
 
   if (typeof I18N !== 'undefined') I18N.apply();
+  refreshReportLocaleBits();
 });
+

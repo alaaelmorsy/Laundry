@@ -969,8 +969,10 @@
       const svcAr  = escHtml(item.service_name_ar || '');
       const svcEn  = escHtml(item.service_name_en || '');
 
+      const merzam = escHtml(item.merzam_type_name || '');
       const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-      const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '');
+      const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '')
+        + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
 
       return `<tr>
         <td class="inv-td-name">${productCell}</td>
@@ -1205,6 +1207,7 @@
         productEn:  item.product_name_en || '',
         serviceAr:  item.service_name_ar || '',
         serviceEn:  item.service_name_en || '',
+        merzam:     item.merzam_type_name || '',
         qty:        item.quantity,
         unitPrice:  parseFloat(item.unit_price || 0),
         lineTotal:  parseFloat(item.line_total || 0)
@@ -1294,9 +1297,11 @@
     return intCopies;
   }
 
-  function printInvoiceByCopies() {
+  function printInvoiceByCopies(options) {
+    options = options || {};
     const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
-    const copies = getPrintCopies();
+    let copies = getPrintCopies();
+    if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
     if (copies === 0) return;
 
     const paperEl = document.getElementById(paperType === 'a4' ? 'invoicePaperA4m' : 'invoicePaper');
@@ -1386,7 +1391,7 @@
       if (e.target === els.invoiceViewModal) closeInvoiceModal();
     });
     els.btnInvPrint.addEventListener('click', () => {
-      printInvoiceByCopies();
+      printInvoiceByCopies({ forceAtLeastOneCopy: true });
     });
     
     els.btnInvExportPdf.addEventListener('click', async () => {
@@ -1482,7 +1487,7 @@
     window.addEventListener('message', (e) => {
       if (!e.data || !e.data.action) return;
       if (e.data.action === 'printInvoice') {
-        printInvoiceByCopies();
+        printInvoiceByCopies({ forceAtLeastOneCopy: true });
       } else if (e.data.action === 'exportPdf') {
         const btn = document.getElementById('btnInvExportPdf');
         if (btn) btn.click();

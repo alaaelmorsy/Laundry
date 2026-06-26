@@ -1,6 +1,6 @@
 {
   "name": "laundry-app",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Laundry Management System",
   "bin": "server/index.js",
   "pkg": {

@@ -180,7 +180,7 @@ window.addEventListener('DOMContentLoaded', () => {
         } else { net = lineTotal; itemVat = 0; gross = lineTotal; }
 
         const nameCell = escHtml(it.productAr || '') + (it.productEn && it.productEn !== it.productAr ? `<span class="a4m-td-en">${escHtml(it.productEn)}</span>` : '');
-        const svcCell  = escHtml(it.serviceAr || '—') + (it.serviceEn && it.serviceEn !== it.serviceAr ? `<span class="a4m-td-en">${escHtml(it.serviceEn)}</span>` : '');
+        const svcCell  = escHtml(it.serviceAr || '-') + (it.serviceEn && it.serviceEn !== it.serviceAr ? `<span class="a4m-td-en">${escHtml(it.serviceEn)}</span>` : '') + (it.merzam ? `<span class="a4m-td-merzam">${escHtml(it.merzam)}</span>` : '');
 
         return `<tr>
           <td class="a4m-td-num">${i + 1}</td>
@@ -598,9 +598,10 @@ window.addEventListener('DOMContentLoaded', () => {
         const nameEn = escHtml(item.product_name_en || '');
         const svcAr  = escHtml(item.service_name_ar || '');
         const svcEn  = escHtml(item.service_name_en || '');
+        const merzam = escHtml(item.merzam_type_name || '');
 
         const productCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-        const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '');
+        const serviceCell = svcAr + (svcEn && svcEn !== svcAr ? `<span class="inv-td-en">${svcEn}</span>` : '') + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
 
         return `<tr>
           <td class="inv-td-name">${productCell}</td>
@@ -818,6 +819,7 @@ window.addEventListener('DOMContentLoaded', () => {
         productEn:  item.product_name_en || '',
         serviceAr:  item.service_name_ar || '',
         serviceEn:  item.service_name_en || '',
+        merzam:     item.merzam_type_name || '',
         qty:        item.quantity,
         unitPrice:  parseFloat(item.unit_price || 0),
         lineTotal:  parseFloat(item.line_total || 0)
@@ -938,8 +940,9 @@ window.addEventListener('DOMContentLoaded', () => {
       const nameEn = escHtml(it.productNameEn || it.product_name_en || '');
       const svcAr  = escHtml(it.serviceNameAr  || it.service_name_ar  || '—');
       const svcEn  = escHtml(it.serviceNameEn  || it.service_name_en  || '');
+      const merzam = escHtml(it.merzamTypeName || it.merzam_type_name || it.merzam || '');
       const nameCell = nameAr + (nameEn && nameEn !== nameAr ? `<span class="inv-td-en">${nameEn}</span>` : '');
-      const svcCell  = svcAr  + (svcEn  && svcEn  !== svcAr  ? `<span class="inv-td-en">${svcEn}</span>`  : '');
+      const svcCell  = svcAr  + (svcEn  && svcEn  !== svcAr  ? `<span class="inv-td-en">${svcEn}</span>`  : '') + (merzam ? `<span class="inv-td-merzam">${merzam}</span>` : '');
       return `<tr>
         <td class="inv-td-name">${nameCell || '—'}</td>
         <td class="inv-td-num">${it.quantity || it.qty || 1}</td>
@@ -1629,3 +1632,4 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (typeof I18N !== 'undefined') I18N.apply();
 });
+

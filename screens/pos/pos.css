@@ -214,7 +214,7 @@ html, body {
 .pos-products-panel {
   display: flex;
   flex-direction: column;
-  flex: 0 0 60%;
+  flex: 0 0 57%;
   min-width: 0;
   overflow: hidden;
   background: #f1f5f9;
@@ -225,7 +225,7 @@ html, body {
 .pos-cart-panel {
   display: flex;
   flex-direction: column;
-  flex: 0 0 40%;
+  flex: 0 0 43%;
   min-width: 0;
   overflow: hidden;
   background: #ffffff;
@@ -1076,6 +1076,10 @@ html, body {
 
 /* Responsive for mobile */
 @media (max-width: 767px) {
+  .ci-thumb {
+    display: none;
+  }
+
   .chip-info {
     gap: 6px;
   }
@@ -1173,7 +1177,44 @@ html, body {
 }
 
 .ci-row1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 6px;
+}
+
+.ci-thumb {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ci-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ci-thumb-placeholder {
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.ci-thumb-placeholder svg {
+  width: 22px;
+  height: 22px;
 }
 
 .ci-name {
@@ -1184,6 +1225,8 @@ html, body {
   flex-direction: column;
   gap: 2px;
   overflow: hidden;
+  min-width: 0;
+  flex: 1;
 }
 
 .ci-name-ar {
@@ -1260,6 +1303,7 @@ html, body {
 .cart-item-service-select {
   font-size: 11.5px;
   font-family: 'Cairo', sans-serif;
+  font-weight: 700;
   color: #15803d;
   background: #f0fdf4;
   border: 1.5px solid #bbf7d0;
@@ -1273,10 +1317,67 @@ html, body {
   transition: border-color 0.2s;
 }
 
+.cart-item-service-select option {
+  font-weight: 700;
+}
+
 .cart-item-service-select:focus,
 .cart-item-service-select:hover {
   border-color: #22c55e;
   box-shadow: 0 0 0 2px rgba(34,197,94,0.12);
+}
+
+.ci-merzam-wrap {
+  margin-top: 4px;
+}
+
+.cart-item-merzam-select {
+  font-size: 11.5px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1.5px solid #99f6e4;
+  border-radius: 6px;
+  padding: 0 6px;
+  cursor: pointer;
+  outline: none;
+  width: 100%;
+  height: 28px;
+  direction: rtl;
+  transition: border-color 0.2s;
+}
+
+.cart-item-merzam-select option {
+  font-weight: 700;
+}
+
+.cart-item-merzam-select:focus,
+.cart-item-merzam-select:hover {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 2px rgba(20,184,166,0.12);
+}
+
+.ci-merzam-tag {
+  display: inline-block;
+  font-size: 11px;
+  color: #9333ea;
+  background: #faf5ff;
+  border: 1px solid #d8b4fe;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-top: 2px;
+}
+
+.inv-td-merzam,
+.a4m-td-merzam,
+.a4-td-merzam {
+  display: block;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin-top: 0;
 }
 
 .ci-qty-group {
@@ -1360,6 +1461,20 @@ html, body {
   color: #15803d;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.ci-custom-price-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #2563eb;
+  background: rgba(37,99,235,.12);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 4px;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .ci-remove {
@@ -1792,7 +1907,7 @@ html, body {
 
 .disc-type-toggle {
   display: flex;
-  background: #f1f5f9;
+  background: #e2e8f0;
   border-radius: 8px;
   padding: 3px;
   gap: 3px;
@@ -1800,26 +1915,47 @@ html, body {
 }
 
 .disc-type-btn {
-  padding: 6px 12px;
+  padding: 6px 10px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: #64748b;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
   font-family: 'Cairo', sans-serif;
   line-height: 1.4;
-  min-width: 40px;
+  min-width: 58px;
   text-align: center;
   touch-action: manipulation;
+  border: 1px solid transparent;
+}
+
+.disc-type-btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .disc-type-btn.active {
   background: #ffffff;
-  color: #16a34a;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.disc-type-btn-flat.active {
+  color: #b45309;
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
+}
+
+.disc-type-btn-pct.active {
+  color: #15803d;
+  border-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.18);
 }
 
 .discount-input {
@@ -2793,6 +2929,12 @@ html, body {
 }
 .inv-meta-label { color: #000; flex-shrink: 0; font-weight: 700; }
 .inv-meta-val { font-weight: 700; text-align: left; color: #000; word-break: break-all; }
+#invTypeLabelRow .inv-meta-label {
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+}
 
 /* Consumption receipt 2-column info grid */
 .cr-info-grid {
@@ -3441,6 +3583,10 @@ html, body {
 
 /* Mobile (< 768px): stacked, toggle between panels */
 @media (max-width: 767px) {
+  .ci-thumb {
+    display: none !important;
+  }
+
   .pos-main {
     flex-direction: column;
   }

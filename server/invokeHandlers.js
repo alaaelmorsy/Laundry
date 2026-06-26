@@ -600,6 +600,7 @@ async function invoke(method, payload, reqUser) {
           nameAr: data.nameAr,
           nameEn: data.nameEn,
           isActive: data.isActive,
+          merzamEnabled: data.merzamEnabled,
           priceLines: data.priceLines
         };
         if (data.removeImage === true) {
@@ -1945,6 +1946,65 @@ async function invoke(method, payload, reqUser) {
         return result;
       } catch (err) {
         return { success: false, message: err.message, code: err.code || 'INSTALL_FAILED' };
+      }
+    }
+
+    case 'getMerzamTypes': {
+      try {
+        const types = await db.getMerzamTypes();
+        return { success: true, types };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'saveMerzamType': {
+      try {
+        const result = await db.saveMerzamType(payload);
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'deleteMerzamType': {
+      try {
+        await db.deleteMerzamType(payload.id);
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getCustomPricesScreenData': {
+      try {
+        const result = await db.getCustomPricesScreenData(payload.customerId);
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'saveCustomerCustomPrices': {
+      try {
+        const result = await db.saveCustomerCustomPrices(
+          payload.customerId,
+          payload.changes,
+          payload.deletes,
+          _user ? _user.id : null
+        );
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getCustomerPosCustomPrices': {
+      try {
+        const result = await db.getCustomerPosCustomPrices(payload.customerId);
+        return result;
+      } catch (err) {
+        return { success: false, message: err.message };
       }
     }
 

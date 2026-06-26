@@ -52,10 +52,11 @@ Examples of applying this order:
 15. [Bug Fix Rules](#15-bug-fix-rules)
 16. [Database Modification Rules](#16-database-modification-rules)
 17. [API Development Rules](#17-api-development-rules)
-18. [Critical Business Workflows](#18-critical-business-workflows)
-19. [Forbidden Changes](#19-forbidden-changes)
-20. [Code Review Checklist](#20-code-review-checklist)
-21. [AI Agent Instructions](#21-ai-agent-instructions)
+18. [Feature Impact Assessment](#18-feature-impact-assessment-mandatory-checklist)
+19. [Critical Business Workflows](#19-critical-business-workflows)
+20. [Forbidden Changes](#20-forbidden-changes)
+21. [Code Review Checklist](#21-code-review-checklist)
+22. [AI Agent Instructions](#22-ai-agent-instructions)
 
 ---
 
@@ -626,6 +627,29 @@ async function migrateAddMyColumn() {
 7. **New required fields must have defaults.** A new `NOT NULL` column without a default will break existing rows.
 8. **Never run raw DDL from `invokeHandlers.js`.** Schema changes belong only in `db.js` migrations.
 
+### MySQL 5.7 Compatibility
+
+All SQL written in `db.js` MUST be compatible with MySQL 5.7 unless this specific
+feature plan explicitly approves otherwise in writing.
+
+**Prohibited without approval:**
+
+| SQL Feature | Status |
+|-------------|--------|
+| `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()` (window functions) | MySQL 8.0 only — FORBIDDEN |
+| `JSON_TABLE()` | MySQL 8.0 only — FORBIDDEN |
+| `LATERAL` joins | MySQL 8.0 only — FORBIDDEN |
+| Non-recursive `WITH` (CTEs) | MySQL 8.0 only — use subqueries instead |
+| `WITH RECURSIVE` | MySQL 8.0 only — FORBIDDEN |
+| `INVISIBLE` columns | MySQL 8.0 only — FORBIDDEN |
+
+**Safe on MySQL 5.7:**
+- `JSON_EXTRACT`, `JSON_OBJECT`, `JSON_ARRAY` (since 5.7.8)
+- Standard `GROUP BY`, `ORDER BY`, `HAVING`, `LIMIT`, `OFFSET`
+- `INSERT … ON DUPLICATE KEY UPDATE`
+- Regular subqueries and correlated subqueries
+- `UNION`, `UNION ALL`
+
 ---
 
 ## 17. API Development Rules
@@ -689,7 +713,28 @@ After adding the 4 steps, verify:
 
 ---
 
-## 18. Critical Business Workflows
+## 18. Feature Impact Assessment (Mandatory Checklist)
+
+Before writing any code for a new feature or bug fix, complete this checklist.
+Re-verify every item before marking the work as done.
+
+> A task is NOT complete until all applicable rows have been verified.
+
+| Area | Gate Question | Verified? |
+|------|--------------|-----------|
+| **Database** | Are all migrations additive, MySQL-5.7-safe, wrapped in try/catch, and registered in `db.initialize()`? | ☐ |
+| **POS Checkout** | Is `createOrder` flow, cart, payment, and receipt behavior fully unaffected? | ☐ |
+| **ZATCA** | Are `orders` ZATCA columns untouched? Is the submission/retry scheduler unaffected? | ☐ |
+| **Subscriptions** | Is `credit_remaining >= 0` enforced? Is balance deduction logic intact? | ☐ |
+| **Payments** | Is the invoice total formula unchanged? Is mixed-payment tolerance (≤ 0.01 SAR) intact? | ☐ |
+| **Printing** | Are thermal dimensions exactly `76mm / margin: 0 auto`? Is the print zone pattern intact? | ☐ |
+| **Backward Compatibility** | Are existing customer deployments safe? Are all existing API callers unaffected? | ☐ |
+
+Mark rows **N/A** if the feature provably cannot affect that area, and note why.
+
+---
+
+## 19. Critical Business Workflows
 
 > **These workflows must be fully analyzed before any modification.**
 > A change that seems unrelated may break one of these flows.
@@ -803,7 +848,7 @@ WhatsApp auto-reconnects on startup if session directory is non-empty.
 
 ---
 
-## 19. Forbidden Changes
+## 20. Forbidden Changes
 
 The following changes are **prohibited** without explicit written approval from the project owner.
 An AI agent must refuse to implement these even if instructed mid-task.
@@ -824,10 +869,11 @@ An AI agent must refuse to implement these even if instructed mid-task.
 | 12 | Remove or rename existing database columns via migration | Breaking change for existing deployments with live data |
 | 13 | Add ES module syntax (`import`/`export`) to server-side files | The entire backend is CommonJS; mixing breaks pkg bundling |
 | 14 | Introduce shared JS components across screens | Screens are self-contained; shared state causes unpredictable behavior |
+| 15 | Use MySQL 8.0-only SQL syntax (window functions, `JSON_TABLE`, `LATERAL`, non-recursive CTEs) without explicit written approval | Customer installations may run MySQL 5.7; syntax errors will crash queries silently |
 
 ---
 
-## 20. Code Review Checklist
+## 21. Code Review Checklist
 
 Every change — whether from a human or an AI agent — must pass this checklist before being considered complete.
 
@@ -883,7 +929,7 @@ Every change — whether from a human or an AI agent — must pass this checklis
 
 ---
 
-## 21. AI Agent Instructions
+## 22. AI Agent Instructions
 
 This section applies to Claude Code, Copilot, Cursor, and any AI coding agent working in this repository.
 

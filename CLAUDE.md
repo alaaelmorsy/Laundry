@@ -1,147 +1,126 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/027-product-offers/plan.md](specs/027-product-offers/plan.md)
+[specs/029-customer-custom-prices/plan.md](specs/029-customer-custom-prices/plan.md)
 <!-- SPECKIT END -->
 
-> **MANDATORY: Before doing anything else, read the full Project Constitution:**
-> **[PROJECT_CONSTITUTION.md](PROJECT_CONSTITUTION.md)**
-> This file contains priorities, forbidden changes, all workflows, and development rules.
-> Do not write a single line of code before reading it.
+# CLAUDE.md — PLUS Laundry AI Agent Guide
+
+## 0. Mandatory First Rule
+
+**Before making any code change, always read this file first and follow it.
+If a request conflicts with this file, ask for clarification before changing code.**
 
 ---
 
-## ⚠️ AI Agent: Read This First
+## 1. Source of Truth
 
-Before writing any code, confirm you understand:
+| Document | Purpose |
+|----------|---------|
+| [PROJECT_CONSTITUTION.md](PROJECT_CONSTITUTION.md) | Full authoritative rules, workflows, code patterns |
+| [.specify/memory/constitution.md](.specify/memory/constitution.md) | Spec Kit governance source (version-controlled) |
+| This file (`CLAUDE.md`) | Daily AI agent guide — concise, practical, always read first |
 
-1. **Project Priorities** (in order — never sacrifice a higher for a lower):
-   `Data integrity → ZATCA compliance → Workflow stability → Backward compatibility → Correct business behavior → Maintainability → Performance → Developer convenience`
+**Project Priorities** (never sacrifice a higher for a lower):
 
-2. **4-Step API Checklist** — every new API requires all 4:
-   `database/db.js` → `server/invokeHandlers.js` → `server/index.js` (only direct endpoints) → `assets/web-api.js`
-
-3. **Forbidden** (no exceptions without explicit owner approval):
-   - No React / Vue / any JS framework
-   - No ORM
-   - No `fetch('/api/invoke')` directly in screen JS — use `window.api` only
-   - No `spawn(detached: true)` for post-exit scripts — use Task Scheduler
-   - No `DROP` / `RENAME` column in migrations — additive only
-   - No DDL from `invokeHandlers.js`
-   - No `process.exit()` in request handlers
-   - No change to ZATCA workflow without explicit requirement
-   - No redesign of thermal print mechanism
-   - No change to `.inv-paper` print dimensions (`76mm / margin: 0 auto`)
-
-4. **Before finishing**, verify:
-   - No duplicate logic introduced
-   - POS checkout still works end-to-end
-   - Thermal print still centered (`76mm`, `margin: 0 auto`)
-   - ZATCA fields on `orders` table untouched
-   - All new DB migrations are additive + try/catch + registered in `db.initialize()`
-   - All 4 API steps completed for every new method
+1. Data integrity — no data loss, no silent corruption
+2. ZATCA compliance — legally mandatory
+3. Workflow stability — POS, subscriptions, invoices, refunds must keep working
+4. Backward compatibility — existing customer deployments must not break
+5. Correct business behavior — calculations and balances must be accurate
+6. Maintainability — follow established patterns
+7. Performance
+8. Developer convenience
 
 ---
 
-## Project Overview
+## 2. Project Overview
 
-**PLUS Laundry** — نظام نقاط بيع لمحلات التنظيف الجاف (Laundry POS System)
-- Node.js Express server bundled as a Windows `.exe` via `@yao-pkg/pkg` (Node 20, x64)
-- Vanilla JS frontend (no framework) served as static files by Express
-- MySQL database via `mysql2/promise`
-- Deployed as a Windows Service using NSSM
-- Version: see `package.json` → `"version"`
+**PLUS Laundry** — نظام نقاط بيع لمحلات التنظيف الجاف
+
+| Property | Value |
+|----------|-------|
+| Runtime | Node.js 20 → Windows `.exe` via `@yao-pkg/pkg` |
+| Frontend | Vanilla JS, no framework, no bundler, no TypeScript |
+| Database | MySQL via `mysql2/promise`, no ORM |
+| Deployment | Windows Service (NSSM), single-tenant on-premise |
+| Version | `package.json` → `"version"` |
+| Compliance | ZATCA e-invoicing (Saudi Arabia) |
 
 ---
 
-## Folder Structure
+## 3. Project Structure
 
 ```
-D:\PLUS\Laundry\
-├── server/
-│   ├── index.js              — Entry point: Express app, cron jobs, ZATCA scheduler
-│   ├── paths.js              — APP_ROOT / DATA_ROOT resolution (pkg-aware)
-│   ├── invokeHandlers.js     — All API business logic (switch on method name)
-│   ├── middleware/auth.js    — JWT sign/verify, authMiddleware
-│   └── services/
-│       ├── updateService.js       — Auto-update via GitHub Releases
-│       ├── exportsService.js      — Excel/PDF exports
-│       ├── reportHtml.js          — HTML report generation
-│       ├── emailService.js        — Nodemailer + encryption helpers
-│       ├── reportEmailScheduler.js— Daily report email cron
-│       ├── whatsappService.js     — WhatsApp via Baileys
-│       ├── zatcaBridge.js         — ZATCA e-invoicing (LocalZatcaBridge)
-│       └── branding.js            — Logo/branding for receipts
-├── database/
-│   └── db.js                 — MySQL pool, createTables(), all db functions, migrations
-├── assets/
-│   ├── web-api.js            — Browser-side window.api (fetch wrapper for /api/invoke)
-│   └── tailwind.css / input.css
-├── screens/                  — One folder per screen
-│   ├── pos/                  — Point of Sale (pos.html, pos.js, pos.css)
-│   ├── invoices/             — Invoices list
-│   ├── credit-invoices/      — Credit/deferred invoices
-│   ├── consumption-receipts/ — Consumption receipts
-│   ├── hangers/              — Hanger tracking
-│   ├── customers/            — Customer management
-│   ├── products/             — Product catalog
-│   ├── services/             — Laundry services
-│   ├── subscriptions/        — Subscription packages
-│   ├── offers/               — Discount offers
-│   ├── expenses/             — Expense tracking
-│   ├── users/                — User management
-│   ├── roles/                — Role-based permissions
-│   ├── dashboard/            — Dashboard/summary
-│   ├── payment/              — Payment screen
-│   ├── invoice-a4/           — A4 invoice print view
-│   ├── login/                — Login screen
-│   ├── settings/             — App settings
-│   ├── zatca-settings/       — ZATCA configuration
-│   ├── whatsapp/             — WhatsApp setup
-│   ├── installing/           — Update progress screen
-│   └── reports/              — All report screens
-│       ├── daily-report/
-│       ├── period-report/
-│       ├── all-invoices-report/
-│       ├── worker-report/
-│       ├── credit-invoices-report/
-│       ├── expenses-report/
-│       ├── types-report/
-│       ├── subscriptions-report/
-│       ├── customer-account-report/
-│       └── zakat-report/
-├── scripts/                  — PowerShell scripts for service/update management
-│   ├── updater.ps1           — Rename-based exe replacement
-│   ├── launch-updater.ps1    — Register updater as Task Scheduler task
-│   ├── run-installer.ps1     — Run Inno Setup installer (4 paths)
-│   ├── launch-installer.ps1  — Register installer as Task Scheduler task
-│   ├── install-service.ps1   — NSSM service installation
-│   ├── register-task.ps1     — Generic task registration helper
-│   └── setup-ssl.ps1 / setup.ps1
-├── installer/
-│   └── laundry.iss           — Inno Setup script
-├── release/
-│   └── laundry-app.exe       — Built executable (committed for deploy)
-└── specs/                    — Feature specs (Spec Kit)
-    └── <NNN>-<feature>/
-        ├── spec.md, plan.md, tasks.md
-        └── research.md, data-model.md, quickstart.md
+server/
+  index.js                   — Express entry point, auth routes, cron jobs, ZATCA scheduler
+  paths.js                   — APP_ROOT / DATA_ROOT resolution (pkg-aware)
+  invokeHandlers.js          — ALL /api/invoke business logic, single switch(method)
+  middleware/auth.js         — JWT sign/verify, authMiddleware
+  services/
+    updateService.js         — GitHub Releases auto-update
+    zatcaBridge.js           — ZATCA singleton (LocalZatcaBridge)
+    whatsappService.js       — WhatsApp via Baileys
+    reportEmailScheduler.js  — Daily report email cron
+    exportsService.js        — Excel/PDF exports
+    reportHtml.js / emailService.js / branding.js
+database/
+  db.js                      — MySQL pool + ALL db functions + ALL migrations
+assets/
+  web-api.js                 — window.api (browser-side invoke wrapper)
+  tailwind.css / input.css
+screens/
+  pos/                       — Point of Sale (pos.html, pos.js, pos.css)
+  invoices/                  — Invoice list
+  credit-invoices/           — Deferred/credit invoices
+  consumption-receipts/      — Subscription consumption
+  customers/ products/ services/ subscriptions/ offers/ expenses/
+  users/ roles/ dashboard/ payment/ invoice-a4/ login/ settings/
+  zatca-settings/ whatsapp/ installing/
+  reports/                   — daily-report, period-report, all-invoices-report,
+                               worker-report, subscriptions-report, zakat-report, ...
+scripts/
+  updater.ps1 / launch-updater.ps1   — exe rename updater (Task Scheduler)
+  launch-installer.ps1 / run-installer.ps1 — Inno Setup installer
+  install-service.ps1                — NSSM service setup
+installer/laundry.iss        — Inno Setup script
+release/laundry-app.exe      — Built exe (committed to repo)
+specs/<NNN>-<feature>/       — spec.md, plan.md, tasks.md
 ```
+
+**Runtime paths** (from `server/paths.js`):
+```js
+APP_ROOT  = path.join(__dirname, '..')    // bundled files: screens, assets, scripts
+DATA_ROOT = isPkg ? EXEC_DIR : APP_ROOT  // writable files: .env, data/, ssl/
+DATA_DIR  = path.join(DATA_ROOT, 'data') // logs/, update-status.json, whatsapp_session/
+```
+PowerShell scripts cannot read files inside the pkg snapshot — copy to `DATA_DIR` first.
 
 ---
 
-## API Architecture (4-Step Checklist)
+## 4. API Architecture — 4-Step Checklist
 
-**Every new API function must follow all 4 steps:**
+Every new API method requires ALL 4 steps. Missing any step breaks the feature.
 
-1. **`database/db.js`** — Add the DB function (query, insert, update)
-2. **`server/invokeHandlers.js`** — Add a `case 'methodName':` in the `invoke()` switch
-3. **`server/index.js`** — Register route only if it's a direct HTTP endpoint (binary/export); most features use invoke
-4. **`assets/web-api.js`** — Add `api.methodName = (payload) => invoke('methodName', payload)` to `window.api`
+1. **`database/db.js`** — add a named export function with parameterized query
+2. **`server/invokeHandlers.js`** — add `case 'methodName':` inside the `invoke()` switch
+3. **`assets/web-api.js`** — add `api.methodName = (p) => invoke('methodName', p)`
+4. **Screen JS** — call `window.api.methodName(payload)` (never `fetch('/api/invoke')` directly)
 
-Frontend calls: `window.api.methodName(payload)` → POST `/api/invoke` → `invokeHandlers.js` → `db.js`
+> `server/index.js` is for auth routes (`/api/auth/*`), exports (`/api/export/*`), binary/file
+> download endpoints, and special infrastructure routes only. It is **not** part of normal
+> `/api/invoke` features.
 
-Response shape — always one of:
+**Request flow:**
+```
+window.api.methodName(payload)
+  → POST /api/invoke { method, payload }
+    → invokeHandlers.js switch(method)
+      → db.js namedFunction()
+        → MySQL
+```
+
+**Response shape** — always one of:
 ```js
 { success: true,  ...data }
 { success: false, message: 'Arabic error string' }
@@ -149,166 +128,294 @@ Response shape — always one of:
 
 ---
 
-## Key Paths (Runtime)
+## 5. Database Rules
 
-```js
-// server/paths.js
-APP_ROOT  = path.join(__dirname, '..')      // bundled files (screens, assets, scripts)
-DATA_ROOT = isPkg ? EXEC_DIR : APP_ROOT    // writable files (.env, data/, ssl/, backup/)
-DATA_DIR  = path.join(DATA_ROOT, 'data')   // logs, update-status.json, whatsapp_session
-```
+- Schema changes are **additive only**: `ADD COLUMN`, `CREATE TABLE`, `ADD INDEX`
+- **NEVER** `DROP COLUMN`, `RENAME COLUMN`, `DROP TABLE`, or `RENAME TABLE` in migrations
+- New `NOT NULL` columns **must** have a `DEFAULT` value
+- Every migration wrapped in `try { ... } catch (_) {}` (idempotent)
+- Every migration function registered in `db.initialize()` in chronological order
+- **Never run DDL from `invokeHandlers.js`** — schema changes belong only in `db.js`
+- `DECIMAL(10,2)` for all monetary values — never floats
+- Images stored as gzip-compressed BLOBs in the database (no filesystem storage)
+- Transactions: `pool.getConnection()` → `beginTransaction()` → `commit/rollback` → `release()`
 
-PowerShell scripts **cannot** read files inside the pkg snapshot — copy to `DATA_DIR` first.
-
----
-
-## Database Key Tables
+**Key tables:**
 
 | Table | Purpose |
 |-------|---------|
-| `orders` | All invoices (POS, subscription, deferred) |
+| `orders` | All invoices: POS, subscription, deferred |
 | `order_items` | Line items per order |
 | `customers` | Customer records |
 | `products` | Products with optional image (gzip blob) |
 | `laundry_services` | Laundry service types |
 | `prepaid_packages` | Subscription packages |
 | `subscriptions` | Customer subscriptions |
-| `subscription_periods` | Active/expired periods per subscription |
-| `credit_notes` | Credit invoices (آجل) |
+| `subscription_periods` | Active/expired periods (balance tracking) |
+| `credit_notes` | Deferred invoices (آجل) |
 | `refunds` | Refund records |
-| `consumption_receipts` | Consumption receipt records |
-| `hangers` | Hanger tracking |
-| `expenses` | Expense records |
-| `offers` | Discount offers |
-| `loyalty_points` | Loyalty point transactions |
-| `users` | System users |
-| `roles` / `role_permissions` | RBAC |
-| `app_settings` | Single-row settings (logo, VAT, ZATCA, etc.) |
-| `accounts` | Trial/subscription accounts (ip-based) |
-| `license` | Hardware serial license |
-
-Migrations run at startup via `db.initialize()` — always use `ALTER TABLE … ADD COLUMN` in a try/catch for additive migrations.
+| `consumption_receipts` | Subscription consumption |
+| `loyalty_points` | Loyalty point ledger |
+| `app_settings` | Single-row settings (id=1): VAT, logo, ZATCA, print copies, etc. |
+| `users` / `roles` / `role_permissions` | Auth and RBAC |
+| `accounts` / `license` | Trial (IP-based) and hardware license |
 
 ---
 
-## Coding Conventions
+## 6. MySQL 5.7 Compatibility
 
-- **Arabic UI** throughout — all user-facing strings in Arabic
-- **Riyal symbol**: `ر.س` (not ﷼)
-- **No framework** — plain HTML + vanilla JS + CSS per screen
-- **`window.api`** is the only bridge between frontend and backend — never call `/api/invoke` directly in screen JS
-- Each screen is self-contained: one `.html`, one `.js`, one `.css`
-- `db.js` exports named functions — no ORM, raw `mysql2` queries
-- `invokeHandlers.js` uses a single `switch(m)` — one case per method
-- Error responses: `{ success: false, message: '...' }` | Success: `{ success: true, ...data }`
-- VAT calculations: stored as inclusive or exclusive based on `priceDisplayMode` setting
-- JWT auth via `httpOnly` cookie (`token`); `authMiddleware` applied to `/api/invoke`
+**All SQL must be compatible with MySQL 5.7. No exceptions without explicit written approval.**
+
+MySQL 5.7 does NOT support window functions. The following are prohibited:
+
+| Prohibited syntax | Reason |
+|-------------------|--------|
+| `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `OVER(...)` | Window functions — MySQL 8.0 only |
+| `WITH ... AS (...)` (non-recursive CTEs) | MySQL 8.0 only |
+| `WITH RECURSIVE` | MySQL 8.0 only |
+| `JSON_TABLE()` | MySQL 8.0 only |
+| `LATERAL` joins | MySQL 8.0 only |
+| Invisible columns | MySQL 8.0 only |
+
+**Use instead:** subqueries, derived tables (`FROM (SELECT ...) t`), `JOIN`, temporary tables,
+or application-side logic in Node.js.
+
+**Safe on MySQL 5.7:** `JSON_EXTRACT`, `JSON_OBJECT`, `JSON_ARRAY` (since 5.7.8),
+`GROUP BY`, `ORDER BY`, `HAVING`, `LIMIT`/`OFFSET`, `UNION`/`UNION ALL`,
+`INSERT … ON DUPLICATE KEY UPDATE`, standard subqueries.
 
 ---
 
-## Build & Deployment
+## 7. Frontend Rules
 
+- **Vanilla JS only** — no React, Vue, Angular, Svelte, or any JS framework
+- **No ES modules** — no `import`/`export` in frontend files; use `<script>` tags
+- **No bundler** — no Webpack, Vite, Rollup, etc.
+- **One screen = one folder** — `screens/<name>/<name>.{html,js,css}`, self-contained
+- **`window.api` is the only bridge** to the backend — never call `fetch('/api/invoke')` directly
+- **Arabic UI** — all user-facing strings in Arabic; `<html lang="ar" dir="rtl">`
+- **Riyal symbol** — `<span class="sar">&#xE900;</span>` with `SaudiRiyal` font; never use `﷼`
+- **CommonJS on server** — `require()` / `module.exports`; no `import`/`export` server-side
+- No shared components across screens — screens are fully self-contained
+
+**Naming conventions:**
+- Files/directories: `kebab-case`
+- JS functions/variables: `camelCase`
+- HTML IDs: `camelCase` (`btnBack`, `searchInput`)
+- CSS classes: `kebab-case` (`header-bar`, `inv-paper`)
+- DB tables/columns: `snake_case`
+- API method names: `camelCase` matching the DB function name
+- i18n keys: `kebab-case` with screen prefix (`pos-cart-title`)
+
+---
+
+## 8. POS Rules
+
+- `createOrder` runs in a **single transaction** (orders + order_items + ZATCA trigger)
+- `orders.total_amount = subtotal - discount + vat_amount` — **do not change this formula**
+- Mixed payment: `paid_cash + paid_card == total_amount` (tolerance ≤ 0.01 SAR)
+- Deferred order: `payment_method='deferred'`, `payment_status='pending'`, `paid_amount=0`
+- Subscription deduction is credit usage — it does **not** reduce `remaining_amount` on the invoice
+- `credit_remaining` on `subscription_periods` must never go below 0
+- Only ONE active subscription period per customer at any time
+
+---
+
+## 9. Invoice, Payments & Subscription Rules
+
+**Invoices:**
+- Each invoice stores its own `price_display_mode` at creation — never retroactive
+- VAT is configurable in `app_settings.priceDisplayMode` (inclusive / exclusive)
+- `invoice_seq` and `order_number` are independent sequential counters, both inside transactions
+
+**Payments:**
+- Mixed payment tolerance: `paid_cash + paid_card == total_amount` (± 0.01 SAR)
+- Deferred (credit) invoice: settled via `credit_notes`, separate from `orders` balance
+
+**Subscriptions:**
+- One subscription per customer; second attempt must be rejected
+- `subscription_periods` is an append-only ledger (no DELETE operations)
+- Consumption: `INSERT INTO consumption_receipts` + `UPDATE subscription_periods` (balance decrement)
+- On balance = 0 or expiry: period status → `expired`, activate next period if any
+
+**Business logic that is frozen — do not change without an explicit requirement:**
+- Invoice total formula and VAT calculation
+- ZATCA submission and retry logic
+- Subscription credit deduction (≠ cash payment)
+- Partial / mixed payment validation
+- Deferred invoice creation and settlement flow
+- Refund balance update logic
+- Loyalty points earn / redeem calculation
+
+---
+
+## 10. ZATCA Rules
+
+- Singleton: `LocalZatcaBridge.getInstance()` in `server/services/zatcaBridge.js`
+- Retry scheduler: every 15 min via cron in `server/index.js`
+- Settings stored in `app_settings`: `zatcaEnabled`, `zatcaMode`, `zatcaCertificate`, etc.
+- ZATCA columns on `orders` table (`zatca_status`, `zatca_hash`, etc.) — **do not touch** in unrelated work
+- **Do not alter ZATCA submission workflow** without explicit written requirement from project owner
+
+---
+
+## 11. Printing Rules
+
+Every screen that prints an 80mm thermal receipt must follow this pattern exactly.
+
+**Fixed values — never change:**
+
+| Property | Correct value | Common mistake |
+|----------|--------------|----------------|
+| `.inv-paper` width | `76mm` | `72mm` |
+| `.inv-paper` margin | `margin: 0 auto` | `margin: 0 4mm` → misalignment |
+| Print zone width | `80mm` + `margin: 0 auto` | constraining `body` width |
+| `@page` rule | `size: 80mm auto; margin: 0` | omitting entirely |
+| Content copy | `printZone.innerHTML = paperEl.outerHTML` | printing modal directly |
+| Multi-copy sequencing | `afterprint` event + `setTimeout(200)` between copies | fixed timers |
+| Printer offset | `transform: translateX(Nmm)` only when shift ≠ 0 | adjusting `margin` instead |
+
+Full JS + CSS pattern: [PROJECT_CONSTITUTION.md §8](PROJECT_CONSTITUTION.md#8-thermal-print-rules-80mm-receipts)
+
+---
+
+## 12. Permissions & Auth
+
+- JWT stored in `httpOnly` cookie `laundry_auth` (7-day expiry)
+- `authMiddleware` applied to all `/api/invoke` requests
+- Roles: `admin` (bypasses all checks), `cashier`
+- Permission checks are client-side via `data-permission` attributes and `auth-guard.js`
+- Rate limit on login: 50 requests / 15 min
+- License validation: disk serial + MAC + motherboard serial vs `license` table
+
+---
+
+## 13. Build, Installer & Updates
+
+**Build commands:**
 ```bash
-# Full build (pkg exe + Inno Setup installer)
-npm run build
-
-# Dev server
-npm start
-
-# CSS (Tailwind)
-npm run watch:css
+npm start            # Dev server
+npm run build        # Full build: pkg exe + Inno Setup installer
+npm run watch:css    # Tailwind CSS watch
+npm run build:css    # Tailwind CSS one-shot
+npm run build:installer  # Installer only
 ```
 
-- **pkg** bundles `server/index.js` + assets → `release/laundry-app.exe`
-- **Inno Setup** (`installer/laundry.iss`) creates the installer with scripts/, ssl setup, NSSM
-- Service name: `LaundryPlus` (NSSM)
-- Boot log: `DATA_ROOT/data/logs/boot.log`
-- Update log: `DATA_ROOT/data/update-log.txt`
+Service name: `LaundryPlus` | Boot log: `DATA_ROOT/data/logs/boot.log`
 
----
+**Update flow:**
+```
+updateService.js → GitHub Releases API → download .exe → SHA256 verify
+  → spawnUpdater() → copy scripts to DATA_DIR
+    → Task Scheduler: LaundryPlusUpdater
+      → updater.ps1: wait for Node PID exit → rename exe → NSSM restarts
+```
 
-## Background Services & Crons
+**Installer flow:**
+```
+launch-installer.ps1 → Task Scheduler → run-installer.ps1 → Inno Setup → NSSM restore
+```
+
+- **Never use `spawn(detached: true)`** for post-exit scripts — NSSM Job Object kills them
+- Always use Task Scheduler via a `launch-*.ps1` script for post-exit work
+- Progress tracked in `DATA_ROOT/data/update-status.json`, polled by `screens/installing/`
+
+**Background crons:**
 
 | Service | Schedule | File |
 |---------|----------|------|
-| Update check | startup + every 6h | `updateService.js` |
-| Daily report email | configurable | `reportEmailScheduler.js` |
-| ZATCA retry | every 15 min | `zatcaBridge.js` via `index.js` |
-| WhatsApp auto-reconnect | on startup if session exists | `whatsappService.js` |
+| Update check | Startup + every 6h | `services/updateService.js` |
+| ZATCA retry | Every 15 min | `services/zatcaBridge.js` via `index.js` |
+| Daily report email | Configurable in settings | `services/reportEmailScheduler.js` |
+| WhatsApp reconnect | Startup if session exists | `services/whatsappService.js` |
 
 ---
 
-## Update System
+## 14. Feature Impact Checklist
 
-- `updateService.js`: checks GitHub Releases API, downloads `.exe`, verifies SHA256, calls `spawnUpdater()`
-- `spawnUpdater()`: copies scripts to `DATA_DIR`, registers `LaundryPlusUpdater` Task Scheduler task via `launch-updater.ps1`
-- `updater.ps1`: waits for Node PID to exit → renames `.exe` → NSSM restarts service
-- Installer path: `launch-installer.ps1` → `run-installer.ps1` → Inno Setup (4 paths based on session type)
-- Progress tracked in `DATA_ROOT/data/update-status.json`, polled by `screens/installing/`
+**Complete before writing any code. Re-verify before marking the task done.**
+Mark N/A only if the feature provably cannot affect that area.
 
----
-
-## ZATCA Integration
-
-- `zatcaBridge.js` → `LocalZatcaBridge` singleton
-- Settings stored in `app_settings` (zatcaEnabled, zatcaMode, zatcaCertificate, etc.)
-- Unsent orders retried every 15 minutes
-- `screens/zatca-settings/` for configuration UI
+| Area | What to verify |
+|------|---------------|
+| **Database** | Migrations additive, MySQL-5.7-safe, wrapped in try/catch, registered in `db.initialize()` |
+| **POS Checkout** | `createOrder` flow, cart, payment, and receipt behavior fully intact |
+| **ZATCA** | `orders` ZATCA columns untouched; submission/retry scheduler unaffected |
+| **Subscriptions** | `credit_remaining >= 0`; one active period; balance deduction logic intact |
+| **Payments** | Invoice total formula unchanged; mixed-payment tolerance (≤ 0.01 SAR) intact |
+| **Printing** | Thermal: `76mm / margin: 0 auto`; print zone pattern; `afterprint` cleanup intact |
+| **Backward Compatibility** | Existing customer deployments safe; no breaking schema or API changes |
 
 ---
 
-## Thermal Print Rules (80mm Receipts)
+## 15. New Feature Rules
 
-**أي شاشة جديدة تطبع إيصال حرارى 80mm يجب أن تتبع هذا النمط بالضبط:**
+Every new feature must follow the existing stack (no exceptions without owner approval):
 
-### Fixed Values — Never Change
+1. Add migration function in `db.js` (additive, try/catch, MySQL 5.7, register in `db.initialize()`)
+2. Add named query function(s) in `db.js`
+3. Add `case 'methodName':` in `invokeHandlers.js` (try/catch, standard response shape, Arabic errors)
+4. Add `api.methodName = (p) => invoke('methodName', p)` in `assets/web-api.js`
+5. Create `screens/<feature>/<feature>.{html,js,css}` (self-contained, Arabic UI, RTL)
+6. Call only `window.api.*` from screen JS — never `fetch('/api/invoke')` directly
 
-| Rule | Correct Value | Common Mistake |
-|------|--------------|----------------|
-| `.inv-paper` width inside zone | `76mm` | `72mm` |
-| `.inv-paper` margin inside zone | `margin: 0 auto` | `margin: 0 4mm` → misalignment |
-| Print zone container width | `80mm` + `margin: 0 auto` | constraining `body` width |
-| `@page` declaration | `size: 80mm auto; margin: 0` | omitting `@page` |
-| Copy paper content | `printZone.innerHTML = paperEl.outerHTML` | printing modal directly |
-| Printer offset | `transform: translateX(shift mm)` only when `shift !== 0` | adjusting `margin` |
-| Cleanup trigger | `afterprint` event + `setTimeout(200)` between copies | fixed timers |
-
-### Pattern (copy exactly)
-
-**HTML** — outside modal before `</body>`:
-```html
-<div id="myPrintZone" data-print-root="true" style="display:none"></div>
-```
-
-**CSS**:
-```css
-@page { size: 80mm auto; margin: 0; }
-@media print {
-  html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-               overflow: visible !important; height: auto !important; max-height: none !important; }
-  body.printing-myscreen > *:not(#myPrintZone) { display: none !important; }
-  body.printing-myscreen #myPrintZone {
-    display: block !important; position: static !important; background: none !important;
-    padding: 0 !important; overflow: visible !important; height: auto !important;
-    width: 80mm !important; margin: 0 auto !important; }
-  body.printing-myscreen #myPrintZone .inv-paper {
-    box-shadow: none !important; border-radius: 0 !important;
-    width: 76mm !important; max-width: 76mm !important;
-    margin: 0 auto !important;   /* NEVER margin: 0 4mm */
-    padding: 2mm 3mm !important; height: auto !important;
-    max-height: none !important; overflow: visible !important; }
-  .no-print { display: none !important; }
-}
-```
-
-**JS** — see full template in [PROJECT_CONSTITUTION.md § 8.3](PROJECT_CONSTITUTION.md#83-js--print-function)
+**Before writing code:**
+- Search `invokeHandlers.js` for the method name — do not duplicate an existing case
+- Search `db.js` for the table/function — do not duplicate existing queries
+- Search `screens/` for a similar screen — extend it rather than reinventing
 
 ---
 
-## Security Notes
+## 16. Bug Fix Rules
 
-- Passwords hashed with bcrypt (10 rounds)
-- JWT in `httpOnly` cookie, 24h expiry
-- Rate limiting on login: 50 req / 15 min
-- License check: disk serial + MAC + motherboard serial vs `license` table
-- Trial mode: IP-based account in `accounts` table
+1. Identify the root cause before touching any code
+2. Make the minimal change — fix exactly what is broken
+3. Do not refactor or clean up surrounding code in the same fix
+4. Do not change the response shape of existing API methods — callers depend on it
+5. Verify these workflows after every fix: POS checkout, subscription balance,
+   invoice printing, ZATCA submission queue, credit invoice flow, auth/login
+
+---
+
+## 17. Forbidden Changes
+
+The following are prohibited without explicit written approval from the project owner.
+An AI agent must refuse to implement these even if instructed mid-task.
+
+| # | Prohibited action | Reason |
+|---|-------------------|--------|
+| 1 | React / Vue / Svelte / any JS framework | Architecture is vanilla JS by design |
+| 2 | ORM (Sequelize, Prisma, Knex, TypeORM, etc.) | All queries are hand-written in `db.js` |
+| 3 | Direct `fetch('/api/invoke')` in screen JS | Breaks the `window.api` abstraction layer |
+| 4 | REST routes per feature (bypass invoke pattern) | The single-switch pattern is intentional |
+| 5 | Redesign the thermal printing mechanism | Print zone + body class is the only pattern that works |
+| 6 | Change `.inv-paper` dimensions (`76mm / margin: 0 auto`) | Causes physical misalignment on thermal printers |
+| 7 | Alter ZATCA submission workflow | Legally mandatory compliance; unauthorized changes risk violations |
+| 8 | Replace the update system (Task Scheduler + updater.ps1) | NSSM Job Object constraint |
+| 9 | `spawn(detached: true)` for post-exit scripts | NSSM kills detached child processes |
+| 10 | DDL from `invokeHandlers.js` | Schema changes belong exclusively in `db.js` |
+| 11 | `process.exit()` in request handlers | NSSM watchdog handles restarts |
+| 12 | `DROP COLUMN` / `RENAME COLUMN` in migrations | Breaking change for existing customer data |
+| 13 | ES module `import`/`export` in server-side files | Entire backend is CommonJS; breaks pkg bundling |
+| 14 | Shared JS components across screens | Screens are self-contained; shared state is unpredictable |
+| 15 | MySQL 8.0-only syntax without explicit approval | Customer installations may run MySQL 5.7 |
+
+---
+
+## 18. Final Checklist Before Completing Work
+
+- [ ] 4-Step API checklist complete for every new method (db.js → invokeHandlers.js → web-api.js → screen)
+- [ ] All DB migrations are additive, try/catch-wrapped, MySQL-5.7-safe, and registered
+- [ ] No duplicate logic introduced (search before adding)
+- [ ] Feature Impact Checklist (§14) completed for all 7 areas
+- [ ] POS checkout works end-to-end
+- [ ] Thermal print dimensions unchanged (`76mm`, `margin: 0 auto`)
+- [ ] ZATCA columns on `orders` table untouched
+- [ ] Existing API callers unaffected (backward compatible)
+- [ ] All user-facing strings in Arabic
+- [ ] No forbidden change (§17) implemented
+
+---
+
+*Full authoritative rules and code patterns: [PROJECT_CONSTITUTION.md](PROJECT_CONSTITUTION.md)*
+*Spec Kit constitution: [.specify/memory/constitution.md](.specify/memory/constitution.md)*

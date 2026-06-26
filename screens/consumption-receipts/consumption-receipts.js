@@ -81,10 +81,12 @@
       const nameEn = escHtml(it.productNameEn || it.product_name_en || '');
       const svcAr = escHtml(it.serviceNameAr || it.service_name_ar || it.service || '');
       const svcEn = escHtml(it.serviceNameEn || it.service_name_en || '');
+      const merzam = escHtml(it.merzamTypeName || it.merzam_type_name || it.merzam || '');
       const productCell = nameAr
         + (nameEn && nameEn !== nameAr ? '<br><span class="inv-td-en">' + nameEn + '</span>' : '');
       const serviceCell = svcAr
-        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '');
+        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '')
+        + (merzam ? '<span class="inv-td-merzam">' + merzam + '</span>' : '');
       const qty = it.qty != null ? it.qty : (it.quantity != null ? it.quantity : 1);
       const line = it.lineTotal != null ? it.lineTotal : (it.line_total != null ? it.line_total : 0);
       return '<tr>'
@@ -313,6 +315,7 @@
               productNameEn: it.product_name_en,
               serviceNameAr: it.service_name_ar,
               serviceNameEn: it.service_name_en,
+              merzamTypeName: it.merzam_type_name,
               quantity: it.quantity,
               lineTotal: it.line_total
             }));

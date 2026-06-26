@@ -82,7 +82,6 @@
           <thead id="productsTableHead">
             <tr>
               <th class="col-reorder th-nosort" scope="col" data-i18n-title="products-reorder-col-title" title="">⋮⋮</th>
-              <th class="col-index" scope="col" data-i18n="products-col-index">#</th>
               <th class="th-sortable col-manual-order" scope="col">
                 <button type="button" class="th-sort-btn" data-sort="sort_order">
                   <span class="th-sort-label" data-i18n="products-col-manual-order">الترتيب</span>
@@ -224,11 +223,21 @@
           </div>
 
           <div class="field-group field-group-full">
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="inputMerzamEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="toggle-label" data-i18n="products-label-merzam">إضافة مزرام</span>
+            </div>
+          </div>
+
+          <div class="field-group field-group-full">
             <div class="price-lines-section">
               <div class="price-lines-head">
                 <span class="price-lines-title" data-i18n="products-price-lines-title">التسعير (عملية + سعر)</span>
                 <button type="button" id="btnAddPriceLine" class="btn-secondary">
-                  <span data-i18n="products-btn-add-line">+ سطر</span>
+                  <span data-i18n="products-btn-add-line">+ إضافة</span>
                 </button>
               </div>
               <div class="price-lines-table-wrap">

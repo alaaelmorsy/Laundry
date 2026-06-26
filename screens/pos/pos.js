@@ -56,6 +56,8 @@
     loyaltyPointsToRedeem: 0,
     customerLoyaltyBalance: 0,
     skipSubscription: false,
+    merzamTypes: [],
+    customerCustomPrices: {},  // { "productId:serviceId": { productId, laundryServiceId, customPrice } }
   };
 
   /* ========== DOM REFS ========== */
@@ -118,8 +120,11 @@
     subChipSubBalance: document.getElementById('subChipSubBalance'),
     btnClearSubCustomer: document.getElementById('btnClearSubCustomer'),
     subPackageSelect: document.getElementById('subPackageSelect'),
+    subPeriodType: document.getElementById('subPeriodType'),
+    subStartDateGroup: document.getElementById('subStartDateGroup'),
     subStartDate: document.getElementById('subStartDate'),
     subEndDate: document.getElementById('subEndDate'),
+    subEndDateGroup: document.getElementById('subEndDateGroup'),
     subRenewSubGroup: document.getElementById('subRenewSubGroup'),
     subRenewSubSelect: document.getElementById('subRenewSubSelect'),
     subCarryOver: document.getElementById('subCarryOver'),
@@ -358,12 +363,27 @@
   };
 
   /* ========== UTILS ========== */
+  function ensureThermalInvoiceTitlePosition() {
+    if (!els || !els.invTypeLabelRow || !els.invShopName) return;
+    var headerWrap = els.invShopName.parentElement;
+    if (!headerWrap) return;
+    if (els.invLogoWrap && els.invLogoWrap.parentElement === headerWrap) {
+      headerWrap.insertBefore(els.invTypeLabelRow, els.invLogoWrap.nextSibling);
+      return;
+    }
+    headerWrap.insertBefore(els.invTypeLabelRow, els.invShopName);
+  }
+
   function fmtLtr(n) {
     return Number(n || 0).toFixed(2);
   }
 
   function riyalHtml(amountStr) {
     return `<span class="amt-sar"><span class="sar">&#xE900;</span><span>${amountStr}</span></span>`;
+  }
+
+  function plainMoneyHtml(amountStr) {
+    return `<span>${amountStr}</span>`;
   }
 
   function t(key) {
@@ -400,6 +420,58 @@
       toast.classList.add('toast-top-out');
       setTimeout(() => toast.remove(), 300);
     }, duration);
+  }
+
+  function cartThumbPlaceholderHtml() {
+    return `
+      <div class="ci-thumb-placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+      </div>
+    `;
+  }
+
+  function getCartThumbHtml(item, product) {
+    const hasImage = product && Number(product.has_image) === 1;
+    const cached = imageCache.get(item.productId);
+    if (hasImage && cached) {
+      return `<img src="${cached}" alt="${escHtml(item.productNameAr || item.productNameEn || '')}" draggable="false" />`;
+    }
+    return cartThumbPlaceholderHtml();
+  }
+
+  async function ensureCartThumbImage(item, thumbEl) {
+    if (!item || !thumbEl || imageCache.has(item.productId)) return;
+    const product = state.products.find((p) => p.id === item.productId);
+    if (!product || Number(product.has_image) !== 1) return;
+    try {
+      const res = await window.api.getPosProductImages([item.productId]);
+      const images = (res && res.success && res.images) ? res.images : {};
+      const dataUrl = images[item.productId] || null;
+      imageCache.set(item.productId, dataUrl);
+      if (dataUrl) {
+        persistCacheDebounced();
+        thumbEl.innerHTML = `<img src="${dataUrl}" alt="${escHtml(item.productNameAr || item.productNameEn || '')}" draggable="false" />`;
+      }
+    } catch (_) {
+      imageCache.set(item.productId, null);
+    }
+  }
+
+  function syncDiscountTypeUi() {
+    const isPct = state.discountType === 'pct';
+    els.btnDiscPct.classList.toggle('active', isPct);
+    els.btnDiscFlat.classList.toggle('active', !isPct);
+    if (isPct) {
+      els.discountInput.setAttribute('max', '100');
+      els.discountInput.placeholder = '0-100';
+    } else {
+      els.discountInput.removeAttribute('max');
+      els.discountInput.placeholder = '0.00';
+    }
   }
 
   /* ========== PAYMENT METHODS ========== */
@@ -587,6 +659,12 @@
     renderProducts();
 
     _loadImagesBackground(state.products.slice());
+
+    // تحميل أنواع المزرام
+    try {
+      const mzRes = await window.api.getMerzamTypes();
+      if (mzRes && mzRes.success) state.merzamTypes = mzRes.types || [];
+    } catch (_) {}
   }
 
   async function _loadImagesBackground(products) {
@@ -959,7 +1037,12 @@
   function addToCart(product, priceLine) {
     const lang = getLang();
     const key = `${product.id}_${priceLine.laundry_service_id}_${Date.now()}`;
-    const unitPrice = parseFloat(priceLine.price);
+    const generalPrice = parseFloat(priceLine.price);
+    const lookupKey = `${product.id}:${priceLine.laundry_service_id}`;
+    const customEntry = state.customerCustomPrices && state.customerCustomPrices[lookupKey];
+    const customPrice = customEntry ? parseFloat(customEntry.customPrice) : null;
+    const unitPrice = customPrice !== null ? customPrice : generalPrice;
+    const priceSource = customPrice !== null ? 'custom' : 'general';
     const productNameAr = product.name_ar || product.name_en || '';
     const productNameEn = product.name_en || product.name_ar || '';
     const serviceNameAr = priceLine.service_name_ar || priceLine.service_name_en || '';
@@ -975,7 +1058,13 @@
       serviceNameAr,
       serviceNameEn,
       serviceName,
+      merzamEnabled: Number(product.merzam_enabled) === 1,
+      merzamTypeId: null,
+      merzamTypeName: null,
       unitPrice,
+      generalPrice,
+      customPrice,
+      priceSource,
       qty: 1,
       lineTotal: unitPrice
     });
@@ -1026,6 +1115,14 @@
     updateMobileCartBadge();
   }
 
+  function formatBilingualLabel(nameAr, nameEn) {
+    const ar = String(nameAr || '').trim();
+    const en = String(nameEn || '').trim();
+    if (!ar) return en;
+    if (!en || en === ar) return ar;
+    return `${ar} / ${en}`;
+  }
+
   /* ========== RENDER CART ========== */
   function renderCart() {
     const isEmpty = state.cart.length === 0;
@@ -1060,37 +1157,53 @@
             : `<span class="ci-service-tag">${escHtml(svcAr || svcEn)}</span>`;
         }
 
+        // قائمة المزرام — تظهر فقط إذا المنتج مفعّل المزرام وليس في وضع المعالجة
+        let merzamHtml = '';
+        if (item.merzamEnabled && !isProcessMode && state.merzamTypes.length > 0) {
+          const mzOptions = `<option value="">— نوع المزرام —</option>` +
+            state.merzamTypes.map((mt) => {
+              const sel = mt.id === item.merzamTypeId ? ' selected' : '';
+              return `<option value="${mt.id}"${sel}>${escHtml(formatBilingualLabel(mt.name_ar, mt.name_en))}</option>`;
+            }).join('');
+          merzamHtml = `<select class="cart-item-merzam-select" data-key="${escHtml(item.key)}">${mzOptions}</select>`;
+        } else if (item.merzamEnabled && isProcessMode && item.merzamTypeName) {
+          merzamHtml = `<span class="ci-merzam-tag">${escHtml(item.merzamTypeName)}</span>`;
+        }
+
         const row = document.createElement('div');
         row.className = 'cart-item' + (isProcessMode ? ' cart-item-readonly' : '');
-        
+
+        const customBadge = '';
         const nameHtml = item.productNameEn && item.productNameEn !== item.productNameAr
           ? `<span class="ci-name-ar">${escHtml(item.productNameAr)}</span><span class="ci-name-en">${escHtml(item.productNameEn)}</span>`
           : `<span class="ci-name-ar">${escHtml(item.productNameAr)}</span>`;
-        
+
         if (isProcessMode) {
           row.innerHTML = `
             <div class="ci-row1">
+              <div class="ci-thumb" data-product-id="${item.productId}">${getCartThumbHtml(item, product)}</div>
               <span class="ci-name" title="${escHtml(item.productNameAr)}">${nameHtml}</span>
             </div>
             <div class="ci-row2">
-              <div class="ci-service-wrap">${serviceHtml}</div>
+              <div class="ci-service-wrap">${serviceHtml}${merzamHtml ? `<div class="ci-merzam-wrap">${merzamHtml}</div>` : ''}</div>
               <div class="ci-qty-readonly">× ${item.qty}</div>
-              <span class="ci-line-total">${riyalHtml(fmtLtr(item.lineTotal))}</span>
+              <span class="ci-line-total">${plainMoneyHtml(fmtLtr(item.lineTotal))}</span>
             </div>
           `;
         } else {
           row.innerHTML = `
             <div class="ci-row1">
-              <span class="ci-name" title="${escHtml(item.productNameAr)}">${nameHtml}</span>
+              <div class="ci-thumb" data-product-id="${item.productId}">${getCartThumbHtml(item, product)}</div>
+              <span class="ci-name" title="${escHtml(item.productNameAr)}">${nameHtml}${customBadge}</span>
             </div>
             <div class="ci-row2">
-              <div class="ci-service-wrap">${serviceHtml}</div>
+              <div class="ci-service-wrap">${serviceHtml}${merzamHtml ? `<div class="ci-merzam-wrap">${merzamHtml}</div>` : ''}</div>
               <div class="ci-qty-group">
                 <button class="qty-btn plus" data-key="${escHtml(item.key)}" type="button">+</button>
                 <input class="qty-display" type="text" inputmode="numeric" pattern="[0-9]*" value="${item.qty}" lang="en" dir="ltr" autocomplete="off" />
                 <button class="qty-btn minus" data-key="${escHtml(item.key)}" type="button">−</button>
               </div>
-              <span class="ci-line-total">${riyalHtml(fmtLtr(item.lineTotal))}</span>
+              <span class="ci-line-total">${plainMoneyHtml(fmtLtr(item.lineTotal))}</span>
               <button class="ci-remove" data-key="${escHtml(item.key)}" type="button">حذف</button>
             </div>
           `;
@@ -1116,7 +1229,20 @@
           if (sel) {
             sel.addEventListener('change', () => changeItemService(item.key, parseInt(sel.value, 10)));
           }
+
+          const mzSel = row.querySelector('.cart-item-merzam-select');
+          if (mzSel) {
+            mzSel.addEventListener('change', () => {
+              const cartItem = state.cart.find((i) => i.key === item.key);
+              if (!cartItem) return;
+              const mzId = mzSel.value ? parseInt(mzSel.value, 10) : null;
+              const mzType = mzId ? state.merzamTypes.find((t) => t.id === mzId) : null;
+              cartItem.merzamTypeId = mzId;
+              cartItem.merzamTypeName = mzType ? formatBilingualLabel(mzType.name_ar, mzType.name_en) : null;
+            });
+          }
         }
+        ensureCartThumbImage(item, row.querySelector('.ci-thumb'));
 
         fragment.appendChild(row);
       });
@@ -1143,7 +1269,12 @@
     const newLine = product.priceLines.find((pl) => pl.laundry_service_id === newServiceId);
     if (!newLine) return;
 
-    const newUnitPrice = parseFloat(newLine.price);
+    const newGeneralPrice = parseFloat(newLine.price);
+    const newLookupKey = item.productId + ':' + newServiceId;
+    const newCustomEntry = state.customerCustomPrices && state.customerCustomPrices[newLookupKey];
+    const newCustomPrice = newCustomEntry ? parseFloat(newCustomEntry.customPrice) : null;
+    const newUnitPrice = newCustomPrice !== null ? newCustomPrice : newGeneralPrice;
+    const newPriceSource = newCustomPrice !== null ? 'custom' : 'general';
     const newServiceNameAr = newLine.service_name_ar || newLine.service_name_en || '';
     const newServiceNameEn = newLine.service_name_en || newLine.service_name_ar || '';
     const newServiceName = lang === 'ar' ? (newServiceNameAr || newServiceNameEn) : (newServiceNameEn || newServiceNameAr);
@@ -1153,6 +1284,9 @@
     item.serviceNameAr = newServiceNameAr;
     item.serviceNameEn = newServiceNameEn;
     item.serviceName = newServiceName;
+    item.generalPrice = newGeneralPrice;
+    item.customPrice = newCustomPrice;
+    item.priceSource = newPriceSource;
     item.unitPrice = newUnitPrice;
     item.lineTotal = item.qty * newUnitPrice;
 
@@ -1549,6 +1683,43 @@
     }
     updateSkipSubscriptionBtn();
 
+    // أسعار مخصصة للعميل — تحميل وإعادة تسعير الـ cart
+    const prevCustomId = state.selectedCustomer && state.selectedCustomer.id;
+    if (customer.id) {
+      try {
+        const cpr = await window.api.getCustomerPosCustomPrices({ customerId: customer.id });
+        const newPrices = (cpr && cpr.success) ? (cpr.prices || {}) : {};
+
+        // Check if cart has manual-priced items before re-pricing
+        const manualItems = state.cart.filter(function (item) { return item.priceSource === 'manual'; });
+        let repriceManaul = false;
+        if (state.cart.length > 0 && manualItems.length > 0) {
+          repriceManaul = confirm('يوجد ' + manualItems.length + ' بند(بنود) بأسعار يدوية — هل تريد إعادة التسعير وفق العميل الجديد؟');
+        }
+
+        state.customerCustomPrices = newPrices;
+
+        // Re-price cart items
+        state.cart.forEach(function (item) {
+          if (item.priceSource === 'manual' && !repriceManaul) return;
+          const lookupKey = item.productId + ':' + item.serviceId;
+          const entry = newPrices[lookupKey];
+          if (entry) {
+            item.customPrice = parseFloat(entry.customPrice);
+            item.unitPrice = item.customPrice;
+            item.priceSource = 'custom';
+          } else {
+            item.customPrice = null;
+            item.unitPrice = item.generalPrice;
+            item.priceSource = 'general';
+          }
+          item.lineTotal = item.qty * item.unitPrice;
+        });
+        renderCart();
+        updateSummary();
+      } catch (_) {}
+    }
+
     // خصم العميل — تطبيق أو إلغاء بناءً على الصلاحية وتاريخ الانتهاء
     state.customerDiscount = null;
     if (customer.discount_type && customer.discount_value != null && Number(customer.discount_value) > 0) {
@@ -1570,6 +1741,16 @@
     state.selectedCustomer = null;
     state.customerLoyaltyBalance = 0;
     state.customerDiscount = null;
+    // إعادة تسعير بنود الـ cart إلى السعر العام
+    state.customerCustomPrices = {};
+    state.cart.forEach(function (item) {
+      if (item.priceSource === 'custom') {
+        item.unitPrice = item.generalPrice;
+        item.customPrice = null;
+        item.priceSource = 'general';
+        item.lineTotal = item.qty * item.unitPrice;
+      }
+    });
     els.customerSearch.value = '';
     els.btnClearCustomer.style.display = 'none';
     els.selectedCustomerChip.style.display = 'none';
@@ -1791,6 +1972,13 @@
     els.subRenewSubGroup.style.display = isRenew ? '' : 'none';
   }
 
+  function syncSubscriptionPeriodFields() {
+    const isLimited = els.subPeriodType.value === 'limited';
+    els.subStartDateGroup.style.display = isLimited ? '' : 'none';
+    els.subEndDateGroup.style.display = isLimited ? '' : 'none';
+    if (!isLimited) els.subEndDate.value = '';
+  }
+
   async function openAddSubscriptionModal(mode) {
     mode = mode || 'new';
     els.addSubError.style.display = 'none';
@@ -1805,6 +1993,8 @@
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
     els.subStartDate.value = `${yyyy}-${mm}-${dd}`;
+    els.subPeriodType.value = 'unlimited';
+    syncSubscriptionPeriodFields();
     els.subEndDate.value = ''; // تاريخ الانتهاء فارغ (باقة مفتوحة)
     els.subRenewSubSelect.innerHTML = '<option value="">— اختر اشتراك —</option>';
     subSetMode(mode);
@@ -1951,6 +2141,8 @@
   async function handleSaveSubscription() {
     const customerId = els.subCustomerId.value;
     const packageId = els.subPackageSelect.value;
+    const isLimited = els.subPeriodType.value === 'limited';
+    if (!isLimited) els.subEndDate.value = '';
     const periodFrom = els.subStartDate.value || undefined;
     const periodTo = els.subEndDate.value || undefined; // تاريخ الانتهاء (اختياري)
     const isRenew = state.subMode === 'renew';
@@ -1974,6 +2166,11 @@
     }
     
     // التحقق من صحة التواريخ
+    if (isLimited && !els.subEndDate.value) {
+      els.addSubError.textContent = 'يرجى تحديد تاريخ الانتهاء للباقة المحدودة';
+      els.addSubError.style.display = '';
+      return;
+    }
     if (periodFrom && periodTo) {
       const startDate = new Date(periodFrom);
       const endDate = new Date(periodTo);
@@ -2165,6 +2362,7 @@
           productEn: it.product_name_en || '',
           serviceAr: it.service_name_ar || '',
           serviceEn: it.service_name_en || '',
+          merzam:    it.merzam_type_name || '',
           qty: it.quantity || 1,
           unitPrice: it.unit_price || it.unitPrice || 0,
           lineTotal: it.line_total || it.lineTotal || 0
@@ -2350,6 +2548,7 @@
         if (it.productEn && it.productEn !== it.productAr) nameCell += '<span class="a4m-td-en">' + escHtml(it.productEn) + '</span>';
         var svcCell = escHtml(it.serviceAr || '—');
         if (it.serviceEn && it.serviceEn !== it.serviceAr) svcCell += '<span class="a4m-td-en">' + escHtml(it.serviceEn) + '</span>';
+        if (it.merzam) svcCell += '<span class="a4m-td-merzam">' + escHtml(it.merzam) + '</span>';
 
         return '<tr>'
           + '<td class="a4m-td-num">' + (i + 1) + '</td>'
@@ -2620,24 +2819,34 @@
       var nameEn = escHtml(item.productNameEn || '');
       var svcAr = escHtml(item.serviceNameAr || item.serviceName || '');
       var svcEn = escHtml(item.serviceNameEn || '');
+      var merzam = escHtml(item.merzam || item.merzamTypeName || item.merzam_type_name || '');
       var productCell = nameAr
         + (nameEn && nameEn !== nameAr ? '<br><span class="inv-td-en">' + nameEn + '</span>' : '');
       var serviceCell = svcAr
-        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '');
+        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '')
+        + (merzam ? '<span class="inv-td-merzam">' + merzam + '</span>' : '');
       var qty = item.qty != null ? item.qty : (item.quantity != null ? item.quantity : 1);
       var line = item.lineTotal != null ? item.lineTotal : 0;
       return '<tr>'
         + '<td class="inv-td-name">' + (productCell || '—') + '</td>'
         + '<td class="inv-td-num">' + qty + '</td>'
         + '<td class="inv-td-amt">' + fmtLtr(line) + '</td>'
-        + '<td class="inv-td-name">' + (svcAr ? serviceCell : '—') + '</td>'
+        + '<td class="inv-td-name">' + (svcAr ? serviceCell : (merzam ? serviceCell : '—')) + '</td>'
         + '</tr>';
     }).join('');
   }
 
-  function printConsumptionReceipt() {
+  function printConsumptionReceipt(options) {
+    options = options || {};
     var copies = getPrintCopies();
-    if (copies === 0) return;
+    if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
+    if (copies === 0) {
+      if (!state._creditNoteModalMode && !state.viewingDeferredInvoice && state.shouldClearCartAfterConsumptionPrint !== false) {
+        clearCart();
+        state.shouldClearCartAfterConsumptionPrint = false;
+      }
+      return;
+    }
 
     // نسخ محتوى الإيصال لـ print zone (خارج المودال) للتوافق مع متصفحات الجوال
     var crPaperEl = document.getElementById('crModalPaper');
@@ -3103,6 +3312,7 @@
     } else {
       els.invLogoWrap.style.display = 'none';
     }
+    ensureThermalInvoiceTitlePosition();
 
     /* ── Reset CN mode elements ── */
     state._creditNoteModalMode = false;
@@ -3194,18 +3404,20 @@
       var nameEn = escHtml(item.productNameEn || '');
       var svcAr  = escHtml(item.serviceNameAr  || item.serviceName || '');
       var svcEn  = escHtml(item.serviceNameEn  || '');
+      var merzam = item.merzamTypeName ? escHtml(item.merzamTypeName) : '';
 
       var productCell = nameAr
         + (nameEn && nameEn !== nameAr ? '<br><span class="inv-td-en">' + nameEn + '</span>' : '');
 
       var serviceCell = svcAr
-        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '');
+        + (svcEn && svcEn !== svcAr ? '<br><span class="inv-td-en">' + svcEn + '</span>' : '')
+        + (merzam ? '<span class="inv-td-merzam">' + merzam + '</span>' : '');
 
       return '<tr>'
         + '<td class="inv-td-name">' + productCell + '</td>'
         + '<td class="inv-td-num">' + item.qty + '</td>'
         + '<td class="inv-td-amt">' + fmtLtr(item.lineTotal) + '</td>'
-        + '<td class="inv-td-name">' + (svcAr ? serviceCell : '—') + '</td>'
+        + '<td class="inv-td-name">' + (svcAr ? serviceCell : (merzam ? serviceCell : '—')) + '</td>'
         + '</tr>';
     }).join('');
 
@@ -3600,6 +3812,7 @@
           productEn:  item.productNameEn || '',
           serviceAr:  item.serviceNameAr || item.serviceName || '',
           serviceEn:  item.serviceNameEn || '',
+          merzam:     item.merzamTypeName || '',
           qty:        item.qty,
           unitPrice:  item.unitPrice,
           lineTotal:  item.lineTotal
@@ -3668,14 +3881,16 @@
 
       state.cart = (items || []).map(function(item) {
         return {
-          productNameAr: item.product_name_ar || '',
-          productNameEn: item.product_name_en || '',
-          serviceNameAr: item.service_name_ar || '',
-          serviceNameEn: item.service_name_en || '',
-          serviceName:   item.service_name_ar || '',
-          qty:           item.quantity,
-          unitPrice:     parseFloat(item.unit_price || 0),
-          lineTotal:     parseFloat(item.line_total || 0),
+          productNameAr:  item.product_name_ar || '',
+          productNameEn:  item.product_name_en || '',
+          serviceNameAr:  item.service_name_ar || '',
+          serviceNameEn:  item.service_name_en || '',
+          serviceName:    item.service_name_ar || '',
+          qty:            item.quantity,
+          unitPrice:      parseFloat(item.unit_price || 0),
+          lineTotal:      parseFloat(item.line_total || 0),
+          merzamTypeName: item.merzam_type_name || null,
+          merzamEnabled:  !!item.merzam_type_name,
         };
       });
       state.selectedCustomer = order.customer_name
@@ -3842,7 +4057,9 @@
         productNameAr: item.productNameAr || null,
         productNameEn: item.productNameEn || null,
         serviceNameAr: item.serviceNameAr || null,
-        serviceNameEn: item.serviceNameEn || null
+        serviceNameEn: item.serviceNameEn || null,
+        merzamTypeId: item.merzamTypeId || null,
+        merzamTypeName: item.merzamTypeName || null
       }));
 
       const res = await window.api.createOrder({
@@ -3958,7 +4175,7 @@
       var ratio = total > 0 && consumed > 0 && invoicePart > 0 ? invoicePart / total : 1;
 
       if (consumed > 0) {
-        state.shouldClearCartAfterConsumptionPrint = !!res.isConsumptionOnly;
+        state.shouldClearCartAfterConsumptionPrint = true;
         showConsumptionReceiptModal(res, subscription, true);
       }
 
@@ -4140,7 +4357,8 @@
         return { productNameAr: item.product_name_ar || '', productNameEn: item.product_name_en || '',
           serviceNameAr: item.service_name_ar || '', serviceNameEn: item.service_name_en || '',
           serviceName: item.service_name_ar || '', qty: item.quantity,
-          unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0) };
+          unitPrice: parseFloat(item.unit_price || 0), lineTotal: parseFloat(item.line_total || 0),
+          merzamTypeName: item.merzam_type_name || null, merzamEnabled: !!item.merzam_type_name };
       });
       state.selectedCustomer = { name: order.customer_name || '', phone: order.phone || '', taxNumber: order.customer_vat || '' };
       state.paymentMethod    = (totalCash > 0 && totalCard > 0) ? 'mixed' : (order.payment_method || 'cash');
@@ -4227,10 +4445,17 @@
     return copies;
   }
 
-  function printInvoiceByCopies() {
+  function printInvoiceByCopies(options) {
+    options = options || {};
     var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
     var copies = getPrintCopies();
-    if (copies === 0) return;
+    if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
+    if (copies === 0) {
+      if (!state._creditNoteModalMode && !state.viewingDeferredInvoice) {
+        clearCart();
+      }
+      return;
+    }
     var styleEl = null;
 
     styleEl = document.createElement('style');
@@ -4606,6 +4831,7 @@
     } else {
       els.invLogoWrap.style.display = 'none';
     }
+    ensureThermalInvoiceTitlePosition();
 
     var cnNum  = cnRes.creditNoteNumber || String(cnRes.creditNoteSeq);
     var origNum = String(cnRes.originalInvoiceSeq || inv.invoice_seq || inv.order_number || inv.id);
@@ -4915,9 +5141,7 @@
       state.discountType = 'flat';
       state.discount = 0;
       els.discountInput.value = '';
-      els.discountInput.removeAttribute('max');
-      els.btnDiscFlat.classList.add('active');
-      els.btnDiscPct.classList.remove('active');
+      syncDiscountTypeUi();
       updateSummary();
     });
 
@@ -4926,11 +5150,11 @@
       state.discountType = 'pct';
       state.discount = 0;
       els.discountInput.value = '';
-      els.discountInput.setAttribute('max', '100');
-      els.btnDiscPct.classList.add('active');
-      els.btnDiscFlat.classList.remove('active');
+      syncDiscountTypeUi();
       updateSummary();
     });
+
+    syncDiscountTypeUi();
 
     if (els.starchSelect) {
       els.starchSelect.addEventListener('change', () => {
@@ -5066,7 +5290,7 @@
           return;
         }
       }
-      printInvoiceByCopies();
+      printInvoiceByCopies({ forceAtLeastOneCopy: true });
     });
 
     els.btnInvExportPdf.addEventListener('click', async () => {
@@ -5139,6 +5363,10 @@
     if (els.btnCrModalClose) {
       els.btnCrModalClose.addEventListener('click', function () {
         if (els.consumptionReceiptModal) els.consumptionReceiptModal.style.display = 'none';
+        if (!state._creditNoteModalMode && !state.viewingDeferredInvoice && state.shouldClearCartAfterConsumptionPrint !== false) {
+          clearCart();
+          state.shouldClearCartAfterConsumptionPrint = false;
+        }
       });
     }
     if (els.btnCrModalWhatsapp) {
@@ -5160,7 +5388,7 @@
       els.btnCrModalPrint.addEventListener('click', () => {
         const isRefund = els.crModalRefundNumRow && els.crModalRefundNumRow.style.display !== 'none';
         state.shouldClearCartAfterConsumptionPrint = !isRefund;
-        printConsumptionReceipt();
+        printConsumptionReceipt({ forceAtLeastOneCopy: true });
       });
     }
     if (els.btnCrModalExportPdf) {
@@ -5364,6 +5592,7 @@
     });
     els.btnAddSubClose.addEventListener('click', closeAddSubscriptionModal);
     els.btnAddSubCancel.addEventListener('click', closeAddSubscriptionModal);
+    els.subPeriodType.addEventListener('change', syncSubscriptionPeriodFields);
     els.addSubscriptionModal.addEventListener('click', (e) => {
       if (e.target === els.addSubscriptionModal) closeAddSubscriptionModal();
     });
@@ -6851,6 +7080,8 @@
       qty:           item.quantity,
       unitPrice:     parseFloat(item.unit_price || 0),
       lineTotal:     parseFloat(item.line_total || 0),
+      merzamTypeName: item.merzam_type_name || null,
+      merzamEnabled:  !!item.merzam_type_name,
     }));
     state.selectedCustomer = order.customer_name
       ? { name: order.customer_name, phone: order.phone || '', taxNumber: order.customer_vat || '' }

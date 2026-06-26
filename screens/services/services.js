@@ -149,46 +149,38 @@ window.addEventListener('DOMContentLoaded', () => {
       await loadServices();
     }
 
-    function bindServicesRowDnD() {
-      servicesTableBody.querySelectorAll('tr[data-row-id]').forEach((tr) => {
-        const handle = tr.querySelector('.drag-handle');
-        if (!handle) return;
-        handle.addEventListener('dragstart', (e) => {
-          e.dataTransfer.setData('text/plain', String(tr.dataset.rowId));
-          e.dataTransfer.effectAllowed = 'move';
-          tr.classList.add('row-dragging');
-        });
-        handle.addEventListener('dragend', () => {
-          tr.classList.remove('row-dragging');
-          servicesTableBody.querySelectorAll('tr.row-drag-over').forEach((row) => row.classList.remove('row-drag-over'));
-        });
-        tr.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          tr.classList.add('row-drag-over');
-        });
-        tr.addEventListener('dragleave', (e) => {
-          if (!tr.contains(e.relatedTarget)) tr.classList.remove('row-drag-over');
-        });
-        tr.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          tr.classList.remove('row-drag-over');
-          const draggedId = Number(e.dataTransfer.getData('text/plain'));
-          const targetId = Number(tr.dataset.rowId);
-          if (!draggedId || draggedId === targetId) return;
-          try {
-            const r = await window.api.reorderLaundryService({ id: draggedId, beforeId: targetId });
-            if (r.success) {
-              showToast(I18N.t('services-reorder-success'), 'success');
-              await applyServiceManualSortAndReload();
-            } else {
-              showToast(r.message || I18N.t('services-err-generic'), 'error');
-            }
-          } catch (err) {
-            showToast(I18N.t('services-err-db'), 'error');
-          }
-        });
-      });
+    async function moveServiceRow(serviceId, direction) {
+      const idx = currentServices.findIndex((s) => Number(s.id) === Number(serviceId));
+      if (idx === -1) return;
+
+      let beforeId = null;
+      if (direction === 'up') {
+        if (idx === 0) return;
+        beforeId = currentServices[idx - 1].id;
+      } else if (direction === 'down') {
+        if (idx === currentServices.length - 1) return;
+        beforeId = idx + 2 < currentServices.length ? currentServices[idx + 2].id : null;
+      } else if (direction === 'first') {
+        if (idx === 0) return;
+        beforeId = currentServices[0].id;
+      } else if (direction === 'last') {
+        if (idx === currentServices.length - 1) return;
+        beforeId = null;
+      } else {
+        return;
+      }
+
+      try {
+        const r = await window.api.reorderLaundryService({ id: serviceId, beforeId });
+        if (r.success) {
+          showToast(I18N.t('services-reorder-success'), 'success');
+          await applyServiceManualSortAndReload();
+        } else {
+          showToast(r.message || I18N.t('services-err-generic'), 'error');
+        }
+      } catch (err) {
+        showToast(I18N.t('services-err-db'), 'error');
+      }
     }
 
     function isServiceActive(s) {
@@ -248,13 +240,21 @@ window.addEventListener('DOMContentLoaded', () => {
       servicesTableBody.innerHTML = services.map((s, i) => {
         const active = isServiceActive(s);
         const activeNum = active ? 1 : 0;
-        const dragTitle = escHtml(I18N.t('services-drag-handle-title'));
+        const moveUpTitle = escHtml(I18N.t('services-move-up-title'));
+        const moveDownTitle = escHtml(I18N.t('services-move-down-title'));
+        const disableUp = i === 0 ? ' disabled' : '';
+        const disableDown = i === services.length - 1 ? ' disabled' : '';
         return `
       <tr class="${active ? '' : 'row-inactive'}" data-row-id="${s.id}">
         <td class="col-reorder">
-          <span class="drag-handle" draggable="true" title="${dragTitle}">⋮⋮</span>
+          <div class="reorder-actions">
+            <button type="button" class="reorder-btn js-move-first" title="نقل للأول" aria-label="نقل للأول" data-id="${s.id}"${disableUp}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="17 11 12 6 7 11"/><polyline points="17 17 12 12 7 17"/><line x1="5" y1="3" x2="19" y2="3"/></svg></button>
+            <button type="button" class="reorder-btn js-move-up" title="${moveUpTitle}" aria-label="${moveUpTitle}" data-id="${s.id}"${disableUp}>&#9650;</button>
+            <button type="button" class="reorder-btn js-move-down" title="${moveDownTitle}" aria-label="${moveDownTitle}" data-id="${s.id}"${disableDown}>&#9660;</button>
+            <button type="button" class="reorder-btn js-move-last" title="نقل للآخر" aria-label="نقل للآخر" data-id="${s.id}"${disableDown}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="17 7 12 12 7 7"/><polyline points="17 13 12 18 7 13"/><line x1="5" y1="21" x2="19" y2="21"/></svg></button>
+          </div>
         </td>
-        <td class="index-cell">${indexStart + i + 1}</td>
+
         <td class="col-order-num">${s.sort_order != null && s.sort_order !== '' ? escHtml(String(s.sort_order)) : '—'}</td>
         <td>${escHtml(s.name_ar || '—')}</td>
         <td dir="ltr" style="text-align:right">${escHtml(s.name_en || '—')}</td>
@@ -311,7 +311,18 @@ window.addEventListener('DOMContentLoaded', () => {
           deleteService(Number(btn.dataset.id), row ? (row.name_ar || '') : '');
         });
       });
-      bindServicesRowDnD();
+      servicesTableBody.querySelectorAll('.js-move-first').forEach((btn) => {
+        btn.addEventListener('click', () => moveServiceRow(Number(btn.dataset.id), 'first'));
+      });
+      servicesTableBody.querySelectorAll('.js-move-up').forEach((btn) => {
+        btn.addEventListener('click', () => moveServiceRow(Number(btn.dataset.id), 'up'));
+      });
+      servicesTableBody.querySelectorAll('.js-move-down').forEach((btn) => {
+        btn.addEventListener('click', () => moveServiceRow(Number(btn.dataset.id), 'down'));
+      });
+      servicesTableBody.querySelectorAll('.js-move-last').forEach((btn) => {
+        btn.addEventListener('click', () => moveServiceRow(Number(btn.dataset.id), 'last'));
+      });
     }
 
     async function toggleServiceStatus(id, currentActive) {
