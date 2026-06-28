@@ -3,7 +3,7 @@
 # 🧺 PLUS Laundry — نظام نقاط بيع لمحلات التنظيف الجاف
 
 <p>
-  <img src="https://img.shields.io/badge/version-1.0.27-blue?style=flat-square" alt="version"/>
+  <img src="https://img.shields.io/github/package-json/v/alaaelmorsy/Laundry?style=flat-square&label=version&color=blue" alt="version"/>
   <img src="https://img.shields.io/badge/Node.js-20-339933?style=flat-square&logo=node.js&logoColor=white" alt="node"/>
   <img src="https://img.shields.io/badge/MySQL-5.7%2B-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="mysql"/>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white" alt="platform"/>

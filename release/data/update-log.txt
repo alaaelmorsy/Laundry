@@ -1,4 +1,0 @@
-[2026-06-13T22:04:32.523Z] [INFO] Update check: current=1.0.3 latest=1.0.4 hasUpdate=true
-[2026-06-13T22:08:10.391Z] [INFO] Update check: current=1.0.3 latest=1.0.4 hasUpdate=true
-[2026-06-13T23:16:49.747Z] [INFO] Update check: current=1.0.3 latest=1.0.10 hasUpdate=true
-[2026-06-13T23:17:19.327Z] [INFO] Update check: 304 Not Modified, using cache

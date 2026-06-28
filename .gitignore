@@ -1,13 +1,13 @@
-# ── Dependencies ────────────────────────────────────
+# ── Dependencies ─────────────────────────────────────
 node_modules/
 
-# ── Environment & Secrets ────────────────────────────
+# ── Environment & Secrets ─────────────────────────────
 .env
 .env.*
 !.env.example
 installer/.env
 
-# ── SSL / Certificates ───────────────────────────────
+# ── SSL / Certificates ────────────────────────────────
 ssl/
 *.pem
 *.key
@@ -38,7 +38,7 @@ backup/
 # ── WhatsApp Session (sensitive) ─────────────────────
 data/whatsapp_session/
 
-# ── Generated ────────────────────────────────────────
+# ── Generated ─────────────────────────────────────────
 generated/
 
 # ── OS ───────────────────────────────────────────────
@@ -46,8 +46,36 @@ generated/
 Thumbs.db
 Desktop.ini
 
-# ── Editors ──────────────────────────────────────────
+# ── Editors ───────────────────────────────────────────
 .vscode/settings.json
 .idea/
 *.suo
 *.user
+
+# ── AI development tools ──────────────────────────────
+.kilo/
+.kiro/
+.qodo/
+.windsurf/
+.zenflow-attachments/
+.claude/settings.local.json
+
+# ── Binary executables (distributed via GitHub Releases) ──
+release/laundry-app.exe
+release/mkcert.exe
+tools/mkcert.exe
+
+# ── Runtime state files ───────────────────────────────
+release/data/update-log.txt
+release/data/update-status.json
+
+# ── Legacy planning docs (superseded by specs/) ───────
+*_plan.md
+*-plan.md
+*-plan-phase2.md
+plan_*.md
+fix-encoding.js
+FIX_ARABIC_NUMBERS_IN_DATES.md
+MIXED_PAYMENT_PLAN.md
+SUBSCRIPTION_END_DATE_CHANGES.md
+ZATCA_PHASE2_FULL_DOC.md
