@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="hc-page-title">الفنادق والشركات - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../assets/tailwind.css" />
+  <link rel="stylesheet" href="../../assets/sidebar.css" />
+  <link rel="stylesheet" href="hotels-companies.css" />
+</head>
+<body data-permission="hotels_companies">
+  <div class="page-wrapper">
+    <!-- Header -->
+    <div class="header-bar">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <span class="header-title" data-i18n="hc-header-title">الفنادق والشركات</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="back-btn" id="btnBack">
+          <span data-i18n="hc-back">رجوع</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+      <!-- Customer Search Panel -->
+      <div class="panel" id="customerPanel">
+        <div class="panel-header">
+          <h2 class="panel-title" data-i18n="hc-customers-panel-title">عملاء الشركات والفنادق</h2>
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="customerSearch" class="search-input" data-i18n-placeholder="hc-customer-search-placeholder" placeholder="بحث باسم الشركة أو الفندق..." />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="customersTable">
+            <thead>
+              <tr>
+                <th data-i18n="hc-th-company-name">اسم الشركة / الفندق</th>
+                <th data-i18n="hc-th-phone">الهاتف</th>
+                <th data-i18n="hc-th-vat">الرقم الضريبي</th>
+                <th data-i18n="hc-th-pending-orders">أوامر في الانتظار</th>
+                <th data-i18n="hc-th-pending-total">إجمالي الانتظار</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="customersTableBody">
+              <tr><td colspan="6" class="empty-cell" id="customersEmpty" data-i18n="hc-loading">جارٍ التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="customerPaginationBar" style="display:none"></div>
+      </div>
+
+      <!-- Work Orders Panel (shown after selecting a customer) -->
+      <div class="panel" id="ordersPanel" style="display:none">
+        <div class="panel-header">
+          <div class="panel-customer-info">
+            <button class="btn-icon" id="btnBackToCustomers" data-i18n-title="hc-customers-panel-title" title="العودة لقائمة العملاء">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <div>
+              <h2 class="panel-title" id="selectedCustomerName">اسم الشركة</h2>
+              <span class="panel-subtitle" id="selectedCustomerVat"></span>
+            </div>
+          </div>
+          <!-- Search + Filter row -->
+          <div class="orders-toolbar">
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="ordersSearch" class="search-input" data-i18n-placeholder="hc-orders-search-placeholder" placeholder="رقم D-XXX أو رقم فاتورة..." />
+            </div>
+            <input type="date" id="ordersDateFrom" class="date-input" data-i18n-title="hc-th-date" title="من تاريخ" />
+            <input type="date" id="ordersDateTo" class="date-input" data-i18n-title="hc-th-date" title="إلى تاريخ" />
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-bar">
+          <button class="tab-btn active" data-tab="pending" data-i18n="hc-tab-pending">في الانتظار</button>
+          <button class="tab-btn" data-tab="invoiced" data-i18n="hc-tab-invoiced">مُفوترة</button>
+          <button class="tab-btn" data-tab="cancelled" data-i18n="hc-tab-cancelled">ملغية</button>
+        </div>
+
+        <!-- Pending tab actions -->
+        <div class="pending-actions" id="pendingActions" style="display:none">
+          <label class="select-all-label">
+            <input type="checkbox" id="selectAllOrders" /> <span data-i18n="hc-select-all">تحديد الكل</span>
+          </label>
+          <div class="discount-row">
+            <span class="discount-label" data-i18n="hc-discount-label">خصم:</span>
+            <input type="number" id="discountValue" class="discount-input" min="0" step="0.01" placeholder="0" />
+            <select id="discountType" class="discount-type-select">
+              <option value="fixed" data-i18n="hc-discount-sar">ريال</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
+          <div class="payment-row">
+            <label class="payment-label" for="paymentMethodSelect" data-i18n="hc-payment-method-label">طريقة الدفع:</label>
+            <select id="paymentMethodSelect" class="payment-method-select">
+              <option value="cash" data-i18n="payment-cash">نقدي</option>
+            </select>
+          </div>
+          <div class="total-preview" id="totalPreview" style="display:none">
+            <span data-i18n="hc-total-selected">المجموع المحدد:</span> <strong id="previewSubtotal">0.00</strong>
+            <span id="previewDiscountRow" style="display:none"> — <span data-i18n="hc-discount-preview">خصم:</span> <strong id="previewDiscount">0.00</strong></span>
+            = <strong id="previewTotal">0.00</strong>
+            <span class="sar">&#xE900;</span>
+          </div>
+          <div class="export-btns-row">
+            <button class="btn-export-excel" id="btnExportSelectedExcel" disabled data-i18n="hc-btn-export-excel">تصدير Excel</button>
+            <button class="btn-export-pdf"   id="btnExportSelectedPdf"   disabled data-i18n="hc-btn-export-pdf">تصدير PDF</button>
+            <button class="btn-primary" id="btnIssueInvoice" disabled data-i18n="hc-btn-issue-invoice">إصدار فاتورة مجمعة</button>
+          </div>
+        </div>
+
+        <!-- Work Orders Table -->
+        <div class="table-wrap">
+          <table class="data-table" id="ordersTable">
+            <thead id="ordersTableHead">
+              <tr>
+                <th id="thCheckbox" style="display:none"><input type="checkbox" id="selectAllOrders2" /></th>
+                <th data-i18n="hc-th-order-num">رقم الأمر</th>
+                <th data-i18n="hc-th-date">التاريخ</th>
+                <th data-i18n="hc-th-total">الإجمالي</th>
+                <th data-i18n="hc-th-cleaning-date">تاريخ التنظيف</th>
+                <th data-i18n="hc-th-delivery-date">تاريخ التسليم</th>
+                <th data-i18n="hc-th-action">الإجراء</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+              <tr><td colspan="7" class="empty-cell" id="ordersEmpty" data-i18n="hc-orders-empty-initial">اختر عميلاً لعرض أوامر التشغيل</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="ordersPaginationBar" style="display:none"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Confirm Cancel Modal -->
+  <div class="modal-overlay" id="cancelModal" style="display:none">
+    <div class="modal-box">
+      <h3 class="modal-title" data-i18n="hc-cancel-modal-title">تأكيد الإلغاء</h3>
+      <p class="modal-text">هل تريد إلغاء أمر التشغيل <strong id="cancelOrderNum"></strong>؟ <span data-i18n="hc-cancel-modal-warn">لا يمكن التراجع عن هذا الإجراء.</span></p>
+      <div class="modal-actions">
+        <button class="btn-danger" id="btnConfirmCancel" data-i18n="hc-btn-confirm-cancel">إلغاء الأمر</button>
+        <button class="btn-secondary" id="btnCancelClose" data-i18n="hc-back">رجوع</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAT Confirm Modal -->
+  <div class="modal-overlay" id="vatConfirmModal" style="display:none">
+    <div class="modal-box">
+      <div class="modal-warn-icon">⚠️</div>
+      <h3 class="modal-title" data-i18n="hc-vat-modal-title">الرقم الضريبي غير مُدخَل</h3>
+      <p class="modal-text"><span data-i18n="hc-customers-panel-title" style="display:none"></span><strong id="vatConfirmCustomerName"></strong> <span data-i18n="hc-vat-modal-no-vat">لا يحتوي على رقم ضريبي.</span><br/><span data-i18n="hc-vat-modal-will-issue">ستُصدَر الفاتورة كـ</span> <strong data-i18n="hc-vat-modal-simplified">فاتورة ضريبية مبسطة</strong>.</p>
+      <div class="modal-actions">
+        <button class="btn-primary" id="btnConfirmNoVat" data-i18n="hc-btn-confirm-no-vat">تأكيد — إصدار فاتورة مبسطة</button>
+        <button class="btn-secondary" id="btnUpdateVat" data-i18n="hc-btn-update-vat">تحديث بيانات العميل</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mixed Payment Modal -->
+  <div class="modal-overlay" id="mixedPaymentModal" style="display:none">
+    <div class="modal-box">
+      <h3 class="modal-title" data-i18n="hc-mixed-modal-title">الدفع نقدي وشبكة</h3>
+      <p class="modal-text" data-i18n="hc-mixed-modal-text">أدخل المبلغ المدفوع نقدًا وسيتم حساب المتبقي شبكة تلقائيًا.</p>
+      <div class="mixed-payment-box">
+        <div class="mixed-payment-row">
+          <span data-i18n="hc-mixed-total">الإجمالي</span>
+          <strong id="mixedTotalAmount" dir="ltr">0.00</strong>
+        </div>
+        <label class="mixed-payment-field" for="mixedCashAmount">
+          <span data-i18n="hc-mixed-cash">المدفوع كاش</span>
+          <input type="number" id="mixedCashAmount" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+        </label>
+        <div class="mixed-payment-row">
+          <span data-i18n="hc-mixed-card">المتبقي شبكة</span>
+          <strong id="mixedCardAmount" dir="ltr">0.00</strong>
+        </div>
+        <div class="mixed-payment-error" id="mixedPaymentError" style="display:none"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" id="btnConfirmMixedPayment" data-i18n="hc-btn-confirm-mixed">تأكيد</button>
+        <button class="btn-secondary" id="btnCancelMixedPayment" data-i18n="hc-back">رجوع</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Work Orders List Modal (invoiced tab) -->
+  <div id="woListModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:700px;width:95%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0;flex-wrap:wrap;gap:8px">
+        <h3 class="modal-title" style="margin:0"><span data-i18n="hc-wo-list-modal-title">أوامر التشغيل المرتبطة بالفاتورة</span> <span id="woListInvoiceNum"></span></h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btnWoListExcel" class="btn-action" style="background:#217346;color:#fff;border-color:transparent;padding:5px 14px" data-i18n="hc-btn-export-excel">تصدير Excel</button>
+          <button id="btnWoListPdf"   class="btn-action" style="background:#dc2626;color:#fff;border-color:transparent;padding:5px 14px" data-i18n="hc-btn-export-pdf">تصدير PDF</button>
+          <button id="btnWoListClose" class="btn-secondary" style="padding:4px 12px" data-i18n="hc-btn-close">إغلاق</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <table class="data-table" id="woListTable">
+          <thead>
+            <tr>
+              <th data-i18n="hc-th-order-num">رقم الأمر</th>
+              <th data-i18n="hc-th-date">التاريخ</th>
+              <th data-i18n="hc-th-total">الإجمالي</th>
+              <th data-i18n="hc-th-action">الإجراء</th>
+            </tr>
+          </thead>
+          <tbody id="woListTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Work Order Preview Modal (same design as POS invoice modal) -->
+  <div id="workOrderModal" class="modal-overlay inv-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="inv-dialog">
+      <div class="inv-dialog-footer no-print">
+        <button id="btnWoModalClose" class="btn-inv-action btn-inv-close" type="button" data-i18n="hc-btn-close">إغلاق</button>
+        <button id="btnWoModalWhatsapp" class="btn-inv-action btn-inv-whatsapp" type="button" style="display:none">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.555 4.122 1.528 5.855L0 24l6.335-1.508A11.934 11.934 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.371l-.36-.214-3.727.977.994-3.634-.235-.374A9.818 9.818 0 1 1 12 21.818z"/>
+          </svg>
+          <span data-i18n="hc-btn-whatsapp">واتساب</span>
+        </button>
+        <button id="btnWoModalExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>
+          <span data-i18n="hc-btn-export-pdf">تصدير PDF</span>
+        </button>
+        <button id="btnWoModalPrint" class="btn-inv-action btn-inv-print" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span data-i18n="hc-btn-print">طباعة</span>
+        </button>
+      </div>
+      <div class="inv-dialog-body">
+        <div class="inv-paper" id="woModalPaper"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Work Order Print Zone -->
+  <div id="woPrintZone" data-print-root style="display:none"></div>
+
+  <!-- A4 Consolidated Invoice Print Zone -->
+  <div id="hcA4PrintZone" style="display:none"></div>
+
+  <!-- A4 Consolidated Invoice Modal -->
+  <div id="hcA4Modal" class="hca4-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="hca4-dialog">
+      <div class="hca4-footer no-print">
+        <button id="hcA4BtnClose"    class="btn-inv-action btn-inv-close"  type="button" data-i18n="hc-btn-close">إغلاق</button>
+        <button id="hcA4BtnWhatsapp" class="btn-inv-action btn-inv-whatsapp" type="button" style="display:none">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.555 4.122 1.528 5.855L0 24l6.335-1.508A11.934 11.934 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.371l-.36-.214-3.727.977.994-3.634-.235-.374A9.818 9.818 0 1 1 12 21.818z"/></svg>
+          <span data-i18n="hc-btn-whatsapp">واتساب</span>
+        </button>
+        <button id="hcA4BtnPdf"      class="btn-inv-action btn-inv-pdf"    type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>
+          <span data-i18n="hc-btn-export-pdf">تصدير PDF</span>
+        </button>
+        <button id="hcA4BtnPrint"    class="btn-inv-action btn-inv-print"  type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span data-i18n="hc-btn-print">طباعة</span>
+        </button>
+      </div>
+      <div class="hca4-body">
+        <div class="inv-paper-a4m" id="hcA4Paper">
+
+          <header class="a4m-header">
+            <div class="a4m-header-ar" dir="rtl">
+              <div class="a4m-brand-name" id="hca4ShopNameAr"></div>
+              <div class="a4m-brand-sub"  id="hca4ShopAddressAr"></div>
+              <div class="a4m-brand-sub"  id="hca4ShopPhoneAr"></div>
+              <div class="a4m-brand-sub"  id="hca4VatAr"></div>
+              <div class="a4m-brand-sub"  id="hca4CrAr"></div>
+            </div>
+            <div class="a4m-header-logo">
+              <img id="hca4Logo" alt="Logo" style="display:none" />
+            </div>
+            <div class="a4m-header-en" dir="ltr">
+              <div class="a4m-brand-name" id="hca4ShopNameEn"></div>
+              <div class="a4m-brand-sub"  id="hca4ShopAddressEn"></div>
+              <div class="a4m-brand-sub"  id="hca4ShopEmail"></div>
+              <div class="a4m-brand-sub"  id="hca4VatEn"></div>
+              <div class="a4m-brand-sub"  id="hca4CrEn"></div>
+            </div>
+          </header>
+
+          <div class="a4m-title-band">
+            <span id="hca4TitleAr">فاتورة ضريبية مجمعة</span>
+            <span class="a4m-title-sep">•</span>
+            <span id="hca4TitleEn">Consolidated Tax Invoice</span>
+          </div>
+
+          <section class="a4m-meta-grid">
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">رقم الفاتورة / Invoice #</div>
+              <div class="a4m-meta-val" id="hca4OrderNum" dir="ltr"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">التاريخ / Date</div>
+              <div class="a4m-meta-val" id="hca4Date" dir="ltr"></div>
+            </div>
+            <div class="a4m-meta-cell">
+              <div class="a4m-meta-lbl">طريقة الدفع / Payment</div>
+              <div class="a4m-meta-val" id="hca4Payment">نقدي</div>
+            </div>
+          </section>
+
+          <section class="a4m-bill-to">
+            <div class="a4m-card">
+              <div class="a4m-kv"><span>الاسم / Name</span><b id="hca4CustName"></b></div>
+              <div class="a4m-kv"><span>الجوال / Mobile</span><b id="hca4CustPhone" dir="ltr"></b></div>
+              <div class="a4m-kv" id="hca4CustVatRow" style="display:none"><span>الرقم الضريبي / VAT No.</span><b id="hca4CustVat" dir="ltr"></b></div>
+            </div>
+            <div class="a4m-card">
+              <div class="a4m-kv"><span>تاريخ السداد / Paid</span><b id="hca4PaidAt" dir="ltr"></b></div>
+              <div class="a4m-kv"><span>تاريخ التنظيف / Cleaned</span><b id="hca4CleanedAt" dir="ltr"></b></div>
+              <div class="a4m-kv"><span>تاريخ التسليم / Delivered</span><b id="hca4DeliveredAt" dir="ltr"></b></div>
+            </div>
+          </section>
+
+          <!-- Items table -->
+          <div class="a4m-items-wrap">
+            <table class="a4m-items">
+              <thead>
+                <tr>
+                  <th class="a4m-th-num">#</th>
+                  <th class="a4m-th-name">النوع / Item</th>
+                  <th class="a4m-th-name">العملية / Service</th>
+                  <th class="a4m-th-num">الكمية / Qty</th>
+                  <th class="a4m-th-num">سعر الوحدة / Unit Price</th>
+                  <th class="a4m-th-num">قبل الضريبة / Net</th>
+                  <th class="a4m-th-num">الضريبة / VAT</th>
+                  <th class="a4m-th-num">الإجمالي / Total</th>
+                </tr>
+              </thead>
+              <tbody id="hca4ItemsTbody"></tbody>
+            </table>
+          </div>
+
+          <section class="a4m-summary">
+            <div class="a4m-totals-col">
+              <div class="a4m-totals">
+                <div class="a4m-trow"><span id="hca4SubtotalLabel">المجموع قبل الضريبة / Subtotal</span><b id="hca4Subtotal" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4DiscRow" style="display:none"><span>الخصم / Discount</span><b id="hca4Discount" class="a4m-neg" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4VatRow"><span id="hca4VatLabel">ضريبة القيمة المضافة (15%) / VAT</span><b id="hca4Vat" dir="ltr"></b></div>
+                <div class="a4m-trow a4m-grand"><span id="hca4TotalLabel">الإجمالي شامل الضريبة / Grand Total</span><b id="hca4Total" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4MixedCashRow" style="display:none"><span>المدفوع كاش / Cash Paid</span><b id="hca4MixedCash" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4MixedCardRow" style="display:none"><span>المدفوع شبكة / Card Paid</span><b id="hca4MixedCard" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4DeferredPaidRow" style="display:none"><span>المدفوع / Paid</span><b id="hca4DeferredPaid" dir="ltr"></b></div>
+                <div class="a4m-trow" id="hca4DeferredRemainingRow" style="display:none"><span>المتبقي / Remaining</span><b id="hca4DeferredRemaining" dir="ltr"></b></div>
+              </div>
+            </div>
+            <div class="a4m-qr-box">
+              <div id="hca4QR" class="a4m-qr"></div>
+              <div class="a4m-qr-label">ZATCA QR</div>
+            </div>
+          </section>
+
+          <div id="hca4FooterNotes" class="a4m-notes-box" style="display:none">
+            <span class="a4m-notes-title">الشروط والأحكام / Terms & Conditions</span>
+            <span class="a4m-notes-content" id="hca4NotesContent"></span>
+          </div>
+
+        </div><!-- /inv-paper-a4m -->
+      </div><!-- /hca4-body -->
+    </div><!-- /hca4-dialog -->
+  </div><!-- /hcA4Modal -->
+
+  <script src="../../assets/i18n.js"></script>
+  <script src="../../assets/web-api.js"></script>
+  <script src="../../assets/auth-guard.js"></script>
+  <script src="../../assets/JsBarcode.min.js"></script>
+  <script src="hotels-companies.js"></script>
+  <script src="../../assets/sidebar.js"></script>
+</body>
+</html>

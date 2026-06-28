@@ -407,7 +407,7 @@
         </span>
         <input id="deferredSearch" type="search" class="deferred-search-input"
           data-i18n-placeholder="pos-deferred-search-placeholder"
-          placeholder="ابحث برقم الفاتورة أو الإيصال (C-5) أو رقم الجوال..."
+          placeholder="ابحث برقم الفاتورة أو أمر التشغيل (D-5) أو الإيصال (C-5) أو رقم الجوال..."
           autocomplete="off" />
       </div>
       <div class="deferred-search-inner deferred-sub-search-inner">
@@ -1249,6 +1249,151 @@
 
 <!-- ===== CONSUMPTION RECEIPT PRINT ZONE (outside modal for mobile compatibility) ===== -->
 <div id="consumptionPrintZone" data-print-root="true" style="display:none"></div>
+
+<!-- ===== WORK ORDER PREVIEW MODAL ===== -->
+<div id="workOrderModal" class="modal-overlay inv-overlay" data-print-root="true" style="display:none" role="dialog" aria-modal="true">
+  <div class="inv-dialog">
+    <div class="inv-dialog-footer no-print">
+      <button id="btnWoClose" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
+      <button id="btnWoWhatsapp" class="btn-inv-action btn-inv-whatsapp" type="button" style="display:none">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.555 4.122 1.528 5.855L0 24l6.335-1.508A11.934 11.934 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.371l-.36-.214-3.727.977.994-3.634-.235-.374A9.818 9.818 0 1 1 12 21.818z"/>
+        </svg>
+        واتساب
+      </button>
+      <button id="btnWoExportPdf" class="btn-inv-action btn-inv-pdf" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>
+        تصدير PDF
+      </button>
+      <button id="btnWoPrint" class="btn-inv-action btn-inv-print" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        طباعة
+      </button>
+    </div>
+    <div class="inv-dialog-body">
+      <div class="inv-paper" id="woPaper">
+        <!-- Shop header (same as invoice) -->
+        <div class="inv-header-wrap">
+          <div class="inv-logo-wrap" id="woLogoWrap" style="display:none">
+            <img id="woLogo" class="inv-logo" alt="شعار المغسلة" />
+          </div>
+          <div class="inv-shop-name" id="woShopName"></div>
+          <div class="inv-shop-sub" id="woShopAddress"></div>
+          <div class="inv-shop-contact-row" id="woShopPhoneRow">
+            <span class="inv-shop-sub" id="woShopPhone"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="woVatRow" style="display:none">
+            <span class="inv-shop-sub" id="woVatNumber" dir="ltr"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="woCRRow" style="display:none">
+            <span class="inv-shop-sub" id="woCR" dir="ltr"></span>
+          </div>
+          <div class="inv-shop-contact-row" id="woEmailRow" style="display:none">
+            <span class="inv-shop-sub" id="woShopEmail"></span>
+          </div>
+          <div id="woCustomFields" style="display:none"></div>
+        </div>
+
+        <div class="inv-divider-thick inv-sep"></div>
+
+        <!-- Work Order title -->
+        <div class="inv-meta-row" style="justify-content:center">
+          <span class="inv-meta-label" id="woTypeLabel" style="color:#000;font-weight:800">أمر تشغيل</span>
+        </div>
+
+        <div class="cr-info-grid">
+          <div class="cr-info-cell">
+            <span class="cr-info-label">رقم الأمر</span>
+            <span class="cr-info-val" id="woOrderNum" dir="ltr"></span>
+          </div>
+          <div class="cr-info-cell">
+            <span class="cr-info-label">التاريخ</span>
+            <span class="cr-info-val" id="woDate" dir="ltr"></span>
+          </div>
+          <div class="cr-info-cell" id="woCustNameRow" style="display:none">
+            <span class="cr-info-label">العميل</span>
+            <span class="cr-info-val" id="woCustName"></span>
+          </div>
+          <div class="cr-info-cell" id="woCustPhoneRow" style="display:none">
+            <span class="cr-info-label">الجوال</span>
+            <span class="cr-info-val" id="woCustPhone" dir="ltr"></span>
+          </div>
+          <div class="cr-info-cell" id="woCustVatRow" style="display:none">
+            <span class="cr-info-label">الرقم الضريبي</span>
+            <span class="cr-info-val" id="woCustVat" dir="ltr"></span>
+          </div>
+          <div class="cr-info-cell" id="woCleanedAtRow" style="display:none">
+            <span class="cr-info-label">تاريخ التنظيف</span>
+            <span class="cr-info-val" id="woCleanedAt" dir="ltr"></span>
+          </div>
+          <div class="cr-info-cell" id="woDeliveredAtRow" style="display:none">
+            <span class="cr-info-label">تاريخ التسليم</span>
+            <span class="cr-info-val" id="woDeliveredAt" dir="ltr"></span>
+          </div>
+        </div>
+
+        <!-- Items table — same column order as invoice: النوع، عدد، الإجمالي، العملية -->
+        <table class="inv-table" style="margin-top:4px">
+          <thead>
+            <tr>
+              <th class="inv-th-name">النوع</th>
+              <th class="inv-th-num">عدد</th>
+              <th class="inv-th-num">الإجمالي</th>
+              <th class="inv-th-name">العملية</th>
+            </tr>
+          </thead>
+          <tbody id="woItemsTbody"></tbody>
+        </table>
+
+        <!-- Totals (same as invoice) -->
+        <div class="inv-totals-box">
+          <div class="inv-total-row" id="woSubtotalRow" style="display:none">
+            <span class="inv-total-label">المجموع قبل الضريبة</span>
+            <span class="inv-total-val" id="woSubtotal" dir="ltr"></span>
+          </div>
+          <div class="inv-total-row" id="woDiscRow" style="display:none">
+            <span class="inv-total-label">الخصم</span>
+            <span class="inv-total-val inv-disc-val" id="woDiscount" dir="ltr"></span>
+          </div>
+          <div class="inv-total-row" id="woVatAmountRow" style="display:none">
+            <span class="inv-total-label" id="woVatLabel">ضريبة القيمة المضافة</span>
+            <span class="inv-total-val" id="woVat" dir="ltr"></span>
+          </div>
+          <div class="inv-total-row inv-grand-row">
+            <span class="inv-grand-label">الإجمالي</span>
+            <span class="inv-grand-val" id="woTotal" dir="ltr"></span>
+          </div>
+        </div>
+
+        <!-- Starch / Bluing (same as invoice extra options) -->
+        <div id="woExtraOpts" style="display:none">
+          <div class="inv-divider-thick inv-sep"></div>
+          <div class="inv-meta-row" id="woStarchRow" style="display:none">
+            <span class="inv-meta-label">نشا</span>
+            <span class="inv-meta-val" id="woStarch"></span>
+          </div>
+          <div class="inv-meta-row" id="woBluingRow" style="display:none">
+            <span class="inv-meta-label">النيلة</span>
+            <span class="inv-meta-val" id="woBluing"></span>
+          </div>
+        </div>
+
+        <!-- Barcode (same as invoice) -->
+        <div class="inv-barcode-wrap">
+          <svg id="woBarcode"></svg>
+        </div>
+
+        <!-- Footer Notes (from settings) -->
+        <div id="woFooterNotes" class="inv-notes-box" style="display:none">
+          <span class="inv-notes-title">الشروط والأحكام (Terms):</span>
+          <span class="inv-notes-content" id="woNotesContent"></span>
+        </div>
+
+      </div><!-- /inv-paper -->
+    </div>
+  </div>
+</div>
 
 <!-- ===== INVOICE PREVIEW MODAL ===== -->
 <div id="invoiceModal" class="modal-overlay inv-overlay" data-print-root="true" style="display:none" role="dialog" aria-modal="true">

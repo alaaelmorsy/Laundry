@@ -1,11 +1,23 @@
-# Feature 14 — ZATCA QR Code (Phase 1 Simplified)
+# Feature 14 — ZATCA (Phase 1 QR + Phase 2 Submission)
 
 ## Goal
-توليد رمز QR متوافق مع ZATCA المرحلة الأولى (Simplified Invoice) لعرضه على فاتورة المبيعات.
+توليد رمز QR متوافق مع ZATCA المرحلة الأولى + إرسال الفواتير الإلكترونية (Phase 2).
 
-## Entry points
+## Phase 1 — QR Code
 - API: `generateZatcaQR` عبر `/api/invoke`.
 - Client: يستدعيها `screens/pos/pos.js` وصفحات طباعة الفاتورة.
+
+## Phase 2 — Submission (منفذة)
+- `zatcaSubmitOrder(orderId)` — إرسال فاتورة مبيعات لـ ZATCA.
+- `zatcaSubmitCreditNote(creditNoteId)` — إرسال إيصال ائتمان.
+- `zatcaGetUnsentOrders` — قائمة الفواتير غير المرسلة.
+- `zatcaRetryUnsent` — إعادة إرسال الفواتير الفاشلة.
+- Retry scheduler: كل 15 دقيقة تلقائيًا.
+- Service: `server/services/zatcaBridge.js` (singleton `LocalZatcaBridge`).
+- الإعدادات: `zatca_settings` جدول منفصل (شهادة، مفتاح، وضع sandbox/production).
+- **لا تعدّل `orders.zatca_status` أو حقول ZATCA في أي كود آخر.**
+
+## Phase 1 — Entry points
 
 ## Inputs
 ```json

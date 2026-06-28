@@ -19,9 +19,16 @@
 
 ## Rules
 - `username UNIQUE` — تكرار يُرجع `"اسم المستخدم موجود بالفعل"` (`ER_DUP_ENTRY`).
-- `role` ∈ `{admin, cashier}`.
+- `role` ∈ `{admin, cashier}` في عمود `users.role` (ENUM).
 - bcrypt hash قبل الحفظ (10 rounds).
 - Seed: يُنشأ `admin/admin123/admin` إذا لم يوجد.
+
+## ملاحظة — نظام الأدوار المخصصة
+بالإضافة إلى الـ ENUM، يوجد نظام أدوار مخصص عبر جداول `roles` و `role_permissions`:
+- API: `getAllRoles`, `createRole`, `updateRole`, `deleteRole`, `saveUserPermissions`
+- الشاشة: `screens/roles/`
+- `admin` يتجاوز كل الفحوصات. الأدوار الأخرى تعتمد على `role_permissions`.
+- التفاصيل في [feature-17-A](feature-17-undocumented-features.md#a-roles--permissions-الأدوار-والصلاحيات).
 
 ## Edge cases
 - حذف المستخدم الوحيد أو النفس: ليس محميًا برمجيًا — مسؤولية الواجهة.

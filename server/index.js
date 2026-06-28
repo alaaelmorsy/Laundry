@@ -394,6 +394,17 @@ async function start() {
     }
   });
 
+  app.post('/api/export/consolidated-work-orders-list', authMiddleware, async (req, res) => {
+    try {
+      const { type, payload = {} } = req.body || {};
+      const result = await exportsService.exportConsolidatedWorkOrdersList(type, payload);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/api/export/customers', authMiddleware, async (req, res) => {
     try {
       const { type, filters = {} } = req.body || {};
@@ -497,6 +508,17 @@ async function start() {
     try {
       const body = req.body || {};
       const result = await exportsService.exportCustomerAccountReport(body);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/export/hotels-companies-report', authMiddleware, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await exportsService.exportHotelsCompaniesReport(body.type, body);
       sendExport(res, result);
     } catch (err) {
       console.error(err);

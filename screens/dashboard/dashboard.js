@@ -31,7 +31,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function applyPermissions(user) {
     if (!user) return;
-    if (user.role === 'admin') return; // admin sees everything
+    if (user.role === 'admin' || user.role === 'superadmin') return; // admin sees everything
 
     document.querySelectorAll('.menu-card[data-permission]').forEach(card => {
       const perm = card.dataset.permission;

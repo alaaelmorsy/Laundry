@@ -160,6 +160,12 @@ async function initialize() {
   await migrateMerzamEnabled();
   await migrateMerzamOrderItems();
   await createCustomerCustomPricesTable();
+  await migrateEnsureOrderTypeSaleValue();
+  await migrateAddConsolidatedFlag();
+  await migrateAddWorkOrderRefOnItems();
+  await migrateCreateWorkOrders();
+  await migrateCreateWorkOrderItems();
+  await migrateWorkOrderItemsMerzam();
 }
 
 async function createCustomerCustomPricesTable() {
@@ -189,6 +195,102 @@ async function createCustomerCustomPricesTable() {
   } catch (e) {
     console.log('[DB] createCustomerCustomPricesTable:', e.message);
   }
+}
+
+async function migrateEnsureOrderTypeSaleValue() {
+  // قواعد بيانات قديمة أُنشئت بـ 'pos' بدلاً من 'sale' — نضيف القيمتين معاً للحفاظ على البيانات الموجودة
+  try {
+    await pool.query(
+      `ALTER TABLE orders MODIFY COLUMN order_type ENUM('pos','sale','subscription_new','subscription_renewal') NOT NULL DEFAULT 'sale'`
+    );
+  } catch (e) {
+    console.error('[DB] migrateEnsureOrderTypeSaleValue:', e.message);
+  }
+}
+
+async function migrateAddConsolidatedFlag() {
+  try {
+    await pool.query(`ALTER TABLE orders ADD COLUMN is_consolidated TINYINT(1) NOT NULL DEFAULT 0`);
+  } catch (_) {}
+  try {
+    await pool.query(`
+      UPDATE orders
+      SET payment_status = 'paid',
+          paid_amount = total_amount,
+          remaining_amount = 0,
+          paid_at = COALESCE(paid_at, created_at, NOW()),
+          fully_paid_at = COALESCE(fully_paid_at, paid_at, created_at, NOW()),
+          cleaning_date = COALESCE(cleaning_date, created_at, NOW()),
+          delivery_date = COALESCE(delivery_date, created_at, NOW())
+      WHERE is_consolidated = 1
+    `);
+  } catch (_) {}
+}
+
+async function migrateAddWorkOrderRefOnItems() {
+  try {
+    await pool.query(`ALTER TABLE order_items ADD COLUMN work_order_id INT DEFAULT NULL`);
+  } catch (_) {}
+}
+
+async function migrateCreateWorkOrders() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS work_orders (
+        id                   INT AUTO_INCREMENT PRIMARY KEY,
+        work_order_seq       INT NOT NULL,
+        work_order_number    VARCHAR(20) NOT NULL,
+        customer_id          INT NOT NULL,
+        subtotal             DECIMAL(10,2) NOT NULL DEFAULT 0,
+        discount_amount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+        vat_rate             DECIMAL(5,2)  NOT NULL DEFAULT 15,
+        vat_amount           DECIMAL(10,2) NOT NULL DEFAULT 0,
+        total_amount         DECIMAL(10,2) NOT NULL DEFAULT 0,
+        price_display_mode   ENUM('inclusive','exclusive') NOT NULL DEFAULT 'exclusive',
+        status               ENUM('pending','invoiced','cancelled') NOT NULL DEFAULT 'pending',
+        consolidated_order_id INT DEFAULT NULL,
+        notes                TEXT DEFAULT NULL,
+        created_by           VARCHAR(100) DEFAULT NULL,
+        created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_wo_number (work_order_number),
+        KEY idx_wo_customer (customer_id),
+        KEY idx_wo_status (status),
+        KEY idx_wo_created_at (created_at),
+        KEY idx_wo_consolidated (consolidated_order_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+  } catch (_) {}
+}
+
+async function migrateCreateWorkOrderItems() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS work_order_items (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        work_order_id   INT NOT NULL,
+        product_name    VARCHAR(200) NOT NULL DEFAULT '',
+        service_name    VARCHAR(200) DEFAULT NULL,
+        quantity        DECIMAL(10,3) NOT NULL DEFAULT 1,
+        unit_price      DECIMAL(10,2) NOT NULL DEFAULT 0,
+        line_total      DECIMAL(10,2) NOT NULL DEFAULT 0,
+        item_type       VARCHAR(50) DEFAULT 'product',
+        sort_order      INT NOT NULL DEFAULT 0,
+        KEY idx_woi_order (work_order_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+  } catch (_) {}
+}
+
+async function migrateWorkOrderItemsMerzam() {
+  try {
+    await pool.query(`ALTER TABLE work_order_items ADD COLUMN merzam_type_name VARCHAR(100) NULL`);
+  } catch (_) {}
+  try {
+    await pool.query(`ALTER TABLE work_orders ADD COLUMN cleaning_date DATETIME NULL DEFAULT NULL`);
+  } catch (_) {}
+  try {
+    await pool.query(`ALTER TABLE work_orders ADD COLUMN delivery_date DATETIME NULL DEFAULT NULL`);
+  } catch (_) {}
 }
 
 async function createLicenseTable() {
@@ -5428,7 +5530,7 @@ async function getOrderById(id) {
            COALESCE(cr.delivery_date, o.delivery_date) AS delivery_date, 
            o.price_display_mode, o.starch, o.bluing,
            o.hanger_id, h.hanger_number,
-           o.is_consumption_only, o.consumption_receipt_id, o.consumption_amount,
+           o.is_consumption_only, o.is_consolidated, o.consumption_receipt_id, o.consumption_amount,
            o.zatca_uuid, o.zatca_hash, o.zatca_qr, o.zatca_submitted, o.zatca_status, o.zatca_rejection_reason, o.zatca_response,
            o.is_refund, o.refunded_at, o.refund_reason, o.refunded_by,
            o.loyalty_points_earned, o.loyalty_points_redeemed, o.loyalty_discount_amount,
@@ -5536,6 +5638,18 @@ async function migrateOrdersDeferredColumns() {
     if (!colMap.has('delivery_date')) {
       await pool.query(`ALTER TABLE orders ADD COLUMN delivery_date DATETIME NULL DEFAULT NULL`);
     }
+
+    await pool.query(`
+      UPDATE orders
+      SET payment_status = 'paid',
+          paid_amount = total_amount,
+          remaining_amount = 0,
+          paid_at = COALESCE(paid_at, created_at, NOW()),
+          fully_paid_at = COALESCE(fully_paid_at, paid_at, created_at, NOW()),
+          cleaning_date = COALESCE(cleaning_date, created_at, NOW()),
+          delivery_date = COALESCE(delivery_date, created_at, NOW())
+      WHERE COALESCE(is_consolidated, 0) = 1
+    `);
   } catch (e) {
     console.error('migrateOrdersDeferredColumns:', e);
   }
@@ -5639,6 +5753,8 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
   if (trimmed) {
     const isNumeric = /^\d+$/.test(trimmed);
     const seqMatch = trimmed.match(/^[cC]-?(\d+)$/);
+    const workOrderMatch = trimmed.match(/^[dD]-?(\d+)$/);
+    const workOrderSeq = workOrderMatch ? Number(workOrderMatch[1]) : null;
     const params = [];
     let whereClause;
     let includeDeferredOnly = true;
@@ -5660,9 +5776,21 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
         LIMIT 1
       `, [receiptSeq]);
       return receiptRows;
+    } else if (workOrderMatch) {
+      whereClause = `
+        EXISTS (
+          SELECT 1
+          FROM work_orders wo
+          LEFT JOIN order_items oi ON oi.work_order_id = wo.id
+          WHERE wo.work_order_seq = ?
+            AND (wo.consolidated_order_id = o.id OR oi.order_id = o.id)
+        )
+      `;
+      params.push(workOrderSeq);
+      includeDeferredOnly = false;
     } else if (isNumeric) {
       if (trimmed.length >= 7) {
-        // رقم طويل → بحث في الجوال فقط (مطابقة تامة أو جزئية من البداية)
+        // رقم طويل → بحث في الجوال
         whereClause = `COALESCE(c.phone, '') LIKE ?`;
         params.push(`${trimmed}%`);
       } else {
@@ -5680,6 +5808,42 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
     const includeReceipts = ['paid', 'settled', 'cleaned', 'delivered', 'unclean', 'undelivered', 'all'].includes(normalizedStatusFilter);
     if (includeReceipts) {
       includeDeferredOnly = false;
+    }
+
+    if (workOrderMatch) {
+      let workOrderDateClause = '';
+      if (normalizedStatusFilter === 'unclean') {
+        workOrderDateClause = `AND wo.cleaning_date IS NULL`;
+      } else if (normalizedStatusFilter === 'undelivered') {
+        workOrderDateClause = `AND wo.delivery_date IS NULL`;
+      } else if (normalizedStatusFilter === 'cleaned') {
+        workOrderDateClause = `AND wo.cleaning_date IS NOT NULL`;
+      } else if (normalizedStatusFilter === 'delivered') {
+        workOrderDateClause = `AND wo.delivery_date IS NOT NULL`;
+      }
+
+      const [workOrderRows] = await pool.query(`
+        SELECT
+          wo.id, wo.work_order_number AS order_number, wo.work_order_seq AS invoice_seq,
+          wo.total_amount, wo.total_amount AS paid_amount, 0 AS remaining_amount,
+          wo.created_at AS fully_paid_at, 'work_order' AS payment_method, 'paid' AS payment_status,
+          wo.created_at, wo.created_at AS paid_at, wo.cleaning_date, wo.delivery_date,
+          wo.notes, NULL AS refunded_at, 0 AS is_refund, 0 AS is_consolidated,
+          0 AS has_credit_note,
+          c.id AS customer_id, c.customer_name, c.phone,
+          'work_order' AS rowType, wo.work_order_number, wo.work_order_seq
+        FROM work_orders wo
+        LEFT JOIN customers c ON c.id = wo.customer_id
+        WHERE wo.work_order_seq = ?
+          AND wo.consolidated_order_id IS NULL
+          AND wo.status <> 'cancelled'
+          ${workOrderDateClause}
+        LIMIT 1
+      `, [workOrderSeq]);
+
+      if (workOrderRows.length > 0) {
+        return workOrderRows;
+      }
     }
 
     let statusClause;
@@ -5701,7 +5865,7 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
         o.paid_amount, o.remaining_amount, o.fully_paid_at,
         o.payment_method, o.payment_status,
         o.created_at, o.paid_at, o.cleaning_date, o.delivery_date,
-        o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund,
+        o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund, COALESCE(o.is_consolidated, 0) AS is_consolidated,
         (EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.original_order_id = o.id)) AS has_credit_note,
         c.id AS customer_id, c.customer_name, c.phone
       FROM orders o
@@ -5712,6 +5876,53 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
       ORDER BY FIELD(o.payment_status, 'partial', 'pending', 'paid'), o.created_at DESC
       LIMIT 2000
     `, params);
+
+    let resultRows = rows;
+
+    if ((isNumeric && trimmed.length >= 7) || !isNumeric) {
+      let workOrderWhere;
+      const workOrderParams = [];
+      if (isNumeric && trimmed.length >= 7) {
+        workOrderWhere = `COALESCE(c.phone, '') LIKE ?`;
+        workOrderParams.push(`${trimmed}%`);
+      } else {
+        workOrderWhere = `COALESCE(c.customer_name, '') LIKE ?`;
+        workOrderParams.push(`%${trimmed}%`);
+      }
+
+      let workOrderDateClause = '';
+      if (normalizedStatusFilter === 'unclean') {
+        workOrderDateClause = `AND wo.cleaning_date IS NULL`;
+      } else if (normalizedStatusFilter === 'undelivered') {
+        workOrderDateClause = `AND wo.delivery_date IS NULL`;
+      } else if (normalizedStatusFilter === 'cleaned') {
+        workOrderDateClause = `AND wo.cleaning_date IS NOT NULL`;
+      } else if (normalizedStatusFilter === 'delivered') {
+        workOrderDateClause = `AND wo.delivery_date IS NOT NULL`;
+      }
+
+      const [workOrderRows] = await pool.query(`
+        SELECT
+          wo.id, wo.work_order_number AS order_number, wo.work_order_seq AS invoice_seq,
+          wo.total_amount, wo.total_amount AS paid_amount, 0 AS remaining_amount,
+          wo.created_at AS fully_paid_at, 'work_order' AS payment_method, 'paid' AS payment_status,
+          wo.created_at, wo.created_at AS paid_at, wo.cleaning_date, wo.delivery_date,
+          wo.notes, NULL AS refunded_at, 0 AS is_refund, 0 AS is_consolidated,
+          0 AS has_credit_note,
+          c.id AS customer_id, c.customer_name, c.phone,
+          'work_order' AS rowType, wo.work_order_number, wo.work_order_seq
+        FROM work_orders wo
+        LEFT JOIN customers c ON c.id = wo.customer_id
+        WHERE ${workOrderWhere}
+          AND wo.consolidated_order_id IS NULL
+          AND wo.status <> 'cancelled'
+          ${workOrderDateClause}
+        ORDER BY wo.created_at DESC
+        LIMIT 2000
+      `, workOrderParams);
+
+      resultRows = [...resultRows, ...workOrderRows];
+    }
 
     // إضافة إيصالات الاستهلاك عند الفلاتر المناسبة
     if (includeReceipts) {
@@ -5725,7 +5936,7 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
         receiptParams.push(`%${trimmed}%`);
       } else {
         // بحث برقم قصير → لا نبحث في الإيصالات هنا (c1 معالج مسبقاً)
-        return rows;
+        return resultRows;
       }
 
       let receiptDateClause = '';
@@ -5756,10 +5967,10 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
         ORDER BY cr.created_at DESC
         LIMIT 2000
       `, receiptParams);
-      return [...rows, ...receiptRows];
+      return [...resultRows, ...receiptRows];
     }
 
-    return rows;
+    return resultRows;
   } else {
     const [rows] = await pool.query(`
       SELECT
@@ -5767,7 +5978,7 @@ async function getDeferredOrders({ search = '', statusFilter = 'unpaid' } = {}) 
         o.paid_amount, o.remaining_amount, o.fully_paid_at,
         o.payment_method, o.payment_status,
         o.created_at, o.paid_at, o.cleaning_date, o.delivery_date,
-        o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund,
+        o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund, COALESCE(o.is_consolidated, 0) AS is_consolidated,
         (EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.original_order_id = o.id)) AS has_credit_note,
         c.id AS customer_id, c.customer_name, c.phone
       FROM orders o
@@ -5827,7 +6038,7 @@ async function getDeferredBySubscription({ subscriptionSearch, statusFilter = 'u
            o.paid_amount, o.remaining_amount, o.fully_paid_at,
            o.payment_method, o.payment_status,
            o.created_at, o.paid_at, o.cleaning_date, o.delivery_date,
-           o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund,
+           o.notes, o.refunded_at, COALESCE(o.is_refund, 0) AS is_refund, COALESCE(o.is_consolidated, 0) AS is_consolidated,
            (EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.original_order_id = o.id)) AS has_credit_note,
            c.id AS customer_id, c.customer_name, c.phone
     FROM orders o
@@ -5967,6 +6178,18 @@ async function markReceiptDelivered({ receiptId }) {
   const id = Number(receiptId);
   if (!id) throw new Error('معرّف الإيصال غير صالح');
   await pool.query(`UPDATE consumption_receipts SET delivery_date = NOW() WHERE id = ?`, [id]);
+}
+
+async function markWorkOrderCleaned({ workOrderId }) {
+  const id = Number(workOrderId);
+  if (!id) throw new Error('معرّف أمر التشغيل غير صالح');
+  await pool.query(`UPDATE work_orders SET cleaning_date = NOW() WHERE id = ?`, [id]);
+}
+
+async function markWorkOrderDelivered({ workOrderId }) {
+  const id = Number(workOrderId);
+  if (!id) throw new Error('معرّف أمر التشغيل غير صالح');
+  await pool.query(`UPDATE work_orders SET delivery_date = NOW() WHERE id = ?`, [id]);
 }
 
 // ============================================================================
@@ -8387,6 +8610,532 @@ async function getCustomerPosCustomPrices(customerId) {
   return { success: true, prices: prices };
 }
 
+// ── Work Orders (Hotels & Companies) ─────────────────────────────────────────
+
+async function createWorkOrder({ customerId, items, subtotal, discountAmount, vatRate, vatAmount, totalAmount, priceDisplayMode, notes, createdBy }) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[seqRow]] = await conn.execute('SELECT COALESCE(MAX(work_order_seq), 0) AS mx FROM work_orders FOR UPDATE');
+    const seq = Number(seqRow.mx) + 1;
+    const workOrderNumber = 'D-' + seq;
+
+    const [[cust]] = await conn.execute('SELECT customer_name, tax_number, customer_type FROM customers WHERE id = ?', [customerId]);
+    if (!cust) { const e = new Error('العميل غير موجود'); e.appCode = 'CUSTOMER_NOT_FOUND'; throw e; }
+    if (cust.customer_type !== 'corporate') { const e = new Error('العميل ليس شركة'); e.appCode = 'CUSTOMER_NOT_CORPORATE'; throw e; }
+
+    const [woRes] = await conn.execute(
+      `INSERT INTO work_orders (work_order_seq, work_order_number, customer_id, subtotal, discount_amount, vat_rate, vat_amount, total_amount, price_display_mode, status, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      [seq, workOrderNumber, customerId, subtotal || 0, discountAmount || 0, vatRate || 15, vatAmount || 0, totalAmount || 0, priceDisplayMode || 'exclusive', notes || null, createdBy || null]
+    );
+    const workOrderId = woRes.insertId;
+
+    if (Array.isArray(items) && items.length > 0) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        await conn.execute(
+          `INSERT INTO work_order_items (work_order_id, product_name, service_name, merzam_type_name, quantity, unit_price, line_total, item_type, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [workOrderId, it.productName || it.productNameAr || '', it.serviceName || it.serviceNameAr || null, it.merzamTypeName || it.merzam_type_name || null, it.quantity || 1, it.unitPrice || 0, it.lineTotal || 0, it.itemType || 'product', i]
+        );
+      }
+    } else {
+      const e = new Error('لا توجد أصناف في الأمر'); e.appCode = 'ITEMS_EMPTY'; throw e;
+    }
+
+    await conn.commit();
+    return { workOrderId, workOrderNumber, workOrderSeq: seq, customerName: cust.customer_name, customerTaxNumber: cust.tax_number || null, createdAt: new Date().toISOString() };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getWorkOrders({ status, customerId, search, dateFrom, dateTo, page, pageSize } = {}) {
+  const p = [];
+  let where = 'WHERE 1=1';
+  if (status) { where += ' AND wo.status = ?'; p.push(status); }
+  if (customerId) { where += ' AND wo.customer_id = ?'; p.push(customerId); }
+  if (search) {
+    where += ' AND (wo.work_order_number LIKE ? OR (wo.consolidated_order_id IS NOT NULL AND EXISTS (SELECT 1 FROM orders o WHERE o.id = wo.consolidated_order_id AND CONCAT(o.invoice_seq) LIKE ?)))';
+    p.push('%' + search + '%', '%' + search + '%');
+  }
+  if (dateFrom) { where += ' AND DATE(wo.created_at) >= ?'; p.push(dateFrom); }
+  if (dateTo)   { where += ' AND DATE(wo.created_at) <= ?'; p.push(dateTo); }
+
+  const pg = Math.max(1, parseInt(page) || 1);
+  const ps = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+  const offset = (pg - 1) * ps;
+
+  const [[{ total }]] = await pool.execute(`SELECT COUNT(*) AS total FROM work_orders wo ${where}`, p);
+
+  const [rows] = await pool.execute(`
+    SELECT wo.id, wo.work_order_number, wo.work_order_seq, wo.customer_id,
+           c.customer_name, c.tax_number AS customer_tax_number,
+           wo.subtotal, wo.discount_amount, wo.vat_rate, wo.vat_amount, wo.total_amount,
+           wo.price_display_mode, wo.status, wo.consolidated_order_id,
+           wo.notes, wo.created_by, wo.created_at, wo.cleaning_date, wo.delivery_date,
+           o.invoice_seq AS consolidated_invoice_seq,
+           o.payment_method AS consolidated_payment_method,
+           o.payment_status AS consolidated_payment_status,
+           o.total_amount   AS consolidated_total_amount
+    FROM work_orders wo
+    JOIN customers c ON c.id = wo.customer_id
+    LEFT JOIN orders o ON o.id = wo.consolidated_order_id
+    ${where}
+    ORDER BY COALESCE(wo.consolidated_order_id, wo.id) DESC, wo.id DESC
+    LIMIT ? OFFSET ?
+  `, [...p, ps, offset]);
+
+  const ids = rows.map(r => r.id);
+  let itemsMap = {};
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',');
+    const [items] = await pool.execute(`SELECT * FROM work_order_items WHERE work_order_id IN (${placeholders}) ORDER BY work_order_id, sort_order`, ids);
+    items.forEach(it => {
+      if (!itemsMap[it.work_order_id]) itemsMap[it.work_order_id] = [];
+      itemsMap[it.work_order_id].push(it);
+    });
+  }
+
+  return {
+    rows: rows.map(r => ({ ...r, items: itemsMap[r.id] || [] })),
+    total: Number(total), page: pg, pageSize: ps,
+    totalPages: Math.ceil(Number(total) / ps)
+  };
+}
+
+async function cancelWorkOrder({ workOrderId }) {
+  const [res] = await pool.execute(
+    `UPDATE work_orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'`,
+    [workOrderId]
+  );
+  if (res.affectedRows === 0) {
+    const e = new Error('الأمر غير موجود أو ليس في حالة انتظار'); e.appCode = 'NOT_PENDING'; throw e;
+  }
+}
+
+async function getWorkOrderForPrint({ workOrderId }) {
+  const [[wo]] = await pool.execute(`
+    SELECT wo.*, c.customer_name, c.tax_number AS customer_tax_number, c.phone AS customer_phone
+    FROM work_orders wo JOIN customers c ON c.id = wo.customer_id
+    WHERE wo.id = ?
+  `, [workOrderId]);
+  if (!wo) { const e = new Error('أمر التشغيل غير موجود'); e.appCode = 'NOT_FOUND'; throw e; }
+  const [items] = await pool.execute(`SELECT * FROM work_order_items WHERE work_order_id = ? ORDER BY sort_order`, [workOrderId]);
+  return { ...wo, items };
+}
+
+async function createConsolidatedInvoice({ workOrderIds, discountAmount, discountPercent, paymentMethod, paidCash = 0, paidCard = 0, notes, createdBy, confirmNoVat }) {
+  if (!Array.isArray(workOrderIds) || workOrderIds.length === 0) {
+    const e = new Error('لم يتم تحديد أوامر تشغيل'); e.appCode = 'NO_ORDERS_SELECTED'; throw e;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const placeholders = workOrderIds.map(() => '?').join(',');
+    const [wos] = await conn.execute(
+      `SELECT wo.*, c.customer_name, c.tax_number AS customer_tax_number, c.customer_type
+       FROM work_orders wo JOIN customers c ON c.id = wo.customer_id
+       WHERE wo.id IN (${placeholders}) FOR UPDATE`,
+      workOrderIds
+    );
+
+    if (wos.length !== workOrderIds.length) {
+      const e = new Error('بعض أوامر التشغيل غير موجودة'); e.appCode = 'SOME_NOT_PENDING'; throw e;
+    }
+    const notPending = wos.filter(w => w.status !== 'pending');
+    if (notPending.length > 0) {
+      const e = new Error('بعض الأوامر ليست في حالة انتظار'); e.appCode = 'SOME_NOT_PENDING'; throw e;
+    }
+    const customerIds = [...new Set(wos.map(w => w.customer_id))];
+    if (customerIds.length > 1) {
+      const e = new Error('الأوامر المحددة تخص عملاء مختلفين'); e.appCode = 'MIXED_CUSTOMERS'; throw e;
+    }
+
+    const cust = wos[0];
+    if (!cust.customer_tax_number && !confirmNoVat) {
+      const e = new Error('الرقم الضريبي غير مُدخَل'); e.appCode = 'NEEDS_VAT_CONFIRM'; throw e;
+    }
+
+    let woSubtotal = wos.reduce((s, w) => s + Number(w.subtotal), 0);
+    const vatRate = Number(wos[0].vat_rate) || 15;
+    const priceMode = wos[0].price_display_mode || 'exclusive';
+
+    let disc = 0;
+    if (discountAmount && Number(discountAmount) > 0) disc = Number(discountAmount);
+    else if (discountPercent && Number(discountPercent) > 0) disc = woSubtotal * Number(discountPercent) / 100;
+    disc = Math.min(disc, woSubtotal);
+
+    if (disc > woSubtotal) {
+      const e = new Error('الخصم أكبر من المجموع'); e.appCode = 'DISCOUNT_EXCEEDS_TOTAL'; throw e;
+    }
+
+    let vatAmount, total;
+    if (priceMode === 'inclusive') {
+      total = woSubtotal - disc;
+      vatAmount = total - total / (1 + vatRate / 100);
+    } else {
+      vatAmount = (woSubtotal - disc) * vatRate / 100;
+      total = woSubtotal - disc + vatAmount;
+    }
+    woSubtotal = Math.round(woSubtotal * 100) / 100;
+    disc       = Math.round(disc * 100) / 100;
+    vatAmount  = Math.round(vatAmount * 100) / 100;
+    total      = Math.round(total * 100) / 100;
+
+    const [[seqRow]] = await conn.execute('SELECT COALESCE(MAX(invoice_seq), 0) AS mx FROM orders FOR UPDATE');
+    const invoiceSeq = Number(seqRow.mx) + 1;
+    const [[idRow]] = await conn.execute('SELECT COALESCE(MAX(id), 0) AS mx FROM orders');
+    const nextId = Number(idRow.mx) + 1;
+    const orderNumber = 'ORD-' + nextId;
+    const allowedPaymentMethods = ['cash', 'card', 'bank', 'transfer', 'credit', 'deferred', 'mixed', 'subscription'];
+    const dbPaymentMethod = allowedPaymentMethods.includes(String(paymentMethod || '').trim())
+      ? String(paymentMethod).trim()
+      : 'cash';
+    let dbPaidCash = 0;
+    let dbPaidCard = 0;
+    if (dbPaymentMethod === 'mixed') {
+      dbPaidCash = Math.max(0, Math.min(Number(paidCash || 0), total));
+      dbPaidCash = Math.round(dbPaidCash * 100) / 100;
+      dbPaidCard = Math.max(0, Math.round((total - dbPaidCash) * 100) / 100);
+    } else if (dbPaymentMethod === 'cash') {
+      dbPaidCash = total;
+    } else if (dbPaymentMethod === 'card' || dbPaymentMethod === 'bank' || dbPaymentMethod === 'transfer') {
+      dbPaidCard = total;
+    }
+
+    const isDeferred = dbPaymentMethod === 'deferred' || dbPaymentMethod === 'credit';
+    const dbPaymentStatus   = isDeferred ? 'pending' : 'paid';
+    const dbPaidAmount      = isDeferred ? 0 : total;
+    const dbRemainingAmount = isDeferred ? total : 0;
+    const paidAtExpr        = isDeferred ? 'NULL' : 'NOW()';
+
+    const [oRes] = await conn.execute(
+      `INSERT INTO orders (order_number, invoice_seq, customer_id, subtotal, discount_amount, vat_rate, vat_amount, total_amount, payment_method, payment_status, paid_amount, remaining_amount, paid_cash, paid_card, paid_at, fully_paid_at, cleaning_date, delivery_date, price_display_mode, order_type, is_consolidated, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${paidAtExpr}, ${paidAtExpr}, NOW(), NOW(), ?, 'sale', 1, ?, ?)`,
+      [orderNumber, invoiceSeq, cust.customer_id, woSubtotal, disc, vatRate, vatAmount, total, dbPaymentMethod,
+       dbPaymentStatus, dbPaidAmount, dbRemainingAmount, dbPaidCash, dbPaidCard,
+       priceMode, notes || null, createdBy || null]
+    );
+    const orderId = oRes.insertId;
+
+    const [allItems] = await conn.execute(
+      `SELECT * FROM work_order_items WHERE work_order_id IN (${placeholders}) ORDER BY work_order_id, sort_order`,
+      workOrderIds
+    );
+    for (const it of allItems) {
+      await conn.execute(
+        `INSERT INTO order_items (order_id, product_name_ar, product_name_en, service_name_ar, service_name_en, quantity, unit_price, line_total, work_order_id, merzam_type_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, it.product_name || null, it.product_name || null, it.service_name || null, it.service_name || null,
+         it.quantity, it.unit_price, it.line_total, it.work_order_id, it.merzam_type_name || null]
+      );
+    }
+
+    await conn.execute(
+      `UPDATE work_orders SET status = 'invoiced', consolidated_order_id = ? WHERE id IN (${placeholders})`,
+      [orderId, ...workOrderIds]
+    );
+
+    await conn.commit();
+    return { orderId, invoiceSeq, orderNumber };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+async function getConsolidatedInvoiceForPrint({ orderId }) {
+  const [[order]] = await pool.execute(`
+    SELECT o.*, c.customer_name, c.tax_number AS customer_tax_number, c.phone AS customer_phone
+    FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.id = ? AND o.is_consolidated = 1
+  `, [orderId]);
+  if (!order) { const e = new Error('الفاتورة غير موجودة'); e.appCode = 'NOT_FOUND'; throw e; }
+
+  const [ois] = await pool.execute(
+    `SELECT oi.id, oi.order_id, oi.product_id, oi.laundry_service_id,
+            COALESCE(oi.product_name_ar, '') AS product_name,
+            COALESCE(p.name_en, oi.product_name_en, oi.product_name_ar, '') AS product_name_en,
+            COALESCE(oi.service_name_ar, '') AS service_name,
+            COALESCE(ls.name_en, oi.service_name_en, oi.service_name_ar, '') AS service_name_en,
+            oi.merzam_type_name,
+            oi.quantity, oi.unit_price, oi.line_total, oi.work_order_id
+     FROM order_items oi
+     LEFT JOIN products p ON p.name_ar = oi.product_name_ar
+     LEFT JOIN laundry_services ls ON ls.name_ar = oi.service_name_ar
+     WHERE oi.order_id = ? ORDER BY oi.id`,
+    [orderId]
+  );
+
+  const woIds = [...new Set(ois.map(r => r.work_order_id).filter(Boolean))];
+  let workOrders = [];
+  if (woIds.length > 0) {
+    const ph = woIds.map(() => '?').join(',');
+    const [wos] = await pool.execute(`SELECT wo.id, wo.work_order_number, wo.created_at, wo.subtotal, wo.total_amount FROM work_orders wo WHERE wo.id IN (${ph}) ORDER BY wo.id`, woIds);
+    const [wItems] = await pool.execute(`SELECT * FROM work_order_items WHERE work_order_id IN (${ph}) ORDER BY work_order_id, sort_order`, woIds);
+    const wItemMap = {};
+    wItems.forEach(it => { if (!wItemMap[it.work_order_id]) wItemMap[it.work_order_id] = []; wItemMap[it.work_order_id].push(it); });
+    workOrders = wos.map(w => ({ ...w, items: wItemMap[w.id] || [] }));
+  }
+
+  return { invoice: { ...order, isConsolidated: true, workOrders, orderItems: ois } };
+}
+
+async function settleConsolidatedInvoice({ orderId, paymentMethod, paidCash = 0, paidCard = 0 }) {
+  const allowedMethods = ['cash', 'card', 'bank', 'transfer', 'mixed'];
+  const dbMethod = allowedMethods.includes(String(paymentMethod || '').trim()) ? String(paymentMethod).trim() : 'cash';
+
+  const [[order]] = await pool.execute(
+    'SELECT id, total_amount, payment_status, is_consolidated FROM orders WHERE id = ?', [orderId]
+  );
+  if (!order) throw Object.assign(new Error('الفاتورة غير موجودة'), { appCode: 'NOT_FOUND' });
+  if (!order.is_consolidated) throw Object.assign(new Error('هذه ليست فاتورة مجمعة'), { appCode: 'INVALID' });
+  if (order.payment_status === 'paid') throw Object.assign(new Error('الفاتورة مدفوعة مسبقاً'), { appCode: 'ALREADY_PAID' });
+
+  const total = Number(order.total_amount);
+  let dbPaidCash = 0, dbPaidCard = 0;
+  if (dbMethod === 'mixed') {
+    dbPaidCash = Math.max(0, Math.min(Math.round(Number(paidCash) * 100) / 100, total));
+    dbPaidCard = Math.max(0, Math.round((total - dbPaidCash) * 100) / 100);
+  } else if (dbMethod === 'cash') {
+    dbPaidCash = total;
+  } else {
+    dbPaidCard = total;
+  }
+
+  await pool.execute(
+    `UPDATE orders SET payment_method = ?, payment_status = 'paid', paid_amount = total_amount,
+     remaining_amount = 0, paid_cash = ?, paid_card = ?, paid_at = NOW(), fully_paid_at = NOW()
+     WHERE id = ?`,
+    [dbMethod, dbPaidCash, dbPaidCard, orderId]
+  );
+
+  return { success: true };
+}
+
+async function getCorporateCustomers({ search, page, pageSize } = {}) {
+  const p = [];
+  let where = `WHERE c.customer_type = 'corporate' AND c.is_active = 1`;
+  if (search) { where += ' AND (c.customer_name LIKE ? OR c.phone LIKE ?)'; p.push('%' + search + '%', '%' + search + '%'); }
+
+  const pg = Math.max(1, parseInt(page) || 1);
+  const ps = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+  const offset = (pg - 1) * ps;
+
+  const [[{ total }]] = await pool.execute(`SELECT COUNT(*) AS total FROM customers c ${where}`, p);
+  const [rows] = await pool.execute(`
+    SELECT c.id, c.customer_name, c.phone, c.tax_number,
+           (SELECT COUNT(*) FROM work_orders wo WHERE wo.customer_id = c.id AND wo.status = 'pending') AS pending_work_orders,
+           (SELECT COALESCE(SUM(wo.total_amount), 0) FROM work_orders wo WHERE wo.customer_id = c.id AND wo.status = 'pending') AS pending_total
+    FROM customers c
+    ${where}
+    ORDER BY pending_work_orders DESC, c.customer_name
+    LIMIT ? OFFSET ?
+  `, [...p, ps, offset]);
+
+  return { rows, total: Number(total), page: pg, pageSize: ps, totalPages: Math.ceil(Number(total) / ps) };
+}
+
+/* ============================================================================
+ * تقرير الفنادق والشركات (031) — قراءة فقط، لا كتابة، MySQL 5.7-safe
+ * ========================================================================== */
+
+// تطبيع التاريخ القادم من datetime-local (YYYY-MM-DDTHH:mm:ss) إلى صيغة MySQL
+function _normDt(v) {
+  if (!v) return null;
+  return String(v).replace('T', ' ');
+}
+
+// كشف حساب تفصيلي لعميل مؤسسي واحد خلال فترة
+async function getCorporateReportStatement({ customerId, dateFrom, dateTo, docType = 'all', status = 'all' } = {}) {
+  const cid = Number(customerId);
+  if (!cid) { const e = new Error('يجب اختيار عميل'); e.appCode = 'NO_CUSTOMER'; throw e; }
+
+  const from = _normDt(dateFrom);
+  const to   = _normDt(dateTo);
+  if (from && to && from > to) { const e = new Error('نطاق التاريخ غير صحيح'); e.appCode = 'BAD_RANGE'; throw e; }
+
+  // العميل — يجب أن يكون شركة/فندق
+  const [[cust]] = await pool.execute(
+    `SELECT id, customer_name, phone, tax_number, customer_type FROM customers WHERE id = ?`, [cid]
+  );
+  if (!cust) { const e = new Error('العميل غير موجود'); e.appCode = 'NOT_FOUND'; throw e; }
+  if (cust.customer_type !== 'corporate') { const e = new Error('العميل المحدد ليس شركة/فندق'); e.appCode = 'NOT_CORPORATE'; throw e; }
+
+  // فلاتر النوع/الحالة: حالات أوامر التشغيل مقابل حالات دفع الفواتير
+  const woStatuses  = ['pending', 'invoiced', 'cancelled'];
+  const invStatuses = ['paid', 'deferred'];
+  const includeWO  = (docType === 'all' || docType === 'work_orders') && (status === 'all' || woStatuses.includes(status));
+  const includeInv = (docType === 'all' || docType === 'invoices')   && (status === 'all' || invStatuses.includes(status));
+
+  // أوامر التشغيل خلال الفترة
+  let workOrders = [];
+  if (includeWO) {
+    const wp = [cid];
+    let ww = 'WHERE wo.customer_id = ?';
+    if (from) { ww += ' AND wo.created_at >= ?'; wp.push(from); }
+    if (to)   { ww += ' AND wo.created_at <= ?'; wp.push(to); }
+    if (woStatuses.includes(status)) { ww += ' AND wo.status = ?'; wp.push(status); }
+    const [wrows] = await pool.execute(`
+      SELECT wo.id, wo.work_order_number, wo.work_order_seq, wo.status, wo.created_at,
+             wo.subtotal, wo.discount_amount, wo.vat_amount, wo.total_amount,
+             wo.consolidated_order_id,
+             o.invoice_seq AS consolidated_invoice_seq
+      FROM work_orders wo
+      LEFT JOIN orders o ON o.id = wo.consolidated_order_id
+      ${ww}
+      ORDER BY wo.created_at ASC, wo.id ASC
+    `, wp);
+    workOrders = wrows;
+  }
+
+  // الفواتير المجمعة خلال الفترة
+  let consolidatedInvoices = [];
+  if (includeInv) {
+    const ip = [cid];
+    let iw = 'WHERE o.customer_id = ? AND COALESCE(o.is_consolidated, 0) = 1';
+    if (from) { iw += ' AND o.created_at >= ?'; ip.push(from); }
+    if (to)   { iw += ' AND o.created_at <= ?'; ip.push(to); }
+    if (status === 'paid')     { iw += " AND o.payment_status = 'paid'"; }
+    if (status === 'deferred') { iw += " AND o.payment_status IN ('pending','partial')"; }
+    const [irows] = await pool.execute(`
+      SELECT o.id, o.invoice_seq, o.order_number, o.created_at,
+             o.subtotal, o.discount_amount, o.vat_amount, o.total_amount,
+             o.payment_status, o.paid_amount, o.remaining_amount,
+             (SELECT COUNT(DISTINCT oi.work_order_id) FROM order_items oi
+               WHERE oi.order_id = o.id AND oi.work_order_id IS NOT NULL) AS work_orders_count
+      FROM orders o
+      ${iw}
+      ORDER BY o.created_at ASC, o.id ASC
+    `, ip);
+    consolidatedInvoices = irows;
+
+    // أرقام D-XXX المضمَّنة لكل فاتورة (استعلام واحد)
+    const invIds = consolidatedInvoices.map(r => r.id);
+    if (invIds.length > 0) {
+      const ph = invIds.map(() => '?').join(',');
+      const [links] = await pool.execute(`
+        SELECT DISTINCT oi.order_id, wo.work_order_number
+        FROM order_items oi
+        JOIN work_orders wo ON wo.id = oi.work_order_id
+        WHERE oi.order_id IN (${ph}) AND oi.work_order_id IS NOT NULL
+        ORDER BY wo.work_order_seq ASC
+      `, invIds);
+      const map = {};
+      links.forEach(l => { (map[l.order_id] = map[l.order_id] || []).push(l.work_order_number); });
+      consolidatedInvoices.forEach(inv => { inv.work_order_numbers = map[inv.id] || []; });
+    }
+  }
+
+  // الملخص المالي — يُحسب تطبيقياً (تفادي window functions)
+  const r2 = n => Math.round(Number(n || 0) * 100) / 100;
+  let totalWorkOrdered = 0, totalDiscount = 0, totalVat = 0;
+  let cancelledCount = 0, activeWoCount = 0;
+  workOrders.forEach(w => {
+    if (w.status === 'cancelled') { cancelledCount++; return; }
+    activeWoCount++;
+    totalWorkOrdered += Number(w.total_amount || 0);
+    totalDiscount    += Number(w.discount_amount || 0);
+    totalVat         += Number(w.vat_amount || 0);
+  });
+  let totalInvoiced = 0, totalPaid = 0, totalOutstanding = 0, invDiscount = 0, invVat = 0;
+  consolidatedInvoices.forEach(inv => {
+    totalInvoiced    += Number(inv.total_amount || 0);
+    totalPaid        += Number(inv.paid_amount || 0);
+    totalOutstanding += Number(inv.remaining_amount || 0);
+    invDiscount      += Number(inv.discount_amount || 0);
+    invVat           += Number(inv.vat_amount || 0);
+  });
+
+  const summary = {
+    totalWorkOrdered: r2(totalWorkOrdered),
+    totalInvoiced:    r2(totalInvoiced),
+    totalDiscount:    r2(totalDiscount + invDiscount),
+    totalVat:         r2(totalVat + invVat),
+    totalPaid:        r2(totalPaid),
+    totalOutstanding: r2(totalOutstanding),
+    workOrdersCount:  activeWoCount,
+    cancelledCount,
+    invoicesCount:    consolidatedInvoices.length,
+  };
+
+  return {
+    customer: {
+      id: cust.id, customer_name: cust.customer_name, phone: cust.phone,
+      tax_number: cust.tax_number, hasTaxNumber: !!cust.tax_number,
+    },
+    dateFrom: from, dateTo: to,
+    workOrders, consolidatedInvoices, summary,
+  };
+}
+
+// ملخص كل عملاء الشركات/الفنادق النشطين خلال فترة
+async function getCorporateReportSummary({ dateFrom, dateTo, search } = {}) {
+  const from = _normDt(dateFrom);
+  const to   = _normDt(dateTo);
+  if (from && to && from > to) { const e = new Error('نطاق التاريخ غير صحيح'); e.appCode = 'BAD_RANGE'; throw e; }
+
+  // شروط التاريخ كنصوص قابلة لإعادة الاستخدام داخل subqueries
+  const woDate = (from ? ' AND wo.created_at >= ?' : '') + (to ? ' AND wo.created_at <= ?' : '');
+  const oDate  = (from ? ' AND o.created_at >= ?'  : '') + (to ? ' AND o.created_at <= ?'  : '');
+  const dateArgs = [];
+  if (from) dateArgs.push(from);
+  if (to)   dateArgs.push(to);
+
+  const params = [];
+  // ترتيب الـ subqueries: wo_count, total_work_ordered, inv_count, total_invoiced, total_paid, total_outstanding
+  params.push(...dateArgs);  // wo_count
+  params.push(...dateArgs);  // total_work_ordered
+  params.push(...dateArgs);  // inv_count
+  params.push(...dateArgs);  // total_invoiced
+  params.push(...dateArgs);  // total_paid
+  params.push(...dateArgs);  // total_outstanding
+  let searchWhere = '';
+  if (search) { searchWhere = ' AND c.customer_name LIKE ?'; params.push('%' + search + '%'); }
+
+  const [rows] = await pool.execute(`
+    SELECT c.id, c.customer_name, c.tax_number,
+      (SELECT COUNT(*) FROM work_orders wo
+        WHERE wo.customer_id = c.id AND wo.status <> 'cancelled'${woDate}) AS wo_count,
+      (SELECT COALESCE(SUM(wo.total_amount), 0) FROM work_orders wo
+        WHERE wo.customer_id = c.id AND wo.status <> 'cancelled'${woDate}) AS total_work_ordered,
+      (SELECT COUNT(*) FROM orders o
+        WHERE o.customer_id = c.id AND COALESCE(o.is_consolidated,0) = 1${oDate}) AS inv_count,
+      (SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o
+        WHERE o.customer_id = c.id AND COALESCE(o.is_consolidated,0) = 1${oDate}) AS total_invoiced,
+      (SELECT COALESCE(SUM(o.paid_amount), 0) FROM orders o
+        WHERE o.customer_id = c.id AND COALESCE(o.is_consolidated,0) = 1${oDate}) AS total_paid,
+      (SELECT COALESCE(SUM(o.remaining_amount), 0) FROM orders o
+        WHERE o.customer_id = c.id AND COALESCE(o.is_consolidated,0) = 1${oDate}) AS total_outstanding
+    FROM customers c
+    WHERE c.customer_type = 'corporate'${searchWhere}
+    HAVING (wo_count > 0 OR inv_count > 0)
+    ORDER BY total_outstanding DESC, c.customer_name ASC
+  `, params);
+
+  const r2 = n => Math.round(Number(n || 0) * 100) / 100;
+  const totals = rows.reduce((t, r) => ({
+    wo_count:          t.wo_count + Number(r.wo_count || 0),
+    total_work_ordered: t.total_work_ordered + Number(r.total_work_ordered || 0),
+    inv_count:         t.inv_count + Number(r.inv_count || 0),
+    total_invoiced:    t.total_invoiced + Number(r.total_invoiced || 0),
+    total_paid:        t.total_paid + Number(r.total_paid || 0),
+    total_outstanding: t.total_outstanding + Number(r.total_outstanding || 0),
+  }), { wo_count: 0, total_work_ordered: 0, inv_count: 0, total_invoiced: 0, total_paid: 0, total_outstanding: 0 });
+  Object.keys(totals).forEach(k => { if (k.startsWith('total_')) totals[k] = r2(totals[k]); });
+
+  return { dateFrom: from, dateTo: to, rows, totals };
+}
+
 module.exports = {
   initialize, findUser, query, buildAllPermissions,
   getAllUsers, createUser, updateUser, toggleUserStatus, deleteUser,
@@ -8420,6 +9169,7 @@ module.exports = {
   getDeferredOrders, getDeferredBySubscription, payDeferredOrder,
   markOrderCleaned, markOrderDelivered,
   markReceiptCleaned, markReceiptDelivered,
+  markWorkOrderCleaned, markWorkOrderDelivered,
   // Partial invoice payment functions
   calculateRemainingBalance, determinePaymentStatus, validatePaymentAmount,
   getInvoiceWithPayments, recordInvoicePayment, getPaymentHistory,
@@ -8464,6 +9214,10 @@ module.exports = {
   getMerzamTypes, saveMerzamType, deleteMerzamType,
   // Customer Custom Prices
   getCustomPricesScreenData, saveCustomerCustomPrices, getCustomerPosCustomPrices,
+  // Hotels & Companies (Work Orders)
+  createWorkOrder, getWorkOrders, cancelWorkOrder, getWorkOrderForPrint,
+  createConsolidatedInvoice, getConsolidatedInvoiceForPrint, getCorporateCustomers, settleConsolidatedInvoice,
+  getCorporateReportStatement, getCorporateReportSummary,
 };
 
 // ── System Restore ───────────────────────────────────────────────────────────

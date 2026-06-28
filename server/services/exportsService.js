@@ -1536,6 +1536,452 @@ ${subscriptionPeriods.length ? `
   throw new Error('نوع التصدير غير مدعوم');
 }
 
+/* ── تصدير قائمة أوامر التشغيل المرتبطة بفاتورة مجمعة (مع بنود تفصيلية) ── */
+async function exportConsolidatedWorkOrdersList(type, payload = {}) {
+  const { workOrders = [], invoiceNum, custName, custPhone, custVat,
+          shopNameAr, shopNameEn, shopPhone, vatNumber, addressAr,
+          vatRate = 0, priceMode = 'exclusive' } = payload;
+  const f = cairoFonts();
+  const sar = '';
+
+  const fmtMoney = (n) => Number(n || 0).toFixed(2);
+  const fmtDate = (d) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    const day = String(dt.getDate()).padStart(2, '0');
+    const mon = String(dt.getMonth() + 1).padStart(2, '0');
+    const yr  = dt.getFullYear();
+    const hr  = dt.getHours(), mn = dt.getMinutes();
+    const ampm = hr >= 12 ? 'PM' : 'AM';
+    return `${day}/${mon}/${yr} ${String(hr % 12 || 12).padStart(2, '0')}:${String(mn).padStart(2, '0')} ${ampm}`;
+  };
+
+  /* حساب net/vat/gross لكل بند */
+  const calcItem = (lineTotal) => {
+    const lt = Number(lineTotal || 0);
+    if (vatRate > 0) {
+      if (priceMode === 'inclusive') {
+        const net = lt / (1 + vatRate / 100);
+        return { net, vat: lt - net, gross: lt };
+      } else {
+        const vat = lt * vatRate / 100;
+        return { net: lt, vat, gross: lt + vat };
+      }
+    }
+    return { net: lt, vat: 0, gross: lt };
+  };
+
+  const grandTotal = workOrders.reduce((s, w) => s + Number(w.total_amount || 0), 0);
+
+  /* ── Excel ── */
+  if (type === 'excel') {
+    const wb   = XLSX.utils.book_new();
+    const wsData = [];
+
+    /* رأس الشركة */
+    wsData.push([shopNameAr || shopNameEn || '']);
+    if (addressAr) wsData.push([addressAr]);
+    if (shopPhone)  wsData.push(['هاتف: ' + shopPhone]);
+    if (vatNumber)  wsData.push(['الرقم الضريبي: ' + vatNumber]);
+    wsData.push([]);
+    wsData.push(['فاتورة مجمعة رقم: ' + (invoiceNum || '')]);
+    wsData.push([
+      'العميل: ' + (custName || ''),
+      'الجوال: ' + (custPhone || ''),
+      custVat ? 'الرقم الضريبي: ' + custVat : ''
+    ]);
+    wsData.push([]);
+
+    /* أوامر التشغيل */
+    workOrders.forEach((wo, wi) => {
+      /* رأس أمر التشغيل */
+      wsData.push([
+        `أمر التشغيل رقم: ${wo.work_order_number}`,
+        `التاريخ: ${fmtDate(wo.created_at)}`,
+        '',
+        '',
+        '',
+        `الإجمالي: ${fmtMoney(wo.total_amount)} ر.س`
+      ]);
+      /* رأس الجدول */
+      if (vatRate > 0) {
+        wsData.push(['#', 'النوع', 'العملية', 'الكمية', 'سعر الوحدة', 'قبل الضريبة', `الضريبة (${vatRate}%)`, 'الإجمالي شامل الضريبة']);
+      } else {
+        wsData.push(['#', 'النوع', 'العملية', 'الكمية', 'سعر الوحدة', 'الإجمالي']);
+      }
+      /* البنود */
+      (wo.items || []).forEach((it, ii) => {
+        const { net, vat, gross } = calcItem(it.line_total);
+        const svc = it.service_name + (it.merzam_type_name ? ' / ' + it.merzam_type_name : '');
+        if (vatRate > 0) {
+          wsData.push([ii + 1, it.product_name, svc, it.quantity, fmtMoney(it.unit_price), fmtMoney(net), fmtMoney(vat), fmtMoney(gross)]);
+        } else {
+          wsData.push([ii + 1, it.product_name, svc, it.quantity, fmtMoney(it.unit_price), fmtMoney(it.line_total)]);
+        }
+      });
+      wsData.push([]); /* فراغ بين الأوامر */
+    });
+
+    wsData.push(['', '', '', '', 'الإجمالي الكلي', fmtMoney(grandTotal) + ' ر.س']);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = vatRate > 0
+      ? [{ wch: 4 }, { wch: 22 }, { wch: 24 }, { wch: 8 }, { wch: 13 }, { wch: 14 }, { wch: 14 }, { wch: 18 }]
+      : [{ wch: 4 }, { wch: 22 }, { wch: 24 }, { wch: 8 }, { wch: 13 }, { wch: 14 }];
+    if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
+    ws['!sheetViews'][0].rightToLeft = true;
+    XLSX.utils.book_append_sheet(wb, ws, 'أوامر التشغيل');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `أوامر_فاتورة_${invoiceNum || 'export'}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  /* ── PDF ── */
+  if (type === 'pdf') {
+    const logoB64 = payload.logoB64 || '';
+    const logoTag = logoB64 ? `<img src="${logoB64}" style="max-height:70px;max-width:160px;object-fit:contain" />` : '';
+
+    const vatCols = vatRate > 0
+      ? `<th class="th-num">قبل الضريبة</th><th class="th-num">الضريبة (${vatRate}%)</th><th class="th-num">الإجمالي شامل الضريبة</th>`
+      : `<th class="th-num">الإجمالي</th>`;
+
+    const woBlocks = workOrders.map((wo) => {
+      const itemRows = (wo.items || []).map((it, ii) => {
+        const { net, vat, gross } = calcItem(it.line_total);
+        const svc = (it.service_name || '') + (it.merzam_type_name ? ' / ' + it.merzam_type_name : '');
+        const amtCols = vatRate > 0
+          ? `<td class="td-num">${fmtMoney(net)}</td><td class="td-vat">${fmtMoney(vat)}</td><td class="td-num">${fmtMoney(gross)}</td>`
+          : `<td class="td-num">${fmtMoney(it.line_total)}</td>`;
+        return `<tr class="${ii % 2 === 1 ? 'alt' : ''}">
+          <td class="td-num" style="color:#64748b">${ii + 1}</td>
+          <td class="td-txt">${it.product_name || ''}</td>
+          <td class="td-txt">${svc}</td>
+          <td class="td-num">${it.quantity}</td>
+          <td class="td-num">${fmtMoney(it.unit_price)}</td>
+          ${amtCols}
+        </tr>`;
+      }).join('');
+
+      return `
+      <div class="wo-block">
+        <div class="wo-hdr">
+          <span class="wo-num">أمر التشغيل: ${wo.work_order_number}</span>
+          <span class="wo-date" dir="ltr">${fmtDate(wo.created_at)}</span>
+          <span class="wo-total">الإجمالي: ${fmtMoney(wo.total_amount)} <span class="sar">${sar}</span></span>
+        </div>
+        <table>
+          <thead><tr>
+            <th class="th-num" style="width:32px">#</th>
+            <th class="th-txt">النوع</th>
+            <th class="th-txt">العملية</th>
+            <th class="th-num">الكمية</th>
+            <th class="th-num">سعر الوحدة</th>
+            ${vatCols}
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/>
+<style>
+@font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${f.cairoBoldB64}') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${f.cairoRegularB64}') format('woff2');font-weight:400}
+@font-face{font-family:'SaudiRiyal';src:url('data:font/woff;base64,${f.saudiRiyalB64}') format('woff')}
+*{font-family:'Cairo',sans-serif;box-sizing:border-box;margin:0;padding:0}
+body{padding:28px 32px;color:#1e293b;background:#fff;font-size:10pt}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:14px}
+.shop-name{font-size:14pt;font-weight:700;color:#1e293b}
+.shop-sub{font-size:8.5pt;color:#475569;margin-top:2px}
+.inv-badge{background:#dbeafe;color:#1e40af;border:1.5px solid #93c5fd;padding:3px 16px;border-radius:20px;font-size:10pt;font-weight:700;display:inline-block;margin-bottom:12px}
+.cust-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;gap:28px;flex-wrap:wrap}
+.cust-lbl{font-size:7.5pt;color:#64748b;margin-bottom:1px}
+.cust-val{font-size:10pt;font-weight:700;color:#1e293b}
+.wo-block{margin-bottom:20px;page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden}
+.wo-hdr{background:#eff6ff;border-bottom:2px solid #bfdbfe;padding:7px 12px;display:flex;gap:20px;align-items:center;font-size:9.5pt}
+.wo-num{font-weight:700;color:#1e40af}
+.wo-date{font-size:8.5pt;color:#64748b}
+.wo-total{margin-right:auto;font-weight:700;color:#1e293b}
+.sar{font-family:'SaudiRiyal'}
+table{width:100%;border-collapse:collapse;font-size:9pt}
+thead tr{background:#2563eb;color:#fff}
+th{padding:6px 10px;font-weight:700;font-size:8.5pt;white-space:nowrap}
+th.th-txt{text-align:right}
+th.th-num{text-align:center}
+td{padding:5px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+td.td-txt{text-align:right}
+td.td-num{text-align:center;font-variant-numeric:tabular-nums;direction:ltr;font-weight:700;color:#1e293b}
+td.td-vat{text-align:center;font-variant-numeric:tabular-nums;direction:ltr;color:#dc2626}
+tr.alt td{background:#f8fafc}
+.grand-row td{background:#eff6ff;color:#1e40af;font-weight:700;font-size:10.5pt;border-top:2px solid #bfdbfe;border-bottom:none;padding:9px 12px}
+</style></head><body>
+<div class="page-hdr">
+  <div>
+    <div class="shop-name">${shopNameAr || shopNameEn || ''}</div>
+    ${addressAr ? `<div class="shop-sub">${addressAr}</div>` : ''}
+    ${shopPhone  ? `<div class="shop-sub">هاتف: ${shopPhone}</div>` : ''}
+    ${vatNumber  ? `<div class="shop-sub">الرقم الضريبي: ${vatNumber}</div>` : ''}
+  </div>
+  ${logoTag ? `<div>${logoTag}</div>` : ''}
+</div>
+<div class="inv-badge">فاتورة مجمعة رقم ${invoiceNum || ''}</div>
+<div class="cust-box">
+  ${custName  ? `<div><div class="cust-lbl">العميل / Customer</div><div class="cust-val">${custName}</div></div>` : ''}
+  ${custPhone ? `<div><div class="cust-lbl">الجوال / Mobile</div><div class="cust-val" dir="ltr">${custPhone}</div></div>` : ''}
+  ${custVat   ? `<div><div class="cust-lbl">الرقم الضريبي / VAT No.</div><div class="cust-val" dir="ltr">${custVat}</div></div>` : ''}
+</div>
+${woBlocks}
+<table style="margin-top:8px">
+  <tfoot>
+    <tr class="grand-row">
+      <td colspan="${vatRate > 0 ? 6 : 4}" style="text-align:right">الإجمالي الكلي لجميع أوامر التشغيل</td>
+      <td style="text-align:center;font-variant-numeric:tabular-nums;direction:ltr">${fmtMoney(grandTotal)} <span class="sar">${sar}</span></td>
+    </tr>
+  </tfoot>
+</table>
+</body></html>`;
+
+    const numCols = vatRate > 0 ? 7 : 5;
+    const buffer = await htmlToPdfBuffer(html, { landscape: vatRate > 0 });
+    return { buffer, filename: `أوامر_فاتورة_${invoiceNum || 'export'}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
+/* ── تصدير تقرير الفنادق والشركات (031) — قراءة فقط، يُعيد بناء البيانات على الخادم ── */
+async function exportHotelsCompaniesReport(type, body = {}) {
+  const { mode = 'detail', customerId, dateFrom, dateTo, docType = 'all', status = 'all' } = body || {};
+
+  const f = cairoFonts();
+  const zlib = require('zlib');
+  const pad   = x => String(x).padStart(2, '0');
+  const fmt   = n => Number(n || 0).toFixed(2);
+  const esc   = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmtDT = dt => { if (!dt) return '—'; try { const d = new Date(dt); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; } catch { return String(dt); } };
+  const fmtDate = dt => { if (!dt) return '—'; try { const d = new Date(dt); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; } catch { return String(dt); } };
+  const sarCell = n => `${fmt(n)}&nbsp;<span style="font-family:SaudiRiyal">&#xE900;</span>`;
+  const woStatusLabels = { pending:'في الانتظار', invoiced:'مُفوتر', cancelled:'ملغي' };
+  const payStatusLabels = { paid:'مدفوعة', pending:'آجلة', partial:'جزئية' };
+
+  let branding = {};
+  try { branding = await loadAppBrandingForReceipts(); } catch { /* ignore */ }
+  const laundryNameAr = branding.laundryNameAr || '';
+  const vatNumber     = branding.vatNumber || '';
+  const now    = new Date();
+  const nowStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  let logoHtml = '';
+  if (branding.logoGzipBuffer) {
+    try {
+      const buf = Buffer.isBuffer(branding.logoGzipBuffer) ? branding.logoGzipBuffer : Buffer.from(branding.logoGzipBuffer);
+      const raw = await new Promise((res, rej) => zlib.gunzip(buf, (e, r) => e ? rej(e) : res(r)));
+      logoHtml = `<img src="data:image/png;base64,${raw.toString('base64')}" style="height:56px;object-fit:contain;display:block">`;
+    } catch { /* no logo */ }
+  }
+
+  const pdfHead = (title, periodStr) => `<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8"><style>
+@font-face{font-family:Cairo;src:url('data:font/woff2;base64,${f.cairoBoldB64}') format('woff2');font-weight:700}
+@font-face{font-family:Cairo;src:url('data:font/woff2;base64,${f.cairoRegularB64}') format('woff2');font-weight:400}
+@font-face{font-family:SaudiRiyal;src:url('data:font/woff;base64,${f.saudiRiyalB64}') format('woff')}
+*{font-family:Cairo,sans-serif;box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:12mm}
+body{font-size:9px;color:#1e293b;background:#fff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #f97316;padding-bottom:8px;margin-bottom:10px}
+.rpt-title{font-size:13px;font-weight:700;color:#f97316;text-align:center}
+.co-name{font-size:12px;font-weight:700}.co-meta{font-size:8px;color:#64748b;margin-top:2px}
+.cust-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap}
+.cust-bar span{color:#64748b}.cust-bar strong{color:#1e293b}
+.sg{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:10px}
+.sc{border:1px solid #e2e8f0;border-radius:3px;padding:5px 6px;text-align:center}
+.sc .lbl{font-size:7.5px;color:#64748b;margin-bottom:2px}.sc .val{font-size:9px;font-weight:700}
+.sc.p1{border-right:3px solid #6366f1}.sc.p2{border-right:3px solid #0ea5e9}.sc.p3{border-right:3px solid #f59e0b}
+.sc.p4{border-right:3px solid #10b981}.sc.p5{border-right:3px solid #ef4444}.sc.p6{border-right:3px solid #94a3b8}
+h3{font-size:9px;font-weight:700;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e2e8f0}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}
+th{background:#f1f5f9;padding:4px 5px;text-align:right;font-weight:700;border:1px solid #e2e8f0;font-size:8px}
+td{padding:3px 5px;border:1px solid #f1f5f9;font-size:8px;vertical-align:top}
+tr:nth-child(even) td{background:#fafbfc}
+thead{display:table-header-group}
+.ft{font-size:7.5px;color:#94a3b8;text-align:center;margin-top:6px;border-top:1px solid #e2e8f0;padding-top:5px}
+</style></head><body>
+<div class="hdr">
+  <div>${logoHtml}</div>
+  <div style="text-align:center">
+    <div class="rpt-title">${esc(title)}</div>
+    <div style="font-size:8px;color:#64748b;margin-top:3px">الفترة: ${periodStr}</div>
+  </div>
+  <div style="text-align:left">
+    <div class="co-name">${esc(laundryNameAr)}</div>
+    ${vatNumber ? `<div class="co-meta">الرقم الضريبي: ${esc(vatNumber)}</div>` : ''}
+    <div class="co-meta">تاريخ الإنشاء: ${nowStr}</div>
+  </div>
+</div>`;
+
+  // ── وضع التفصيل (عميل واحد) ──
+  if (mode === 'detail') {
+    const data = await db.getCorporateReportStatement({ customerId, dateFrom, dateTo, docType, status });
+    const c = data.customer || {};
+    const periodStr = `${fmtDate(data.dateFrom)} — ${fmtDate(data.dateTo)}`;
+    const s = data.summary || {};
+
+    // دمج زمني
+    const timeline = [];
+    (data.workOrders || []).forEach(w => timeline.push({
+      kind: 'wo', date: w.created_at, docNo: w.work_order_number,
+      desc: w.consolidated_invoice_seq ? `مُفوتر بالفاتورة #${w.consolidated_invoice_seq}` : '—',
+      statusLabel: woStatusLabels[w.status] || w.status, status: w.status,
+      subtotal: w.subtotal, discount: w.discount_amount, vat: w.vat_amount, total: w.total_amount,
+      paid: null, outstanding: null,
+    }));
+    (data.consolidatedInvoices || []).forEach(inv => timeline.push({
+      kind: 'inv', date: inv.created_at, docNo: `#${inv.invoice_seq}`,
+      desc: (inv.work_order_numbers && inv.work_order_numbers.length) ? `يضم: ${inv.work_order_numbers.join('، ')}` : `${inv.work_orders_count || 0} أمر`,
+      statusLabel: payStatusLabels[inv.payment_status] || inv.payment_status, status: inv.payment_status,
+      subtotal: inv.subtotal, discount: inv.discount_amount, vat: inv.vat_amount, total: inv.total_amount,
+      paid: inv.paid_amount, outstanding: inv.remaining_amount,
+    }));
+    timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (type === 'pdf') {
+      const rows = timeline.map(t => {
+        const isCancelled = t.status === 'cancelled';
+        const outClr = Number(t.outstanding || 0) > 0 ? '#dc2626' : '#059669';
+        return `<tr${isCancelled ? ' style="opacity:.6"' : ''}>
+          <td style="white-space:nowrap;font-size:7.5px">${esc(fmtDT(t.date))}</td>
+          <td>${t.kind === 'wo' ? 'أمر تشغيل' : 'فاتورة مجمعة'}</td>
+          <td style="direction:ltr;text-align:right">${esc(t.docNo)}</td>
+          <td>${esc(t.statusLabel)}</td>
+          <td>${esc(t.desc)}</td>
+          <td style="direction:ltr;text-align:left">${sarCell(t.subtotal)}</td>
+          <td style="direction:ltr;text-align:left">${sarCell(t.discount)}</td>
+          <td style="direction:ltr;text-align:left">${sarCell(t.vat)}</td>
+          <td style="direction:ltr;text-align:left">${sarCell(t.total)}</td>
+          <td style="direction:ltr;text-align:left">${t.paid == null ? '—' : sarCell(t.paid)}</td>
+          <td style="direction:ltr;text-align:left;color:${outClr};font-weight:600">${t.outstanding == null ? '—' : sarCell(t.outstanding)}</td>
+        </tr>`;
+      }).join('');
+
+      const html = pdfHead('تقرير الفنادق والشركات — كشف حساب', periodStr) + `
+<div class="cust-bar">
+  <div><span>العميل: </span><strong>${esc(c.customer_name || '')}</strong></div>
+  ${c.phone ? `<div><span>الجوال: </span><strong dir="ltr">${esc(c.phone)}</strong></div>` : ''}
+  <div><span>الرقم الضريبي: </span><strong>${c.tax_number ? esc(c.tax_number) : 'بدون رقم ضريبي'}</strong></div>
+</div>
+<div class="sg">
+  <div class="sc p1"><div class="lbl">إجمالي المُشغَّل</div><div class="val">${sarCell(s.totalWorkOrdered)}</div></div>
+  <div class="sc p2"><div class="lbl">إجمالي المُفوتَر</div><div class="val">${sarCell(s.totalInvoiced)}</div></div>
+  <div class="sc p3"><div class="lbl">إجمالي الضريبة</div><div class="val">${sarCell(s.totalVat)}</div></div>
+  <div class="sc p4"><div class="lbl">إجمالي المدفوع</div><div class="val">${sarCell(s.totalPaid)}</div></div>
+  <div class="sc p5"><div class="lbl">المستحق الآجل</div><div class="val" style="color:#dc2626">${sarCell(s.totalOutstanding)}</div></div>
+  <div class="sc p6"><div class="lbl">عدد الأوامر / الفواتير</div><div class="val">${s.workOrdersCount || 0} / ${s.invoicesCount || 0}</div></div>
+</div>
+<h3>الحركات التفصيلية (${timeline.length})</h3>
+<table>
+<thead><tr><th>التاريخ</th><th>النوع</th><th>رقم المستند</th><th>الحالة</th><th>التفاصيل</th><th>قبل الضريبة</th><th>الخصم</th><th>الضريبة</th><th>الإجمالي</th><th>مدفوع</th><th>مستحق</th></tr></thead>
+<tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:14px;color:#94a3b8">لا توجد حركات في هذه الفترة</td></tr>'}</tbody>
+</table>
+<div class="ft">PLUS Laundry System — تقرير الفنادق والشركات — ${nowStr}</div>
+</body></html>`;
+      const buffer = await htmlToPdfBuffer(html, { landscape: true });
+      return { buffer, filename: `تقرير-الفنادق-والشركات_${ts()}.pdf`, mimeType: 'application/pdf' };
+    }
+
+    if (type === 'excel') {
+      const wb = XLSX.utils.book_new();
+      const aoa = [
+        [`تقرير الفنادق والشركات — كشف حساب`],
+        [`العميل: ${c.customer_name || ''}`],
+        [`الجوال: ${c.phone || '—'}`],
+        [`الرقم الضريبي: ${c.tax_number || 'بدون رقم ضريبي'}`],
+        [`الفترة: ${fmtDT(data.dateFrom)} — ${fmtDT(data.dateTo)}`],
+        [],
+        [`إجمالي المُشغَّل: ${fmt(s.totalWorkOrdered)}`, '', `إجمالي المُفوتَر: ${fmt(s.totalInvoiced)}`, '', `إجمالي الضريبة: ${fmt(s.totalVat)}`],
+        [`إجمالي المدفوع: ${fmt(s.totalPaid)}`, '', `المستحق الآجل: ${fmt(s.totalOutstanding)}`],
+        [],
+        ['التاريخ والوقت','النوع','رقم المستند','الحالة','التفاصيل','قبل الضريبة','الخصم','الضريبة','الإجمالي','مدفوع','مستحق'],
+        ...timeline.map(t => [
+          fmtDT(t.date), t.kind === 'wo' ? 'أمر تشغيل' : 'فاتورة مجمعة', t.docNo, t.statusLabel, t.desc,
+          Number(t.subtotal || 0), Number(t.discount || 0), Number(t.vat || 0), Number(t.total || 0),
+          t.paid == null ? '' : Number(t.paid), t.outstanding == null ? '' : Number(t.outstanding),
+        ]),
+        ['الإجمالي', '', '', '', '', '', '', '', Number(s.totalInvoiced || 0), Number(s.totalPaid || 0), Number(s.totalOutstanding || 0)],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{wch:18},{wch:13},{wch:13},{wch:12},{wch:28},{wch:12},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12}];
+      if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
+      ws['!sheetViews'][0].rightToLeft = true;
+      XLSX.utils.book_append_sheet(wb, ws, 'كشف الحساب');
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      return { buffer: Buffer.from(buf), filename: `تقرير-الفنادق-والشركات_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+    }
+    throw new Error('نوع التصدير غير مدعوم');
+  }
+
+  // ── وضع الملخص (كل الشركات) ──
+  const data = await db.getCorporateReportSummary({ dateFrom, dateTo, search: body.search });
+  const periodStr = `${fmtDate(data.dateFrom)} — ${fmtDate(data.dateTo)}`;
+  const t = data.totals || {};
+
+  if (type === 'pdf') {
+    const rows = (data.rows || []).map(r => {
+      const outClr = Number(r.total_outstanding || 0) > 0 ? '#dc2626' : '#059669';
+      return `<tr>
+        <td>${esc(r.customer_name)}</td>
+        <td>${r.tax_number ? esc(r.tax_number) : '—'}</td>
+        <td style="text-align:center">${r.wo_count || 0}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(r.total_work_ordered)}</td>
+        <td style="text-align:center">${r.inv_count || 0}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(r.total_invoiced)}</td>
+        <td style="direction:ltr;text-align:left">${sarCell(r.total_paid)}</td>
+        <td style="direction:ltr;text-align:left;color:${outClr};font-weight:600">${sarCell(r.total_outstanding)}</td>
+      </tr>`;
+    }).join('');
+    const footer = `<tr style="background:#f1f5f9;font-weight:700">
+      <td colspan="2" style="text-align:left">الإجمالي الكلي</td>
+      <td style="text-align:center">${t.wo_count || 0}</td>
+      <td style="direction:ltr;text-align:left">${sarCell(t.total_work_ordered)}</td>
+      <td style="text-align:center">${t.inv_count || 0}</td>
+      <td style="direction:ltr;text-align:left">${sarCell(t.total_invoiced)}</td>
+      <td style="direction:ltr;text-align:left">${sarCell(t.total_paid)}</td>
+      <td style="direction:ltr;text-align:left;color:#dc2626">${sarCell(t.total_outstanding)}</td>
+    </tr>`;
+    const html = pdfHead('تقرير الفنادق والشركات — ملخص كل العملاء', periodStr) + `
+<h3>الشركات والفنادق النشطة (${(data.rows || []).length})</h3>
+<table>
+<thead><tr><th>العميل</th><th>الرقم الضريبي</th><th>عدد الأوامر</th><th>المُشغَّل</th><th>عدد الفواتير</th><th>المُفوتَر</th><th>المدفوع</th><th>المستحق</th></tr></thead>
+<tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:14px;color:#94a3b8">لا توجد شركات نشطة في هذه الفترة</td></tr>'}${rows ? footer : ''}</tbody>
+</table>
+<div class="ft">PLUS Laundry System — تقرير الفنادق والشركات — ${nowStr}</div>
+</body></html>`;
+    const buffer = await htmlToPdfBuffer(html, { landscape: true });
+    return { buffer, filename: `تقرير-الفنادق-والشركات-ملخص_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  if (type === 'excel') {
+    const wb = XLSX.utils.book_new();
+    const aoa = [
+      [`تقرير الفنادق والشركات — ملخص كل العملاء`],
+      [`الفترة: ${fmtDT(data.dateFrom)} — ${fmtDT(data.dateTo)}`],
+      [],
+      ['العميل','الرقم الضريبي','عدد الأوامر','المُشغَّل','عدد الفواتير','المُفوتَر','المدفوع','المستحق'],
+      ...(data.rows || []).map(r => [
+        r.customer_name, r.tax_number || '—', r.wo_count || 0, Number(r.total_work_ordered || 0),
+        r.inv_count || 0, Number(r.total_invoiced || 0), Number(r.total_paid || 0), Number(r.total_outstanding || 0),
+      ]),
+      ['الإجمالي الكلي', '', t.wo_count || 0, Number(t.total_work_ordered || 0), t.inv_count || 0, Number(t.total_invoiced || 0), Number(t.total_paid || 0), Number(t.total_outstanding || 0)],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:26},{wch:16},{wch:12},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14}];
+    if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
+    ws['!sheetViews'][0].rightToLeft = true;
+    XLSX.utils.book_append_sheet(wb, ws, 'ملخص الشركات');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `تقرير-الفنادق-والشركات-ملخص_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
 module.exports = {
   exportExpenses,
   exportCustomers,
@@ -1557,5 +2003,7 @@ module.exports = {
   exportZakatReport,
   exportCustomerAccountReport,
   MAX_PRODUCT_IMAGE_RAW_BYTES,
-  cairoFonts
+  cairoFonts,
+  exportConsolidatedWorkOrdersList,
+  exportHotelsCompaniesReport
 };

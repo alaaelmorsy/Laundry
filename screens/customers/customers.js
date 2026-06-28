@@ -152,6 +152,27 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
   btnModalSave.addEventListener('click', saveCustomer);
+  inputCustomerType.addEventListener('change', function () {
+    var vatWarn = document.getElementById('corpVatWarning');
+    if (inputCustomerType.value === 'corporate' && !inputTaxNumber.value.trim()) {
+      if (!vatWarn) {
+        vatWarn = document.createElement('div');
+        vatWarn.id = 'corpVatWarning';
+        vatWarn.style.cssText = 'margin-top:6px;padding:7px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:12px;color:#92400e';
+        vatWarn.textContent = '⚠️ عميل الشركة بدون رقم ضريبي — ستُصدر الفواتير كفاتورة ضريبية مبسطة';
+        inputTaxNumber.parentNode.insertBefore(vatWarn, inputTaxNumber.nextSibling);
+      } else {
+        vatWarn.style.display = '';
+      }
+    } else {
+      if (vatWarn) vatWarn.style.display = 'none';
+    }
+  });
+  inputTaxNumber.addEventListener('input', function () {
+    var vatWarn = document.getElementById('corpVatWarning');
+    if (vatWarn && inputTaxNumber.value.trim()) vatWarn.style.display = 'none';
+    else if (vatWarn && inputCustomerType.value === 'corporate') vatWarn.style.display = '';
+  });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
   btnFirstPage.addEventListener('click', () => goToPage(1));

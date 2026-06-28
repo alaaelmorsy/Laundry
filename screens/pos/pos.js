@@ -34,6 +34,7 @@
     deferredFilteredInvoices: [],
     deferredPayingOrder: null,
     viewingDeferredInvoice: null,
+    viewingInvoiceIsConsolidated: false,
     cameraScanner: null,
     viewingOrderId: null,
     lastA4Data: null,
@@ -1590,7 +1591,8 @@
           data-name="${escHtml(c.customer_name || '')}"
           data-phone="${escHtml(c.phone || '')}"
           data-sub="${escHtml(c.subscription_number || '')}"
-          data-tax="${escHtml(c.tax_number || '')}">
+          data-tax="${escHtml(c.tax_number || '')}"
+          data-type="${escHtml(c.customer_type || 'individual')}">
           <div class="customer-option-row">
             <div class="customer-option-name">${escHtml(c.customer_name || c.subscription_number)}</div>
             ${c.subscription_number ? `<span class="copt-sub-num">${escHtml(c.subscription_number)}</span>` : ''}
@@ -1610,6 +1612,9 @@
           phone: opt.dataset.phone,
           subscription_number: opt.dataset.sub,
           taxNumber: opt.dataset.tax || '',
+          tax_number: fullData.tax_number || '',
+          customer_type: fullData.customer_type || 'individual',
+          customer_name: fullData.customer_name || opt.dataset.name,
           discount_type: fullData.discount_type || null,
           discount_value: fullData.discount_value != null ? fullData.discount_value : null,
           discount_expiry: fullData.discount_expiry || null
@@ -1640,6 +1645,25 @@
     
     els.chipSubscription.style.display = 'none';
     els.selectedCustomerChip.style.display = 'flex';
+
+    // مؤشر عميل الشركة
+    var existingCorpBadge = document.getElementById('posCorpBadge');
+    if (customer.customer_type === 'corporate') {
+      if (!existingCorpBadge) {
+        var badge = document.createElement('span');
+        badge.id = 'posCorpBadge';
+        badge.style.cssText = 'display:inline-flex;align-items:center;padding:2px 8px;background:#1e40af;color:#fff;border-radius:12px;font-size:11px;font-weight:700;margin-right:6px';
+        badge.textContent = 'شركة — سيُطبع أمر تشغيل';
+        els.selectedCustomerChip.appendChild(badge);
+      } else {
+        existingCorpBadge.style.display = '';
+      }
+      // تغيير نص زر الإتمام
+      if (els.btnPay) els.btnPay.textContent = 'طباعة أمر تشغيل';
+    } else {
+      if (existingCorpBadge) existingCorpBadge.style.display = 'none';
+      if (els.btnPay) els.btnPay.textContent = 'إتمام البيع';
+    }
 
     if (customer.id) {
       // جلب رصيد النقاط إذا كان النظام مفعلاً
@@ -1761,6 +1785,9 @@
     els.btnClearCustomer.style.display = 'none';
     els.selectedCustomerChip.style.display = 'none';
     els.chipSubscription.style.display = 'none';
+    var corpBadge = document.getElementById('posCorpBadge');
+    if (corpBadge) corpBadge.style.display = 'none';
+    if (els.btnPay) els.btnPay.textContent = 'إتمام البيع';
     els.customerDropdown.style.display = 'none';
     if (els.chipLoyaltyBadge) els.chipLoyaltyBadge.style.display = 'none';
     clearLoyaltyDiscount(true);
@@ -2400,8 +2427,13 @@
 
   /* ========== A4 MODAL HELPERS ========== */
   function applyInvoiceTypeClass() {
-    var type = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    var type = getEffectiveInvoicePaperType();
     document.body.classList.toggle('invtype-a4', type === 'a4');
+  }
+
+  function getEffectiveInvoicePaperType() {
+    if (state.viewingInvoiceIsConsolidated) return 'a4';
+    return (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
   }
 
   function fillA4InvoiceModal(data) {
@@ -3856,9 +3888,30 @@
       autoPrint: false
     };
 
+    if (state.viewingInvoiceIsConsolidated) {
+      state.lastA4Data.paidAt = state.lastA4Data.paidAt || state.lastA4Data.date;
+      state.lastA4Data.cleanedAt = state.lastA4Data.cleanedAt || state.lastA4Data.date;
+      state.lastA4Data.deliveredAt = state.lastA4Data.deliveredAt || state.lastA4Data.date;
+
+      var groupedA4Items = [];
+      var groupedA4Map = {};
+      state.lastA4Data.items.forEach(function(item) {
+        var key = (item.productAr || '') + '||' + (item.serviceAr || '') + '||' + (item.merzam || '');
+        if (groupedA4Map[key] !== undefined) {
+          var grouped = groupedA4Items[groupedA4Map[key]];
+          grouped.qty = (Number(grouped.qty) || 0) + (Number(item.qty) || 1);
+          grouped.lineTotal = (Number(grouped.lineTotal) || 0) + (Number(item.lineTotal) || 0);
+        } else {
+          groupedA4Map[key] = groupedA4Items.length;
+          groupedA4Items.push(Object.assign({}, item));
+        }
+      });
+      state.lastA4Data.items = groupedA4Items;
+    }
+
     /* ── Show modal (thermal or A4) ── */
     applyInvoiceTypeClass();
-    var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    var paperType = getEffectiveInvoicePaperType();
     if (paperType === 'a4') {
       fillA4InvoiceModal(state.lastA4Data);
     }
@@ -4000,16 +4053,454 @@
       state.paymentMethod    = saved.pm;
       state.vatRate          = saved.vat;
       state.priceDisplayMode = saved.priceDisplayMode || 'exclusive';
+      state.viewingInvoiceIsConsolidated = saved.viewingInvoiceIsConsolidated || false;
       state.viewingDeferredInvoice = null;
     } else {
+      state.viewingInvoiceIsConsolidated = false;
       resetForNewSale();
     }
+  }
+
+  /* ========== WORK ORDER (CORPORATE FLOW) ========== */
+  async function handleWorkOrderFlow() {
+    if (state.cart.length === 0) {
+      showToast(t('pos-err-empty-cart'), 'error');
+      return;
+    }
+
+    const { subtotal, discount, vatAmount, total } = getOrderTotals();
+    const customer = state.selectedCustomer;
+    const settings = state.appSettings || {};
+
+    const items = state.cart.map(function (item) {
+      return {
+        productName: item.productNameAr || '',
+        serviceName: item.serviceNameAr || null,
+        quantity: item.qty,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+        itemType: 'product'
+      };
+    });
+
+    const woPayload = {
+      customerId: customer.id,
+      items: items,
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      discountAmount: parseFloat(discount.toFixed(2)),
+      vatRate: parseFloat((settings.vatRate || 15).toFixed(2)),
+      vatAmount: parseFloat(vatAmount.toFixed(2)),
+      totalAmount: parseFloat(total.toFixed(2)),
+      priceDisplayMode: settings.priceDisplayMode || 'exclusive',
+      createdBy: null
+    };
+
+    els.btnPay.disabled = true;
+    els.btnPay.classList.add('loading');
+
+    try {
+      const res = await window.api.createWorkOrder(woPayload);
+      if (!res.success) {
+        showToast(res.message || 'حدث خطأ أثناء حفظ أمر التشغيل', 'error');
+        return;
+      }
+
+      const woData = {
+        workOrderNumber: res.workOrderNumber,
+        workOrderId: res.workOrderId,
+        customerName: customer.customer_name || customer.name || '',
+        customerPhone: customer.phone || '',
+        customerTaxNumber: customer.tax_number || null,
+        createdAt: res.createdAt || new Date().toISOString(),
+        subtotal: woPayload.subtotal,
+        discountAmount: woPayload.discountAmount,
+        vatRate: woPayload.vatRate,
+        vatAmount: woPayload.vatAmount,
+        totalAmount: woPayload.totalAmount,
+        priceDisplayMode: woPayload.priceDisplayMode,
+        items: state.cart.map(function (item) {
+          return {
+            product_name: item.productNameAr || '',
+            service_name: item.serviceNameAr || null,
+            merzam_type_name: item.merzamTypeName || null,
+            quantity: item.qty,
+            unit_price: item.unitPrice,
+            line_total: item.lineTotal
+          };
+        })
+      };
+
+      showWorkOrderModal(woData);
+      resetForNewSale();
+    } catch (err) {
+      showToast('خطأ: ' + err.message, 'error');
+    } finally {
+      els.btnPay.disabled = false;
+      els.btnPay.classList.remove('loading');
+    }
+  }
+
+  function showWorkOrderModal(woData) {
+    var s = state.appSettings || {};
+    var lang = getLang();
+
+    /* Shop info — same logic as showInvoiceModal */
+    var shopName = (lang === 'ar' ? s.laundryNameAr : s.laundryNameEn) || s.laundryNameAr || s.laundryNameEn || '';
+    document.getElementById('woShopName').textContent = shopName;
+
+    var addressParts = [];
+    if (s.buildingNumber) addressParts.push(s.buildingNumber);
+    if (s.streetNameAr)   addressParts.push(s.streetNameAr);
+    if (s.districtAr)     addressParts.push(s.districtAr);
+    if (s.cityAr)         addressParts.push(s.cityAr);
+    if (s.postalCode)     addressParts.push(s.postalCode);
+    var locationFallback = lang === 'ar' ? s.locationAr : s.locationEn;
+    document.getElementById('woShopAddress').textContent = addressParts.length ? addressParts.join('، ') : (locationFallback || '');
+
+    document.getElementById('woShopPhone').textContent = s.phone ? 'هاتف: ' + s.phone : '';
+    document.getElementById('woShopPhoneRow').style.display = s.phone ? '' : 'none';
+
+    if (s.vatNumber) {
+      document.getElementById('woVatNumber').textContent = 'الرقم الضريبي: ' + s.vatNumber;
+      document.getElementById('woVatRow').style.display = '';
+    } else {
+      document.getElementById('woVatRow').style.display = 'none';
+    }
+
+    if (s.commercialRegister) {
+      document.getElementById('woCR').textContent = 'السجل التجاري: ' + s.commercialRegister;
+      document.getElementById('woCRRow').style.display = '';
+    } else {
+      document.getElementById('woCRRow').style.display = 'none';
+    }
+
+    var woEmail = document.getElementById('woShopEmail');
+    var woEmailRow = document.getElementById('woEmailRow');
+    if (woEmail && woEmailRow) {
+      var emailVal = (s.showEmailInInvoice !== false) ? (s.email || '') : '';
+      woEmail.textContent = emailVal;
+      woEmailRow.style.display = emailVal ? '' : 'none';
+    }
+
+    var woCF = document.getElementById('woCustomFields');
+    if (woCF) {
+      var cfs = Array.isArray(s.customFields) ? s.customFields : [];
+      if (cfs.length > 0) {
+        var cfHtml = '';
+        cfs.forEach(function (cf) {
+          var label = cf.labelAr || cf.labelEn;
+          if (label) cfHtml += '<div class="inv-shop-sub">' + escHtml(label) + '</div>';
+        });
+        woCF.innerHTML = cfHtml;
+        woCF.style.display = cfHtml ? '' : 'none';
+      } else {
+        woCF.innerHTML = '';
+        woCF.style.display = 'none';
+      }
+    }
+
+    /* Logo */
+    var woLogoWrap = document.getElementById('woLogoWrap');
+    var woLogo = document.getElementById('woLogo');
+    if (s.logoDataUrl) {
+      woLogo.src = s.logoDataUrl;
+      woLogo.style.width = (s.logoWidth || 180) + 'px';
+      woLogo.style.height = (s.logoHeight || 70) + 'px';
+      woLogo.style.maxWidth = (s.logoWidth || 180) + 'px';
+      woLogo.style.maxHeight = (s.logoHeight || 70) + 'px';
+      woLogo.style.objectFit = 'contain';
+      woLogoWrap.style.display = '';
+    } else {
+      woLogoWrap.style.display = 'none';
+    }
+
+    /* Work order number & date */
+    document.getElementById('woOrderNum').textContent = woData.workOrderNumber || '';
+    var d = woData.createdAt ? new Date(woData.createdAt) : new Date();
+    document.getElementById('woDate').textContent =
+      d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    /* Customer info */
+    if (woData.customerName) {
+      document.getElementById('woCustName').textContent = woData.customerName;
+      document.getElementById('woCustNameRow').style.display = '';
+    } else {
+      document.getElementById('woCustNameRow').style.display = 'none';
+    }
+    if (woData.customerPhone) {
+      document.getElementById('woCustPhone').textContent = woData.customerPhone;
+      document.getElementById('woCustPhoneRow').style.display = '';
+    } else {
+      document.getElementById('woCustPhoneRow').style.display = 'none';
+    }
+    if (woData.customerTaxNumber) {
+      document.getElementById('woCustVat').textContent = woData.customerTaxNumber;
+      document.getElementById('woCustVatRow').style.display = '';
+    } else {
+      document.getElementById('woCustVatRow').style.display = 'none';
+    }
+
+    var woCleanedAtRow = document.getElementById('woCleanedAtRow');
+    var woCleanedAt = document.getElementById('woCleanedAt');
+    if (woCleanedAtRow && woCleanedAt) {
+      if (woData.cleaningDate) {
+        woCleanedAt.textContent = formatInvoiceDate(woData.cleaningDate);
+        woCleanedAtRow.style.display = '';
+      } else {
+        woCleanedAt.textContent = '';
+        woCleanedAtRow.style.display = 'none';
+      }
+    }
+
+    var woDeliveredAtRow = document.getElementById('woDeliveredAtRow');
+    var woDeliveredAt = document.getElementById('woDeliveredAt');
+    if (woDeliveredAtRow && woDeliveredAt) {
+      if (woData.deliveryDate) {
+        woDeliveredAt.textContent = formatInvoiceDate(woData.deliveryDate);
+        woDeliveredAtRow.style.display = '';
+      } else {
+        woDeliveredAt.textContent = '';
+        woDeliveredAtRow.style.display = 'none';
+      }
+    }
+
+    /* Items table — same column order as invoice: النوع، عدد، الإجمالي، العملية */
+    var sarSymbol = '<span class="sar">&#xE900;</span>';
+    var tbody = document.getElementById('woItemsTbody');
+    tbody.innerHTML = (woData.items || []).map(function (it) {
+      var nameAr  = escHtml(it.product_name || '');
+      var svcAr   = escHtml(it.service_name || '');
+      var merzam  = it.merzam_type_name ? escHtml(it.merzam_type_name) : '';
+      var qty = parseFloat(it.quantity) % 1 === 0 ? parseInt(it.quantity) : parseFloat(it.quantity).toFixed(2);
+      var serviceCell = svcAr + (merzam ? '<span class="inv-td-merzam">' + merzam + '</span>' : '');
+      return '<tr>' +
+        '<td class="inv-td-name">' + nameAr + '</td>' +
+        '<td class="inv-td-num">' + qty + '</td>' +
+        '<td class="inv-td-amt" dir="ltr">' + parseFloat(it.line_total).toFixed(2) + '</td>' +
+        '<td class="inv-td-name">' + (svcAr || merzam ? serviceCell : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    /* Totals */
+    var vatRate     = parseFloat(woData.vatRate || 15);
+    var vatAmount   = parseFloat(woData.vatAmount || 0);
+    var subtotal    = parseFloat(woData.subtotal || 0);
+    var discAmount  = parseFloat(woData.discountAmount || 0);
+    var total       = parseFloat(woData.totalAmount || 0);
+    var priceMode   = woData.priceDisplayMode || (s.priceDisplayMode || 'exclusive');
+    var displaySubtotal = (priceMode === 'inclusive' && vatRate > 0)
+      ? subtotal * 100 / (100 + vatRate)
+      : subtotal;
+    var showBreakdown = vatAmount > 0 || discAmount > 0;
+
+    if (showBreakdown) {
+      document.getElementById('woSubtotal').innerHTML = sarSymbol + ' ' + displaySubtotal.toFixed(2);
+      document.getElementById('woSubtotalRow').style.display = '';
+    } else {
+      document.getElementById('woSubtotalRow').style.display = 'none';
+    }
+
+    if (discAmount > 0) {
+      document.getElementById('woDiscount').innerHTML = '- ' + sarSymbol + ' ' + discAmount.toFixed(2);
+      document.getElementById('woDiscRow').style.display = '';
+    } else {
+      document.getElementById('woDiscRow').style.display = 'none';
+    }
+
+    if (vatAmount > 0) {
+      document.getElementById('woVatLabel').textContent = 'ضريبة القيمة المضافة (' + vatRate + '%)';
+      document.getElementById('woVat').innerHTML = sarSymbol + ' ' + vatAmount.toFixed(2);
+      document.getElementById('woVatAmountRow').style.display = '';
+    } else {
+      document.getElementById('woVatAmountRow').style.display = 'none';
+    }
+    document.getElementById('woTotal').innerHTML = sarSymbol + ' ' + total.toFixed(2);
+
+    /* Starch / Bluing */
+    var starch = woData.starch || state.starch || '';
+    var bluing = woData.bluing || state.bluing || '';
+    var woExtraOpts = document.getElementById('woExtraOpts');
+    if (starch || bluing) {
+      if (starch) {
+        document.getElementById('woStarch').textContent = starch;
+        document.getElementById('woStarchRow').style.display = '';
+      } else {
+        document.getElementById('woStarchRow').style.display = 'none';
+      }
+      if (bluing) {
+        document.getElementById('woBluing').textContent = bluing;
+        document.getElementById('woBluingRow').style.display = '';
+      } else {
+        document.getElementById('woBluingRow').style.display = 'none';
+      }
+      woExtraOpts.style.display = '';
+    } else {
+      woExtraOpts.style.display = 'none';
+    }
+
+    /* Barcode — work order number */
+    var woBarcodeEl = document.getElementById('woBarcode');
+    var woBarcodeWrap = woBarcodeEl ? woBarcodeEl.closest('.inv-barcode-wrap') : null;
+    var woNum = woData.workOrderNumber || '';
+    if (woBarcodeEl && woNum && typeof JsBarcode !== 'undefined') {
+      try {
+        JsBarcode(woBarcodeEl, woNum, {
+          format: 'CODE128', width: 1.5, height: 36,
+          displayValue: true, fontSize: 9, margin: 2,
+          font: 'Cairo', textAlign: 'center'
+        });
+        if (woBarcodeWrap) woBarcodeWrap.style.display = '';
+      } catch (_) {
+        if (woBarcodeWrap) woBarcodeWrap.style.display = 'none';
+      }
+    } else if (woBarcodeWrap) {
+      woBarcodeWrap.style.display = 'none';
+    }
+
+    /* Footer notes from settings */
+    var woFooterNotes = document.getElementById('woFooterNotes');
+    var woNotesContent = document.getElementById('woNotesContent');
+    if (woFooterNotes && woNotesContent && s.invoiceFooterNotes) {
+      woNotesContent.textContent = s.invoiceFooterNotes;
+      woFooterNotes.style.display = '';
+    } else if (woFooterNotes) {
+      woFooterNotes.style.display = 'none';
+    }
+
+    /* WhatsApp button visibility — check live connection status */
+    var btnWoWhatsapp = document.getElementById('btnWoWhatsapp');
+    if (btnWoWhatsapp) {
+      btnWoWhatsapp.style.display = 'none';
+      window.api.whatsappGetStatus().then(function (ws) {
+        if (ws && (ws.status === 'connected' || ws.status === 'ready' || ws.status === 'open')) {
+          btnWoWhatsapp.style.display = '';
+        }
+      }).catch(function () {});
+    }
+
+    /* Show modal */
+    var modal = document.getElementById('workOrderModal');
+    modal.style.display = 'flex';
+
+    /* Print button — uses same @page CSS as invoice */
+    document.getElementById('btnWoPrint').onclick = function () {
+      var printZone = document.getElementById('posPrintZone');
+      if (!printZone) {
+        printZone = document.createElement('div');
+        printZone.id = 'posPrintZone';
+        printZone.setAttribute('data-print-root', '');
+        printZone.style.display = 'none';
+        document.body.appendChild(printZone);
+      }
+      var mLeft  = parseFloat((s.thermalMarginLeft)  || 0) || 0;
+      var mRight = parseFloat((s.thermalMarginRight) || 0) || 0;
+      var shift  = mLeft - mRight;
+      var styleEl = document.createElement('style');
+      styleEl.id = 'woPrintPageStyle';
+      styleEl.textContent = '@page { size: 80mm auto; margin: 0; }' +
+        (shift !== 0 ? ' @media print { .inv-paper { transform: translateX(' + shift + 'mm) !important; } }' : '');
+      document.head.appendChild(styleEl);
+      printZone.innerHTML = document.getElementById('woPaper').outerHTML;
+      document.body.classList.add('printing');
+      var handled = false;
+      function onAP() {
+        if (handled) return;
+        handled = true;
+        window.removeEventListener('afterprint', onAP);
+        printZone.innerHTML = '';
+        document.body.classList.remove('printing');
+        if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+      }
+      window.addEventListener('afterprint', onAP);
+      window.print();
+      setTimeout(onAP, 2500);
+    };
+
+    /* WhatsApp button */
+    if (btnWoWhatsapp) {
+      btnWoWhatsapp.onclick = function () {
+        var paperEl = document.getElementById('woPaper');
+        var phone = woData.customerPhone || '';
+        if (!phone) { showToast('لا يوجد رقم جوال للعميل', 'error'); return; }
+        if (paperEl && typeof sendInvoiceWhatsAppFromHtml === 'function') {
+          sendInvoiceWhatsAppFromHtml(paperEl.outerHTML, 'thermal', phone, woNum, null, 'receive', total);
+        }
+      };
+    }
+
+    /* PDF export button */
+    var btnWoExportPdf = document.getElementById('btnWoExportPdf');
+    if (btnWoExportPdf) {
+      btnWoExportPdf.onclick = async function () {
+        var paperEl = document.getElementById('woPaper');
+        if (!paperEl) { showToast('لم يتم العثور على محتوى أمر التشغيل', 'error'); return; }
+        var pdfIconHtml = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>';
+        try {
+          btnWoExportPdf.disabled = true;
+          btnWoExportPdf.innerHTML = '<span>جارٍ التصدير...</span>';
+          var result = await window.api.exportInvoicePdfFromHtml({ html: paperEl.outerHTML, paperType: 'thermal', orderNum: woNum });
+          if (result.success) {
+            showToast('تم تنزيل ملف PDF بنجاح', 'success');
+          } else {
+            showToast(result.message || 'فشل تصدير PDF', 'error');
+          }
+        } catch (err) {
+          console.error('خطأ في تصدير PDF:', err);
+          showToast('حدث خطأ أثناء التصدير', 'error');
+        }
+        btnWoExportPdf.disabled = false;
+        btnWoExportPdf.innerHTML = pdfIconHtml + '<span>تصدير PDF</span>';
+      };
+    }
+
+    /* Close button */
+    document.getElementById('btnWoClose').onclick = function () {
+      modal.style.display = 'none';
+    };
+
+    /* Close on backdrop click */
+    modal.onclick = function (e) {
+      if (e.target === modal) modal.style.display = 'none';
+    };
+  }
+
+  async function showDeferredWorkOrderPreview(workOrderId) {
+    const res = await window.api.getWorkOrderForPrint({ workOrderId: Number(workOrderId) });
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-load'), 'error');
+      return;
+    }
+
+    showWorkOrderModal({
+      workOrderId: res.workOrderId || res.id || workOrderId,
+      workOrderNumber: res.workOrderNumber || res.work_order_number,
+      customerName: res.customerName || res.customer_name || '',
+      customerPhone: res.customerPhone || res.customer_phone || '',
+      customerTaxNumber: res.customerTaxNumber || res.customer_tax_number || null,
+      createdAt: res.createdAt || res.created_at,
+      subtotal: res.subtotal,
+      discountAmount: res.discountAmount || res.discount_amount || 0,
+      vatRate: res.vatRate || res.vat_rate || 15,
+      vatAmount: res.vatAmount || res.vat_amount || 0,
+      totalAmount: res.totalAmount || res.total_amount || 0,
+      priceDisplayMode: res.priceDisplayMode || res.price_display_mode || 'exclusive',
+      cleaningDate: res.cleaningDate || res.cleaning_date || null,
+      deliveryDate: res.deliveryDate || res.delivery_date || null,
+      notes: res.notes || '',
+      items: res.items || []
+    });
   }
 
   /* ========== CHECKOUT ========== */
   async function handlePay() {
     if (state.cart.length === 0) {
       showToast(t('pos-err-empty-cart'), 'error');
+      return;
+    }
+
+    // --- Corporate customer fork ---
+    if (state.selectedCustomer && state.selectedCustomer.customer_type === 'corporate') {
+      await handleWorkOrderFlow();
       return;
     }
 
@@ -4333,6 +4824,7 @@
       const _prevPriceMode     = state.priceDisplayMode;
       const _prevZatcaQr       = state.lastZatcaQr;
       const _prevViewingId     = state.viewingOrderId;
+      const _prevConsolidated  = state.viewingInvoiceIsConsolidated;
       const _prevModalDisplay  = els.invoiceModal ? els.invoiceModal.style.display : 'none';
 
       // نخفي المودال أثناء التحميل
@@ -4373,6 +4865,7 @@
       state.priceDisplayMode = order.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
       state.lastZatcaQr      = order.zatca_qr || null;
       state.viewingOrderId   = order.id;
+      state.viewingInvoiceIsConsolidated = Number(order.is_consolidated || 0) === 1 || order.isConsolidated === true;
 
       // نملأ المودال بدون طباعة (autoOpenPrint = false) مع تواريخ السداد/التنظيف/التسليم
       showInvoiceModal(order.order_number, order.created_at,
@@ -4385,7 +4878,7 @@
         false, order.id, order.notes || '');
 
       // نولّد QR مباشرةً ونحقنه (بدلاً من الانتظار على renderInvoiceQR async)
-      const paperType = s.invoicePaperType || 'thermal';
+      const paperType = getEffectiveInvoicePaperType();
       const _qrEl = paperType === 'a4'
         ? document.getElementById('a4mQR')
         : (els.invQR || document.getElementById('invQR'));
@@ -4424,6 +4917,7 @@
       state.priceDisplayMode = _prevPriceMode;
       state.lastZatcaQr      = _prevZatcaQr;
       state.viewingOrderId   = _prevViewingId;
+      state.viewingInvoiceIsConsolidated = _prevConsolidated;
       if (els.invoiceModal) els.invoiceModal.style.display = _prevModalDisplay;
 
       // نرسل HTML كـ PDF مع بيانات QR كاحتياط
@@ -4453,7 +4947,7 @@
 
   function printInvoiceByCopies(options) {
     options = options || {};
-    var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    var paperType = getEffectiveInvoicePaperType();
     var copies = getPrintCopies();
     if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
     if (copies === 0) {
@@ -4505,7 +4999,7 @@
           const _waSettings = state.appSettings || {};
           const _waPhone = (state.selectedCustomer && state.selectedCustomer.phone) || '';
           const _waSub = state._printingSubscription;
-          const _waPaperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+          const _waPaperType = getEffectiveInvoicePaperType();
           // التقاط HTML الفاتورة — QR مرسوم بالفعل لأن المستخدم أغلق نافذة الطباعة
           const _waPaperEl = _waPaperType === 'a4'
             ? document.getElementById('invoicePaperA4m')
@@ -5309,7 +5803,7 @@
         els.btnInvExportPdf.innerHTML = '<span>جارٍ التصدير...</span>';
         
         // التقاط HTML الفاتورة الظاهرة حالياً (نفس تصميم الطباعة)
-        const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        const paperType = getEffectiveInvoicePaperType();
         const paperEl = paperType === 'a4'
           ? document.getElementById('invoicePaperA4m')
           : document.getElementById('invoicePaper');
@@ -5354,7 +5848,7 @@
           showTopToast('⚠️ واتساب | لا يوجد عميل مسجّل في هذه الفاتورة', 'warning', 4000);
           return;
         }
-        var paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        var paperType = getEffectiveInvoicePaperType();
         var paperEl = paperType === 'a4'
           ? document.getElementById('invoicePaperA4m')
           : document.getElementById('invoicePaper');
@@ -5783,6 +6277,16 @@
   function invoiceMatchesDeferredFilter(inv) {
     const filter = state.deferredStatusFilter || 'unpaid';
     const isReceipt = inv.rowType === 'receipt';
+    const isWorkOrder = inv.rowType === 'work_order';
+    if (isWorkOrder) {
+      if (filter === 'unpaid') return false;
+      if (filter === 'settled' || filter === 'paid') return true;
+      if (filter === 'cleaned') return !!inv.cleaning_date;
+      if (filter === 'delivered') return !!inv.delivery_date;
+      if (filter === 'unclean') return !inv.cleaning_date;
+      if (filter === 'undelivered') return !inv.delivery_date;
+      return true;
+    }
     // الايصالات دائماً مدفوعة (اشتراك) — تظهر في كل الفلاتر ما عدا 'unpaid'
     if (isReceipt) {
       if (filter === 'unpaid') return false;
@@ -5791,10 +6295,11 @@
       return true;
     }
 
-    const isPaid = inv.payment_status === 'paid';
-    const hasSettledDate = !!(inv.paid_at || inv.fully_paid_at);
-    const hasCleaned = !!inv.cleaning_date;
-    const hasDelivered = !!inv.delivery_date;
+    const isConsolidated = Number(inv.is_consolidated || 0) === 1 || inv.isConsolidated === true;
+    const isPaid = isConsolidated || inv.payment_status === 'paid';
+    const hasSettledDate = isConsolidated || !!(inv.paid_at || inv.fully_paid_at);
+    const hasCleaned = isConsolidated || !!inv.cleaning_date;
+    const hasDelivered = isConsolidated || !!inv.delivery_date;
 
     switch (filter) {
       case 'paid':
@@ -5817,8 +6322,8 @@
     const s = String(raw || '').trim();
     if (!s) return false;
     // receipt number pattern: c1, C-2, c-3 ...
-    if (/^C-?\d+$/i.test(s)) return true;
-    // short numeric = invoice_seq, long numeric = phone
+    // work order number pattern: d1, D-2, d-3 ...
+    if (/^[CD]-?\d+$/i.test(s)) return true;
     return /^\d+$/.test(s) && s.length < 7;
   }
 
@@ -5959,11 +6464,14 @@
 
     els.deferredList.innerHTML = pageItems.map((inv) => {
       const isReceipt    = inv.rowType === 'receipt';
+      const isWorkOrder  = inv.rowType === 'work_order';
+      const isConsolidated = !isReceipt && !isWorkOrder && (Number(inv.is_consolidated || 0) === 1 || inv.isConsolidated === true);
       const isRefunded   = !!inv.is_refund || !!inv.refunded_at || !!inv.has_credit_note;
-      const hasCleaned   = !!inv.cleaning_date;
-      const hasDelivered = !!inv.delivery_date;
-      const hasPaid      = !isReceipt && inv.payment_status === 'paid';
-      const isPartial    = !isReceipt && inv.payment_status === 'partial';
+      const consolidatedPaid = isConsolidated && inv.payment_status === 'paid';
+      const hasCleaned   = consolidatedPaid || !!inv.cleaning_date;
+      const hasDelivered = consolidatedPaid || !!inv.delivery_date;
+      const hasPaid      = !isReceipt && !isWorkOrder && inv.payment_status === 'paid';
+      const isPartial    = !isReceipt && !isWorkOrder && inv.payment_status === 'partial';
       const paidAmt      = Number(inv.paid_amount || 0);
 
       const amountCellHtml = isPartial
@@ -5975,12 +6483,19 @@
         : riyalHtml(fmtLtr(inv.total_amount));
 
       // رقم المستند: فاتورة = INV-X، ايصال = C-X
-      const docNum = isReceipt
+      const docNum = isWorkOrder
+        ? (inv.work_order_number || `D-${inv.work_order_seq || inv.invoice_seq}`)
+        : isReceipt
         ? `C-${inv.receipt_seq}`
         : `${inv.invoice_seq || inv.order_number || inv.id}`;
 
       // أزرار الإجراءات
-      const viewBtn = isReceipt
+      const viewBtn = isWorkOrder
+        ? `<button class="def-tbl-btn def-tbl-view" onclick="window._posDeferredViewWorkOrder(${inv.id})" type="button" title="${t('pos-deferred-btn-view')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            ${t('pos-deferred-btn-view')}
+          </button>`
+        : isReceipt
         ? `<button class="def-tbl-btn def-tbl-view" onclick="window._posDeferredViewReceipt(${inv.id})" type="button" title="عرض الإيصال">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             عرض
@@ -5990,28 +6505,32 @@
             ${t('pos-deferred-btn-view')}
           </button>`;
 
-      const payBtn = isReceipt ? '' : `
+      const payBtn = (isReceipt || isWorkOrder) ? '' : `
           <button class="def-tbl-btn def-tbl-pay ${hasPaid ? 'def-tbl-done' : ''}${isPartial ? ' def-tbl-partial' : ''}"
-            onclick="window._posPayInvoice(${inv.id})" type="button">
+            onclick="window._posPayInvoice(${inv.id})" ${hasPaid ? 'disabled' : ''} type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
             ${hasPaid ? (t('pos-deferred-badge-paid') || '✓ مدفوع') : (isPartial ? (t('pos-deferred-btn-pay-rest') || 'إكمال السداد') : t('pos-deferred-btn-pay'))}
           </button>`;
 
-      const cleanOnclick = isReceipt
+      const cleanOnclick = isWorkOrder
+        ? `window._posMarkWorkOrderCleaned(${inv.id})`
+        : isReceipt
         ? `window._posMarkReceiptCleaned(${inv.id})`
         : `window._posMarkCleaned(${inv.id})`;
-      const deliverOnclick = isReceipt
+      const deliverOnclick = isWorkOrder
+        ? `window._posMarkWorkOrderDelivered(${inv.id})`
+        : isReceipt
         ? `window._posMarkReceiptDelivered(${inv.id})`
         : `window._posMarkDelivered(${inv.id})`;
 
-      return `<tr class="def-table-row${hasPaid ? ' def-row-paid' : ''}${isPartial ? ' def-row-partial' : ''}${isReceipt ? ' def-row-receipt' : ''}" data-id="${inv.id}" data-type="${inv.rowType || 'invoice'}">
+      return `<tr class="def-table-row${hasPaid ? ' def-row-paid' : ''}${isPartial ? ' def-row-partial' : ''}${(isReceipt || isWorkOrder) ? ' def-row-receipt' : ''}" data-id="${inv.id}" data-type="${inv.rowType || 'invoice'}">
         <td class="def-td-num">${docNum}</td>
         <td class="def-td-cust">
           <span class="def-cust-name">${escHtml(inv.customer_name || '—')}</span>
           ${inv.phone ? `<br><span class="def-cust-phone" dir="ltr">${escHtml(inv.phone)}</span>` : ''}
         </td>
         <td class="def-td-date def-td-date-center" dir="ltr">${fmtDate(inv.created_at)}</td>
-        <td class="def-td-date def-td-date-center ${hasPaid ? 'def-val-paid' : ''}" dir="ltr">${isReceipt ? '<span style="color:#94a3b8">—</span>' : fmtDate(inv.paid_at)}</td>
+        <td class="def-td-date def-td-date-center ${hasPaid ? 'def-val-paid' : ''}" dir="ltr">${(isReceipt || isWorkOrder) ? '<span style="color:#94a3b8">—</span>' : fmtDate(inv.paid_at)}</td>
         <td class="def-td-date def-td-date-center ${hasCleaned ? 'def-val-done' : ''}" dir="ltr">${fmtDate(inv.cleaning_date)}</td>
         <td class="def-td-date def-td-date-center ${hasDelivered ? 'def-val-done' : ''}" dir="ltr">${fmtDate(inv.delivery_date)}</td>
         <td class="def-td-amount">${amountCellHtml}</td>
@@ -6256,6 +6775,10 @@
 
   async function openPayDeferredModal(orderId) {
     const localInv = state.deferredInvoices.find(o => o.id === Number(orderId));
+    if (localInv && (Number(localInv.is_consolidated || 0) === 1 || localInv.isConsolidated === true) && localInv.payment_status === 'paid') {
+      showTopToast('الفاتورة المجمعة مدفوعة بالفعل', 'info');
+      return;
+    }
     state.deferredPayingOrder = localInv || null;
     els.payDeferredOrderId.value = orderId;
     els.payDeferredError.style.display = 'none';
@@ -6431,6 +6954,11 @@
   }
 
   async function deferredMarkCleaned(orderId) {
+    const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
+    if (inv && (Number(inv.is_consolidated || 0) === 1 || inv.isConsolidated === true)) {
+      showTopToast(t('pos-deferred-clean-success'), 'success');
+      return;
+    }
     const res = await window.api.markOrderCleaned({ orderId: Number(orderId) });
     if (!res || !res.success) {
       showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
@@ -6445,6 +6973,11 @@
   }
 
   async function deferredMarkDelivered(orderId) {
+    const inv = (state.deferredInvoices || []).find(r => r.id === Number(orderId) && (r.rowType || 'invoice') === 'invoice');
+    if (inv && (Number(inv.is_consolidated || 0) === 1 || inv.isConsolidated === true)) {
+      showTopToast(t('pos-deferred-deliver-success'), 'success');
+      return;
+    }
     const res = await window.api.markOrderDelivered({ orderId: Number(orderId) });
     if (!res || !res.success) {
       showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
@@ -6751,8 +7284,31 @@
     }
   }
 
+  async function deferredMarkWorkOrderCleaned(workOrderId) {
+    const res = await window.api.markWorkOrderCleaned({ workOrderId: Number(workOrderId) });
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
+      return;
+    }
+    showTopToast(t('pos-deferred-clean-success'), 'success');
+    refreshRowInPlace(Number(workOrderId), 'work_order', 'cleaning_date');
+  }
+
+  async function deferredMarkWorkOrderDelivered(workOrderId) {
+    const res = await window.api.markWorkOrderDelivered({ workOrderId: Number(workOrderId) });
+    if (!res || !res.success) {
+      showToast(res && res.message ? res.message : t('pos-err-save'), 'error');
+      return;
+    }
+    showTopToast(t('pos-deferred-deliver-success'), 'success');
+    refreshRowInPlace(Number(workOrderId), 'work_order', 'delivery_date');
+  }
+
   window._posMarkReceiptCleaned   = (id) => deferredMarkReceiptCleaned(id);
   window._posMarkReceiptDelivered = (id) => deferredMarkReceiptDelivered(id);
+  window._posDeferredViewWorkOrder = (id) => showDeferredWorkOrderPreview(id);
+  window._posMarkWorkOrderCleaned   = (id) => deferredMarkWorkOrderCleaned(id);
+  window._posMarkWorkOrderDelivered = (id) => deferredMarkWorkOrderDelivered(id);
 
   /* ========== BARCODE SCAN (Deferred) ========== */
   async function barcodeAutoAction(inv, actionStr) {
@@ -7075,6 +7631,7 @@
       pm:              state.paymentMethod,
       vat:             state.vatRate,
       priceDisplayMode: state.priceDisplayMode,
+      viewingInvoiceIsConsolidated: state.viewingInvoiceIsConsolidated || false,
     };
 
     state.cart = (items || []).map(item => ({
@@ -7095,6 +7652,7 @@
     state.paymentMethod    = order.payment_method || 'cash';
     state.vatRate          = Number(order.vat_rate || 15);
     state.priceDisplayMode = order.price_display_mode === 'inclusive' ? 'inclusive' : 'exclusive';
+    state.viewingInvoiceIsConsolidated = Number(order.is_consolidated || 0) === 1 || order.isConsolidated === true;
     state.viewingDeferredInvoice = saved;
 
     /* استخدام بيانات الاشتراك المُرجعة من getOrderById مباشرة */

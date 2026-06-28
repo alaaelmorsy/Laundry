@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title data-i18n="page-title-hotels-companies-report">تقرير الفنادق والشركات - نظام المغسلة</title>
+  <link rel="stylesheet" href="../../../assets/tailwind.css" />
+  <link rel="stylesheet" href="hotels-companies-report.css" />
+  <link rel="stylesheet" href="../../../assets/screen-mobile-compact.css" />
+</head>
+<body data-page-title="page-title-hotels-companies-report">
+
+  <div class="page-wrapper">
+
+    <header class="header-bar" id="dragRegion">
+      <div class="header-right">
+        <div class="header-logo">
+          <div class="logo-icon" style="background:linear-gradient(135deg,#0ea5e9,#0369a1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>
+              <line x1="9" y1="9" x2="9" y2="9.01"/><line x1="9" y1="12" x2="9" y2="12.01"/><line x1="9" y1="15" x2="9" y2="15.01"/>
+            </svg>
+          </div>
+          <span class="header-title" data-i18n="hcr-header">تقرير الفنادق والشركات</span>
+        </div>
+      </div>
+      <div class="header-left">
+        <button class="btn-action btn-excel" id="btnExcelExport" style="display:none" title="تصدير Excel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="btn-label" data-i18n="hcr-export-excel">Excel</span>
+        </button>
+        <button class="btn-action btn-pdf" id="btnPdfExport" style="display:none" title="طباعة PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span class="btn-label" data-i18n="hcr-export-pdf">PDF</span>
+        </button>
+        <button class="back-btn" id="btnBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="reports-back">العودة</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="filter-bar no-print">
+      <div class="filter-inner">
+        <div class="filter-fields">
+
+          <!-- Customer search (corporate only) -->
+          <div class="customer-search-wrap">
+            <label class="filter-field customer-field">
+              <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>
+              </svg>
+              <input type="text" id="customerSearch" class="filter-input" autocomplete="off"
+                     data-i18n-placeholder="hcr-search-placeholder" placeholder="ابحث باسم الشركة/الفندق أو الجوال... (اتركه فارغاً لعرض ملخص الكل)" />
+            </label>
+            <div id="customerDropdown" class="customer-dropdown" style="display:none"></div>
+          </div>
+
+          <!-- Date range -->
+          <div class="date-pair-wrap">
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="hcr-from">من:</span>
+              <input type="datetime-local" id="filterDateFrom" class="filter-input date-input" />
+            </label>
+            <label class="filter-field">
+              <span class="filter-label" data-i18n="hcr-to">إلى:</span>
+              <input type="datetime-local" id="filterDateTo" class="filter-input date-input" />
+            </label>
+          </div>
+
+          <!-- Type + status filters (detail mode only) -->
+          <div class="status-filters-wrap">
+            <label class="filter-field" id="typeFilterWrap" style="display:none">
+              <span class="filter-label" data-i18n="hcr-type">النوع:</span>
+              <select id="filterDocType" class="filter-input filter-select">
+                <option value="all" data-i18n="hcr-filter-all">الكل</option>
+                <option value="work_orders" data-i18n="hcr-filter-wo">أوامر التشغيل</option>
+                <option value="invoices" data-i18n="hcr-filter-invoices">الفواتير المجمعة</option>
+              </select>
+            </label>
+            <label class="filter-field" id="statusFilterWrap" style="display:none">
+              <span class="filter-label" data-i18n="hcr-status">الحالة:</span>
+              <select id="filterStatus" class="filter-input filter-select">
+                <option value="all" data-i18n="hcr-filter-all">الكل</option>
+                <option value="pending" data-i18n="hcr-filter-pending">في الانتظار</option>
+                <option value="invoiced" data-i18n="hcr-filter-invoiced">مُفوترة</option>
+                <option value="cancelled" data-i18n="hcr-filter-cancelled">ملغية</option>
+                <option value="paid" data-i18n="hcr-filter-paid">مدفوعة</option>
+                <option value="deferred" data-i18n="hcr-filter-deferred">آجلة</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <button id="btnApplyFilter" class="btn-apply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span data-i18n="hcr-show">عرض التقرير</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content" id="mainContent">
+
+      <div id="emptyPrompt" class="empty-prompt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>
+        </svg>
+        <p id="emptyMessage" data-i18n="hcr-empty">ابحث عن شركة/فندق ثم اضغط "عرض التقرير"، أو اترك البحث فارغاً لعرض ملخص الكل</p>
+      </div>
+
+      <div id="loadingState" class="loading-state" style="display:none">
+        <div class="spinner"></div>
+        <p data-i18n="hcr-loading">جارٍ تحميل التقرير...</p>
+      </div>
+
+      <!-- ── Detail mode (single customer) ── -->
+      <div id="detailContent" style="display:none">
+        <div class="customer-info-bar" id="customerInfoBar"></div>
+
+        <div class="report-section">
+          <div class="section-header">
+            <h2 class="section-title" data-i18n="hcr-summary">الملخص المالي</h2>
+          </div>
+          <div class="summary-grid" id="summaryGrid"></div>
+        </div>
+
+        <div class="report-section">
+          <div class="section-header">
+            <h2 class="section-title" data-i18n="hcr-movements">الحركات التفصيلية</h2>
+            <span class="section-badge" id="movementsBadge">0</span>
+            <button class="btn-reset no-print" id="btnReset" style="display:none">
+              <span data-i18n="hcr-reset">إعادة تعيين</span>
+            </button>
+          </div>
+          <div class="table-container">
+            <table class="report-table movements-table">
+              <thead>
+                <tr>
+                  <th data-i18n="hcr-th-date">التاريخ</th>
+                  <th data-i18n="hcr-th-type">النوع</th>
+                  <th data-i18n="hcr-th-doc-num">رقم المستند</th>
+                  <th data-i18n="hcr-th-status">الحالة</th>
+                  <th class="num-th" data-i18n="hcr-th-before-tax">قبل الضريبة</th>
+                  <th class="num-th" data-i18n="hcr-th-discount">الخصم</th>
+                  <th class="num-th" data-i18n="hcr-th-vat">الضريبة</th>
+                  <th class="num-th" data-i18n="hcr-th-total">الإجمالي</th>
+                  <th class="num-th" data-i18n="hcr-th-paid">مدفوع</th>
+                  <th class="num-th" data-i18n="hcr-th-outstanding">مستحق</th>
+                </tr>
+              </thead>
+              <tbody id="movementsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Summary mode (all companies) ── -->
+      <div id="summaryContent" style="display:none">
+        <div class="report-section">
+          <div class="section-header">
+            <h2 class="section-title" data-i18n="hcr-all-companies">ملخص كل الفنادق والشركات</h2>
+            <span class="section-badge" id="companiesBadge">0</span>
+          </div>
+          <div class="table-container">
+            <table class="report-table companies-table">
+              <thead>
+                <tr>
+                  <th data-i18n="hcr-th-customer">العميل</th>
+                  <th data-i18n="hcr-th-vat-num">الرقم الضريبي</th>
+                  <th class="num-th" data-i18n="hcr-th-wo-count">عدد الأوامر</th>
+                  <th class="num-th" data-i18n="hcr-th-worked">المُشغَّل</th>
+                  <th class="num-th" data-i18n="hcr-th-inv-count">عدد الفواتير</th>
+                  <th class="num-th" data-i18n="hcr-th-invoiced">المُفوتَر</th>
+                  <th class="num-th" data-i18n="hcr-th-paid2">المدفوع</th>
+                  <th class="num-th" data-i18n="hcr-th-due">المستحق</th>
+                </tr>
+              </thead>
+              <tbody id="companiesTableBody"></tbody>
+              <tfoot id="companiesTableFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../../../assets/web-api.js"></script>
+  <script src="../../../assets/auth-guard.js"></script>
+  <script src="../../../assets/i18n.js"></script>
+  <script src="hotels-companies-report.js"></script>
+</body>
+</html>

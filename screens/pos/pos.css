@@ -3392,7 +3392,7 @@ html, body {
   body.invtype-a4 { width: 210mm !important; }
 
   /* --- طباعة الفاتورة العادية --- */
-  body:not(.print-consumption-receipt) > *:not(#invoiceModal) { display: none !important; }
+  body:not(.print-consumption-receipt):not(.printing) > *:not(#invoiceModal) { display: none !important; }
   #invoiceModal {
     position: static !important;
     background: none !important;
@@ -3465,6 +3465,19 @@ html, body {
   body.invtype-a4 .a4m-items thead th { background: #fff !important; color: #000 !important; }
   body.invtype-a4 .a4m-title-band { background: #fff !important; }
   body.invtype-a4 .a4m-footer { background: #fff !important; }
+
+  /* --- طباعة أمر تشغيل (شركات/فنادق) --- */
+  body.printing > *:not(#posPrintZone) { display: none !important; }
+  #posPrintZone {
+    display: block !important;
+    position: static !important;
+    background: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }
 
 /* إيصال الاستهلاك — نص أسود ثقيل موحّد */

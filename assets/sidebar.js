@@ -42,6 +42,13 @@
           svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
         },
         {
+          screen: 'hotels-companies',
+          labelKey: 'gsb-nav-hotels-companies',
+          label: { ar: 'الفنادق والشركات', en: 'Hotels & Companies' },
+          permission: 'hotels_companies',
+          svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+        },
+        {
           screen: 'reports',
           labelKey: 'gsb-nav-reports',
           label: { ar: 'التقارير', en: 'Reports' },

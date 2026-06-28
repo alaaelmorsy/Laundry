@@ -624,7 +624,73 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!r.success) showToast(r.message || I18N.t('all-invoices-err-export'), 'error');
   });
 
+  /* تنسيق التاريخ مطابق لطباعة الفاتورة المجمعة: DD/MM/YYYY HH:MM AM/PM */
+  function fmtDateTimeEnConsolidated(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const day = d.getDate(), month = d.getMonth() + 1, year = d.getFullYear();
+    let hrs = d.getHours(); const mins = d.getMinutes();
+    const ampm = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 || 12;
+    const p = (n) => (n < 10 ? '0' + n : '' + n);
+    return p(day) + '/' + p(month) + '/' + year + ' ' + p(hrs) + ':' + p(mins) + ' ' + ampm;
+  }
+  /* تجميع البنود المتطابقة بنفس صيغة حقول مودال الفاتورة في هذه الشاشة */
+  function groupConsolidatedItems(orderItems) {
+    const grouped = []; const gmap = {};
+    (orderItems || []).forEach(function(oi) {
+      const pAr = oi.product_name || '';
+      const sAr = oi.service_name || '-';
+      const mz = oi.merzam_type_name || '';
+      const key = pAr + '||' + sAr + '||' + mz;
+      if (gmap[key] !== undefined) {
+        const g = grouped[gmap[key]];
+        g.quantity += Number(oi.quantity) || 1;
+        g.line_total += Number(oi.line_total) || 0;
+      } else {
+        gmap[key] = grouped.length;
+        grouped.push({
+          product_name_ar: pAr, product_name_en: oi.product_name_en || oi.product_name || '',
+          service_name_ar: sAr, service_name_en: oi.service_name_en || oi.service_name || '',
+          merzam_type_name: mz, quantity: Number(oi.quantity) || 1, line_total: Number(oi.line_total) || 0
+        });
+      }
+    });
+    return grouped;
+  }
+
   /* ── Invoice Modal ── */
+  async function openConsolidatedA4(orderId) {
+    try {
+      const r = await window.api.getConsolidatedInvoiceForPrint({ orderId });
+      if (!r.success) { showToast(r.message || 'خطأ في تحميل الفاتورة المجمعة', 'error'); return; }
+      const inv = r.invoice;
+      document.body.classList.add('invtype-a4');
+
+      /* تحويل حقول الفاتورة المجمعة لما يتوقعه مودال الفاتورة + التواريخ الثلاثة = تاريخ الفاتورة */
+      const dateStr = fmtDateTimeEnConsolidated(inv.created_at);
+      const order = Object.assign({}, inv, {
+        phone: inv.customer_phone || '',
+        customer_vat: inv.customer_tax_number || '',
+        created_at: dateStr,
+        paid_at: dateStr,
+        cleaning_date: dateStr,
+        delivery_date: dateStr
+      });
+      renderInvoiceModal(order, groupConsolidatedItems(inv.orderItems || []), null);
+
+      /* عنوان الفاتورة (ضريبية / مبسطة) حسب الرقم الضريبي للعميل */
+      const titleEl = document.getElementById('invMainTitle');
+      if (titleEl) titleEl.textContent = inv.customer_tax_number ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة';
+
+      /* إزالة جدول أوامر التشغيل إن وُجد من عرض سابق */
+      const woSec = document.getElementById('allrptWorkOrdersSection');
+      if (woSec) woSec.style.display = 'none';
+    } catch(err) {
+      showToast('خطأ في فتح الفاتورة المجمعة: ' + err.message, 'error');
+    }
+  }
+
   window.showInvoiceModal = async function(id) {
     _viewingOrderId = id;
     if (!_appSettings) {
@@ -635,6 +701,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await window.api.getOrderById({ id });
       if (!res || !res.success || !res.order) { showToast(I18N.t('all-invoices-err-load-invoice'), 'error'); return; }
+      if (Number(res.order.is_consolidated || 0) === 1) { await openConsolidatedA4(id); return; }
       renderInvoiceModal(res.order, res.items || [], res.subscription || null);
     } catch { showToast(I18N.t('all-invoices-err-load-invoice'), 'error'); }
   };

@@ -190,6 +190,7 @@
     deleteExpense: (data) => invoke('deleteExpense', data),
     exportExpenses: (data) => exportBinary('/api/export/expenses', data),
     exportCustomers: (data) => exportBinary('/api/export/customers', data),
+    exportConsolidatedWorkOrdersList: (data) => exportBinary('/api/export/consolidated-work-orders-list', data),
     getLaundryServices: (filters) => invoke('getLaundryServices', filters),
     createLaundryService: (data) => invoke('createLaundryService', data),
     updateLaundryService: (data) => invoke('updateLaundryService', data),
@@ -375,6 +376,8 @@
     markOrderDelivered: (data) => invoke('markOrderDelivered', data),
     markReceiptCleaned:   (data) => invoke('markReceiptCleaned',   data),
     markReceiptDelivered: (data) => invoke('markReceiptDelivered', data),
+    markWorkOrderCleaned:   (data) => invoke('markWorkOrderCleaned',   data),
+    markWorkOrderDelivered: (data) => invoke('markWorkOrderDelivered', data),
     generateZatcaQR:    (data) => invoke('generateZatcaQR',    data),
     zatcaSubmitOrder:            (data) => invoke('zatcaSubmitOrder', data),
     zatcaSubmitCreditNote:       (data) => invoke('zatcaSubmitCreditNote', data),
@@ -449,6 +452,21 @@
     getCustomPricesScreenData:  (p) => invoke('getCustomPricesScreenData', p),
     saveCustomerCustomPrices:   (p) => invoke('saveCustomerCustomPrices', p),
     getCustomerPosCustomPrices: (p) => invoke('getCustomerPosCustomPrices', p),
+
+    // Hotels & Companies (Work Orders)
+    getCorporateCustomers:           (p) => invoke('getCorporateCustomers', p),
+    createWorkOrder:                 (p) => invoke('createWorkOrder', p),
+    getWorkOrders:                   (p) => invoke('getWorkOrders', p),
+    cancelWorkOrder:                 (p) => invoke('cancelWorkOrder', p),
+    getWorkOrderForPrint:            (p) => invoke('getWorkOrderForPrint', p),
+    createConsolidatedInvoice:       (p) => invoke('createConsolidatedInvoice', p),
+    getConsolidatedInvoiceForPrint:  (p) => invoke('getConsolidatedInvoiceForPrint', p),
+    settleConsolidatedInvoice:       (p) => invoke('settleConsolidatedInvoice', p),
+
+    // Hotels & Companies Report (031)
+    getCorporateReportStatement:     (p) => invoke('getCorporateReportStatement', p),
+    getCorporateReportSummary:       (p) => invoke('getCorporateReportSummary', p),
+    exportHotelsCompaniesReport:     (d) => exportBinary('/api/export/hotels-companies-report', d),
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

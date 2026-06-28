@@ -11,6 +11,7 @@ window.addEventListener('DOMContentLoaded', () => {
     { id: 'cardTypesReport',          perm: 'report_types',          url: '/screens/reports/types-report/types-report.html' },
     { id: 'cardWorkerReport',         perm: 'report_worker',         url: '/screens/reports/worker-report/worker-report.html' },
     { id: 'cardCustomerAccountReport', perm: 'report_customer_account', url: '/screens/reports/customer-account-report/customer-account-report.html' },
+    { id: 'cardHotelsCompaniesReport', perm: 'report_hotels_companies', url: '/screens/reports/hotels-companies-report/hotels-companies-report.html' },
     { id: 'cardZakatReport',          perm: 'report_zakat',          url: '/screens/reports/zakat-report/zakat-report.html' },
   ];
 
@@ -20,7 +21,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const hasSubPerms = u && u.permissions &&
       ['report_daily','report_period','report_expenses','report_credit_invoices',
        'report_all_invoices','report_subscriptions','report_types','report_worker','report_zakat',
-       'report_customer_account']
+       'report_customer_account','report_hotels_companies']
         .some(k => k in u.permissions);
 
     REPORT_CARDS.forEach(({ id, perm, url }) => {

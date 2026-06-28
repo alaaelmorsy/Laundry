@@ -14,8 +14,10 @@
     searchTimer: null,
     appSettings: null,
     viewingOrderId: null,
+    viewingCnOrderId: null,
     lastA4Data: null,
     activePrintTarget: null,
+    cameraScanner: null,
   };
 
   /* ========== DOM REFS ========== */
@@ -93,6 +95,17 @@
     invDeliveredAtRow: document.getElementById('invDeliveredAtRow'),
     invDeliveredAt: document.getElementById('invDeliveredAt'),
     invQR: document.getElementById('invQR'),
+
+    btnCameraSearch: document.getElementById('btnCameraSearch'),
+    ciCameraScannerModal: document.getElementById('ciCameraScannerModal'),
+    ciCameraScannerView: document.getElementById('ciCameraScannerView'),
+    ciCameraScannerStatus: document.getElementById('ciCameraScannerStatus'),
+    ciCameraScannerResult: document.getElementById('ciCameraScannerResult'),
+    btnCloseCiCameraScanner: document.getElementById('btnCloseCiCameraScanner'),
+    btnInvMarkCleaned: document.getElementById('btnInvMarkCleaned'),
+    btnInvMarkDelivered: document.getElementById('btnInvMarkDelivered'),
+    btnCnMarkCleaned: document.getElementById('btnCnMarkCleaned'),
+    btnCnMarkDelivered: document.getElementById('btnCnMarkDelivered'),
 
     /* Credit note modal */
     cnViewModal: document.getElementById('cnViewModal'),
@@ -940,6 +953,8 @@
     setRow(els.invPaidAtRow, order.paid_at, els.invPaidAt);
     setRow(els.invCleanedAtRow, order.cleaning_date, els.invCleanedAt);
     setRow(els.invDeliveredAtRow, order.delivery_date, els.invDeliveredAt);
+    if (els.btnInvMarkCleaned)  els.btnInvMarkCleaned.style.display  = !order.cleaning_date  ? '' : 'none';
+    if (els.btnInvMarkDelivered) els.btnInvMarkDelivered.style.display = !order.delivery_date ? '' : 'none';
 
     const _invThermalCashier = order.cashier_name || order.created_by || '';
     if (_invThermalCashier) { els.invCreatedBy.textContent = _invThermalCashier; els.invCreatedByRow.style.display = ''; }
@@ -1217,6 +1232,9 @@
     setRow(els.cnPaidAtRow, order && order.paid_at, els.cnPaidAt);
     setRow(els.cnCleanedAtRow, order && order.cleaning_date, els.cnCleanedAt);
     setRow(els.cnDeliveredAtRow, order && order.delivery_date, els.cnDeliveredAt);
+    state.viewingCnOrderId = order ? order.id : null;
+    if (els.btnCnMarkCleaned)  els.btnCnMarkCleaned.style.display  = (order && !order.cleaning_date)  ? '' : 'none';
+    if (els.btnCnMarkDelivered) els.btnCnMarkDelivered.style.display = (order && !order.delivery_date) ? '' : 'none';
 
     const _cnThermalCashier = cn.cashier_name || cn.created_by || (order && (order.cashier_name || order.created_by)) || '';
     if (_cnThermalCashier) { els.cnCreatedBy.textContent = _cnThermalCashier; els.cnCreatedByRow.style.display = ''; }
@@ -1644,14 +1662,162 @@
       });
     }
 
+    /* Camera scan */
+    if (els.btnCameraSearch) els.btnCameraSearch.addEventListener('click', openCiCameraScanner);
+    if (els.btnCloseCiCameraScanner) els.btnCloseCiCameraScanner.addEventListener('click', closeCiCameraScanner);
+    if (els.ciCameraScannerModal) {
+      els.ciCameraScannerModal.addEventListener('click', e => { if (e.target === els.ciCameraScannerModal) closeCiCameraScanner(); });
+    }
+
+    /* Mark cleaned / delivered — invoice modal */
+    if (els.btnInvMarkCleaned) {
+      els.btnInvMarkCleaned.addEventListener('click', () => markCleaned(
+        state.viewingOrderId, els.btnInvMarkCleaned,
+        els.invCleanedAtRow, els.invCleanedAt, els.btnInvMarkCleaned
+      ));
+    }
+    if (els.btnInvMarkDelivered) {
+      els.btnInvMarkDelivered.addEventListener('click', () => markDelivered(
+        state.viewingOrderId, els.btnInvMarkDelivered,
+        els.invDeliveredAtRow, els.invDeliveredAt, els.btnInvMarkDelivered
+      ));
+    }
+
+    /* Mark cleaned / delivered — credit note modal */
+    if (els.btnCnMarkCleaned) {
+      els.btnCnMarkCleaned.addEventListener('click', () => markCleaned(
+        state.viewingCnOrderId, els.btnCnMarkCleaned,
+        els.cnCleanedAtRow, els.cnCleanedAt, els.btnCnMarkCleaned
+      ));
+    }
+    if (els.btnCnMarkDelivered) {
+      els.btnCnMarkDelivered.addEventListener('click', () => markDelivered(
+        state.viewingCnOrderId, els.btnCnMarkDelivered,
+        els.cnDeliveredAtRow, els.cnDeliveredAt, els.btnCnMarkDelivered
+      ));
+    }
+
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         const zatcaModal = document.getElementById('zatcaRespModal');
         if (zatcaModal && zatcaModal.style.display !== 'none') { zatcaModal.style.display = 'none'; return; }
+        if (els.ciCameraScannerModal && els.ciCameraScannerModal.style.display !== 'none') { closeCiCameraScanner(); return; }
         if (els.cnViewModal.style.display !== 'none') closeModal('creditNote');
         else if (els.invoiceViewModal.style.display !== 'none') closeModal('invoice');
       }
     });
+  }
+
+  /* ========== CAMERA SCANNER ========== */
+  async function openCiCameraScanner() {
+    if (typeof Html5Qrcode === 'undefined') {
+      showToast('مكتبة المسح غير متاحة', 'error');
+      return;
+    }
+    if (!els.ciCameraScannerModal) return;
+    els.ciCameraScannerModal.style.display = 'flex';
+    els.ciCameraScannerResult.style.display = 'none';
+    els.ciCameraScannerStatus.style.display = 'flex';
+    els.ciCameraScannerStatus.className = 'camera-scanner-status scanning-active';
+    els.ciCameraScannerStatus.querySelector('span').textContent = 'جاري تشغيل الكاميرا...';
+
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+      els.ciCameraScannerView.innerHTML = '';
+    }
+
+    try {
+      var html5QrCode = new Html5Qrcode('ciCameraScannerView');
+      state.cameraScanner = html5QrCode;
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 280, height: 100 }, aspectRatio: 1.0, disableFlip: false },
+        onCiCameraScanSuccess,
+        function() {}
+      );
+      els.ciCameraScannerStatus.querySelector('span').textContent = 'وجّه الكاميرا نحو الباركود...';
+    } catch (err) {
+      els.ciCameraScannerStatus.className = 'camera-scanner-status camera-error';
+      var errMsg = 'تعذر فتح الكاميرا';
+      if (err && err.name === 'NotAllowedError') errMsg = 'تم رفض صلاحية الكاميرا — فعّلها من الإعدادات';
+      else if (err && err.name === 'NotFoundError') errMsg = 'لم يتم العثور على كاميرا على هذا الجهاز';
+      else if (!window.isSecureContext) errMsg = 'الكاميرا تتطلب اتصال آمن (HTTPS)';
+      els.ciCameraScannerStatus.querySelector('span').textContent = errMsg;
+    }
+  }
+
+  async function closeCiCameraScanner() {
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+    }
+    if (els.ciCameraScannerView) els.ciCameraScannerView.innerHTML = '';
+    if (els.ciCameraScannerModal) els.ciCameraScannerModal.style.display = 'none';
+  }
+
+  async function onCiCameraScanSuccess(decodedText) {
+    if (state.cameraScanner) {
+      try { await state.cameraScanner.stop(); } catch(e) {}
+      state.cameraScanner = null;
+    }
+    if (els.ciCameraScannerStatus) els.ciCameraScannerStatus.style.display = 'none';
+    if (els.ciCameraScannerResult) {
+      els.ciCameraScannerResult.style.display = 'flex';
+      els.ciCameraScannerResult.className = 'camera-scanner-result scan-success';
+      els.ciCameraScannerResult.textContent = '✓ تم مسح الباركود: ' + decodedText;
+    }
+    var barcodeVal = String(decodedText || '').trim();
+    setTimeout(async function() {
+      await closeCiCameraScanner();
+      els.searchInput.value = barcodeVal;
+      state.search = barcodeVal;
+      state.page = 1;
+      loadData();
+    }, 600);
+  }
+
+  /* ========== MARK CLEAN / DELIVER ========== */
+  async function markCleaned(orderId, btnEl, cleanedAtRowEl, cleanedAtEl, markBtnEl) {
+    if (!orderId) return;
+    if (btnEl) btnEl.disabled = true;
+    try {
+      const res = await window.api.markOrderCleaned({ orderId });
+      if (res && res.success) {
+        const now = new Date().toISOString();
+        if (cleanedAtEl) cleanedAtEl.textContent = formatDate(now);
+        if (cleanedAtRowEl) cleanedAtRowEl.style.display = '';
+        if (markBtnEl) markBtnEl.style.display = 'none';
+        showToast('تم تسجيل التنظيف', 'success');
+      } else {
+        showToast((res && res.message) || 'فشل تحديث حالة التنظيف', 'error');
+        if (btnEl) btnEl.disabled = false;
+      }
+    } catch(e) {
+      showToast(e.message || 'فشل تحديث حالة التنظيف', 'error');
+      if (btnEl) btnEl.disabled = false;
+    }
+  }
+
+  async function markDelivered(orderId, btnEl, deliveredAtRowEl, deliveredAtEl, markBtnEl) {
+    if (!orderId) return;
+    if (btnEl) btnEl.disabled = true;
+    try {
+      const res = await window.api.markOrderDelivered({ orderId });
+      if (res && res.success) {
+        const now = new Date().toISOString();
+        if (deliveredAtEl) deliveredAtEl.textContent = formatDate(now);
+        if (deliveredAtRowEl) deliveredAtRowEl.style.display = '';
+        if (markBtnEl) markBtnEl.style.display = 'none';
+        showToast('تم تسجيل التسليم', 'success');
+      } else {
+        showToast((res && res.message) || 'فشل تحديث حالة التسليم', 'error');
+        if (btnEl) btnEl.disabled = false;
+      }
+    } catch(e) {
+      showToast(e.message || 'فشل تحديث حالة التسليم', 'error');
+      if (btnEl) btnEl.disabled = false;
+    }
   }
 
   function closeModal(which) {

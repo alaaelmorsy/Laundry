@@ -15,6 +15,7 @@
     appSettings: null,
     lastA4Data: null,
     viewingOrderId: null,
+    viewingIsConsolidated: false,
   };
 
   /* ========== DOM REFS ========== */
@@ -186,8 +187,13 @@
 
   /* ========== A4 MODAL HELPERS ========== */
   function applyInvoiceTypeClass() {
-    const type = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    const type = getEffectivePaperType();
     document.body.classList.toggle('invtype-a4', type === 'a4');
+  }
+
+  function getEffectivePaperType() {
+    if (state.viewingIsConsolidated) return 'a4';
+    return (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
   }
 
   function fillA4InvoiceModal(data) {
@@ -721,17 +727,115 @@
     return pages;
   }
 
+  /* ========== OPEN CONSOLIDATED A4 ========== */
+  /* تنسيق التاريخ مطابق لطباعة الفاتورة المجمعة: DD/MM/YYYY HH:MM AM/PM */
+  function fmtDateTimeEnConsolidated(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const day = d.getDate(), month = d.getMonth() + 1, year = d.getFullYear();
+    let hrs = d.getHours(); const mins = d.getMinutes();
+    const ampm = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 || 12;
+    const p = (n) => (n < 10 ? '0' + n : '' + n);
+    return p(day) + '/' + p(month) + '/' + year + ' ' + p(hrs) + ':' + p(mins) + ' ' + ampm;
+  }
+  function paymentLabelConsolidated(pm) {
+    const map = { cash: 'نقدي / Cash', card: 'بطاقة / Card', deferred: 'آجل / Deferred', credit: 'آجل / Deferred', mixed: 'نقدي وبطاقة / Mixed', transfer: 'تحويل / Transfer', subscription: 'اشتراك / Subscription' };
+    return map[pm] || pm || 'نقدي / Cash';
+  }
+  /* تجميع البنود المتطابقة (نفس المنتج + العملية + المرزم) مطابق لطباعة الفنادق */
+  function groupConsolidatedItems(orderItems) {
+    const grouped = []; const gmap = {};
+    (orderItems || []).forEach(function(oi) {
+      const productAr = oi.product_name || '';
+      const serviceAr = oi.service_name || '—';
+      const merzam = oi.merzam_type_name || '';
+      const key = productAr + '||' + serviceAr + '||' + merzam;
+      if (gmap[key] !== undefined) {
+        const g = grouped[gmap[key]];
+        g.qty += Number(oi.quantity) || 1;
+        g.lineTotal += Number(oi.line_total) || 0;
+      } else {
+        gmap[key] = grouped.length;
+        grouped.push({
+          productAr: productAr, productEn: oi.product_name_en || oi.product_name || '',
+          serviceAr: serviceAr, serviceEn: oi.service_name_en || oi.service_name || '',
+          merzam: merzam, qty: Number(oi.quantity) || 1,
+          unitPrice: parseFloat(oi.unit_price || 0), lineTotal: Number(oi.line_total) || 0
+        });
+      }
+    });
+    return grouped;
+  }
+
+  async function openConsolidatedA4(orderId) {
+    try {
+      const r = await window.api.getConsolidatedInvoiceForPrint({ orderId });
+      if (!r.success) { showToast(r.message || 'خطأ في تحميل الفاتورة المجمعة', 'error'); return; }
+      const inv = r.invoice;
+      const s = state.appSettings || {};
+      const vatRate = parseFloat(inv.vat_rate || 15);
+      let qrPayload = null;
+      if (vatRate > 0) {
+        if (inv.zatca_qr) { qrPayload = { tlvBase64: inv.zatca_qr }; }
+        else if (s.vatNumber) { qrPayload = { sellerName: s.laundryNameAr || '', vatNumber: s.vatNumber, timestamp: inv.created_at ? new Date(inv.created_at).toISOString() : new Date().toISOString(), totalAmount: parseFloat(inv.total_amount || 0).toFixed(2), vatAmount: parseFloat(inv.vat_amount || 0).toFixed(2) }; }
+      }
+      const arParts = [s.buildingNumber, s.streetNameAr, s.districtAr, s.cityAr, s.postalCode].filter(Boolean);
+      const enParts = [s.buildingNumber, s.streetNameEn, s.districtEn, s.cityEn, s.postalCode].filter(Boolean);
+      const hasCustVat = !!(inv.customer_tax_number);
+      const dateStr = fmtDateTimeEnConsolidated(inv.created_at);
+      const a4Data = {
+        shopNameAr: s.laundryNameAr || '', shopNameEn: s.laundryNameEn || '',
+        shopAddressAr: arParts.join('، ') || s.locationAr || '',
+        shopAddressEn: enParts.join(', ') || s.locationEn || '',
+        shopPhone: s.phone || '', shopEmail: s.email || '',
+        vatNumber: s.vatNumber || '', commercialRegister: s.commercialRegister || '',
+        logoDataUrl: s.logoDataUrl || null,
+        customFields: Array.isArray(s.customFields) ? s.customFields : [],
+        titleAr: hasCustVat ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة',
+        titleEn: hasCustVat ? 'Tax Invoice' : 'Simplified Tax Invoice',
+        orderNum: inv.invoice_seq ? String(inv.invoice_seq) : inv.order_number,
+        date: dateStr,
+        payment: paymentLabelConsolidated(inv.payment_method),
+        paidAt: dateStr, cleanedAt: dateStr, deliveredAt: dateStr,
+        paidCash: parseFloat(inv.paid_cash || 0), paidCard: parseFloat(inv.paid_card || 0),
+        custName: inv.customer_name || '', custPhone: inv.customer_phone || '', custVat: inv.customer_tax_number || '',
+        subtotal: parseFloat(inv.subtotal || 0),
+        discount: parseFloat(inv.discount_amount || 0),
+        vatRate, vatAmount: parseFloat(inv.vat_amount || 0),
+        total: parseFloat(inv.total_amount || 0),
+        priceDisplayMode: inv.price_display_mode || 'exclusive',
+        isConsolidated: true,
+        items: groupConsolidatedItems(inv.orderItems || []),
+        qrPayload, autoPrint: false
+      };
+      state.viewingIsConsolidated = true;
+      document.body.classList.add('invtype-a4');
+      fillA4InvoiceModal(a4Data);
+      state.lastA4Data = a4Data;
+      els.invoiceViewModal.style.display = 'flex';
+      const dialogBody = els.invoiceViewModal.querySelector('.inv-dialog-body');
+      if (dialogBody) dialogBody.scrollTop = 0;
+    } catch(err) {
+      showToast(I18N.t('invoices-err-generic'), 'error');
+    }
+  }
+
   /* ========== OPEN INVOICE ========== */
   async function openInvoice(orderId, seqNum) {
     try {
       state.viewingOrderId = orderId;
+      state.viewingIsConsolidated = false;
       const res = await window.api.getOrderById({ id: orderId });
       if (!res || !res.success) {
         showToast(I18N.t('invoices-err-load-invoice'), 'error');
         return;
       }
+      if (Number(res.order.is_consolidated || 0) === 1) {
+        await openConsolidatedA4(orderId);
+        return;
+      }
       renderInvoiceModal(res.order, res.items, seqNum, res.subscription || null);
-      const order = res.order;
     } catch (err) {
       showToast(I18N.t('invoices-err-generic'), 'error');
     }
@@ -821,6 +925,7 @@
 
   function renderInvoiceModal(order, items, seqNum, subscription) {
     const s = state.appSettings || {};
+    state.viewingIsConsolidated = Number(order.is_consolidated || 0) === 1 || order.isConsolidated === true;
     const displaySeq = order.is_refund ? order.order_number : (order.invoice_seq || seqNum);
 
     /* Shop info */
@@ -1240,9 +1345,30 @@
       isRefund: !!order.is_refund,
     };
 
+    if (state.viewingIsConsolidated) {
+      state.lastA4Data.paidAt = state.lastA4Data.paidAt || state.lastA4Data.date;
+      state.lastA4Data.cleanedAt = state.lastA4Data.cleanedAt || state.lastA4Data.date;
+      state.lastA4Data.deliveredAt = state.lastA4Data.deliveredAt || state.lastA4Data.date;
+
+      const groupedItems = [];
+      const groupMap = {};
+      state.lastA4Data.items.forEach(item => {
+        const key = (item.productAr || '') + '||' + (item.serviceAr || '') + '||' + (item.merzam || '');
+        if (groupMap[key] !== undefined) {
+          const grouped = groupedItems[groupMap[key]];
+          grouped.qty = (Number(grouped.qty) || 0) + (Number(item.qty) || 1);
+          grouped.lineTotal = (Number(grouped.lineTotal) || 0) + (Number(item.lineTotal) || 0);
+        } else {
+          groupMap[key] = groupedItems.length;
+          groupedItems.push({ ...item });
+        }
+      });
+      state.lastA4Data.items = groupedItems;
+    }
+
     /* ── Show modal (thermal or A4) ── */
     applyInvoiceTypeClass();
-    const paperTypeA4 = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    const paperTypeA4 = getEffectivePaperType();
     if (paperTypeA4 === 'a4') {
       fillA4InvoiceModal(state.lastA4Data);
     }
@@ -1299,7 +1425,7 @@
 
   function printInvoiceByCopies(options) {
     options = options || {};
-    const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+    const paperType = getEffectivePaperType();
     let copies = getPrintCopies();
     if (options.forceAtLeastOneCopy && copies === 0) copies = 1;
     if (copies === 0) return;
@@ -1406,7 +1532,7 @@
         els.btnInvExportPdf.innerHTML = '<span>جارٍ التصدير...</span>';
         
         // التقاط HTML الفاتورة الظاهرة حالياً (نفس تصميم الطباعة)
-        const paperType = (state.appSettings && state.appSettings.invoicePaperType) || 'thermal';
+        const paperType = getEffectivePaperType();
         const paperEl = paperType === 'a4'
           ? document.getElementById('invoicePaperA4m')
           : document.getElementById('invoicePaper');
@@ -1462,6 +1588,8 @@
   function closeInvoiceModal() {
     els.invoiceViewModal.style.display = 'none';
     document.body.classList.remove('invtype-a4');
+    state.viewingOrderId = null;
+    state.viewingIsConsolidated = false;
     if (window.self !== window.top) {
       window.parent.postMessage('doc-viewer-close', '*');
     }

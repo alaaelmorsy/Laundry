@@ -1226,6 +1226,24 @@ async function invoke(method, payload, reqUser) {
       }
     }
 
+    case 'markWorkOrderCleaned': {
+      try {
+        await db.markWorkOrderCleaned({ workOrderId: payload && payload.workOrderId });
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'markWorkOrderDelivered': {
+      try {
+        await db.markWorkOrderDelivered({ workOrderId: payload && payload.workOrderId });
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
     case 'generateZatcaQR': {
       try {
         let { sellerName, vatNumber, timestamp, totalAmount, vatAmount, tlvBase64 } = payload || {};
@@ -2005,6 +2023,96 @@ async function invoke(method, payload, reqUser) {
         return result;
       } catch (err) {
         return { success: false, message: err.message };
+      }
+    }
+
+    case 'getCorporateCustomers': {
+      try {
+        const result = await db.getCorporateCustomers(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'getCorporateReportStatement': {
+      try {
+        const result = await db.getCorporateReportStatement(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
+      }
+    }
+
+    case 'getCorporateReportSummary': {
+      try {
+        const result = await db.getCorporateReportSummary(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
+      }
+    }
+
+    case 'createWorkOrder': {
+      try {
+        const result = await db.createWorkOrder(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
+      }
+    }
+
+    case 'getWorkOrders': {
+      try {
+        const result = await db.getWorkOrders(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'cancelWorkOrder': {
+      try {
+        await db.cancelWorkOrder(payload || {});
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
+      }
+    }
+
+    case 'getWorkOrderForPrint': {
+      try {
+        const result = await db.getWorkOrderForPrint(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'createConsolidatedInvoice': {
+      try {
+        const result = await db.createConsolidatedInvoice(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
+      }
+    }
+
+    case 'getConsolidatedInvoiceForPrint': {
+      try {
+        const result = await db.getConsolidatedInvoiceForPrint(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'settleConsolidatedInvoice': {
+      try {
+        await db.settleConsolidatedInvoice(payload || {});
+        return { success: true };
+      } catch (err) {
+        return { success: false, message: err.message, code: err.appCode || null };
       }
     }
 

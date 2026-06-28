@@ -166,6 +166,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     a4mText('a4mCustName',  data.custName || '—');
     a4mText('a4mCustPhone', data.custPhone || '—');
 
+    /* الرقم الضريبي للعميل + تبديل العنوان (فاتورة ضريبية / مبسطة) مطابق للطباعة */
+    if (data.custVat) {
+      a4mText('a4mCustVat', data.custVat);
+      a4mShow('a4mRowCustVat', true);
+      a4mText('a4mTitleAr', 'فاتورة ضريبية');
+      a4mText('a4mTitleEn', 'Tax Invoice');
+    } else {
+      a4mShow('a4mRowCustVat', false);
+      a4mText('a4mTitleAr', 'فاتورة ضريبية مبسطة');
+      a4mText('a4mTitleEn', 'Simplified Tax Invoice');
+    }
+
     if (data.subPackageName) {
       a4mText('a4mSubPackage', data.subPackageName);
       a4mShow('a4mRowSubPackage', true);
@@ -297,6 +309,7 @@ window.addEventListener('DOMContentLoaded', async () => {
           .catch(() => {});
       }
     }
+
   }
 
   function fmt(n) { return Number(n || 0).toFixed(2); }
@@ -963,6 +976,95 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (dialogBody) dialogBody.scrollTop = 0;
   }
 
+  /* تنسيق التاريخ مطابق لطباعة الفاتورة المجمعة: DD/MM/YYYY HH:MM AM/PM */
+  function fmtDateTimeEn(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const day = d.getDate(), month = d.getMonth() + 1, year = d.getFullYear();
+    let hrs = d.getHours(); const mins = d.getMinutes();
+    const ampm = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 || 12;
+    const p = (n) => (n < 10 ? '0' + n : '' + n);
+    return p(day) + '/' + p(month) + '/' + year + ' ' + p(hrs) + ':' + p(mins) + ' ' + ampm;
+  }
+  function paymentLabelConsolidated(pm) {
+    const map = { cash: 'نقدي / Cash', card: 'بطاقة / Card', deferred: 'آجل / Deferred', credit: 'آجل / Deferred', mixed: 'نقدي وبطاقة / Mixed', transfer: 'تحويل / Transfer', subscription: 'اشتراك / Subscription' };
+    return map[pm] || pm || 'نقدي / Cash';
+  }
+  /* تجميع البنود المتطابقة (نفس المنتج + العملية + المرزم) مطابق لطباعة الفنادق */
+  function groupConsolidatedItems(orderItems) {
+    const grouped = []; const gmap = {};
+    (orderItems || []).forEach(function(oi) {
+      const productAr = oi.product_name || '';
+      const serviceAr = oi.service_name || '—';
+      const merzam = oi.merzam_type_name || '';
+      const key = productAr + '||' + serviceAr + '||' + merzam;
+      if (gmap[key] !== undefined) {
+        const g = grouped[gmap[key]];
+        g.qty += Number(oi.quantity) || 1;
+        g.lineTotal += Number(oi.line_total) || 0;
+      } else {
+        gmap[key] = grouped.length;
+        grouped.push({
+          productAr: productAr, productEn: oi.product_name_en || oi.product_name || '',
+          serviceAr: serviceAr, serviceEn: oi.service_name_en || oi.service_name || '',
+          merzam: merzam, qty: Number(oi.quantity) || 1,
+          unitPrice: parseFloat(oi.unit_price || 0), lineTotal: Number(oi.line_total) || 0
+        });
+      }
+    });
+    return grouped;
+  }
+
+  async function openConsolidatedA4(orderId) {
+    try {
+      const r = await window.api.getConsolidatedInvoiceForPrint({ orderId });
+      if (!r.success) { showToast(r.message || 'خطأ في تحميل الفاتورة المجمعة', 'error'); return; }
+      const inv = r.invoice;
+      const s = _reportAppSettings || {};
+      const arParts = [s.buildingNumber, s.streetNameAr, s.districtAr, s.cityAr, s.postalCode].filter(Boolean);
+      const enParts = [s.buildingNumber, s.streetNameEn, s.districtEn, s.cityEn, s.postalCode].filter(Boolean);
+      const vatRate = parseFloat(inv.vat_rate || 15);
+      let qrPayload = null;
+      if (vatRate > 0) {
+        if (inv.zatca_qr) { qrPayload = { tlvBase64: inv.zatca_qr }; }
+        else if (s.vatNumber) { qrPayload = { sellerName: s.laundryNameAr || '', vatNumber: s.vatNumber, timestamp: inv.created_at ? new Date(inv.created_at).toISOString() : new Date().toISOString(), totalAmount: parseFloat(inv.total_amount || 0).toFixed(2), vatAmount: parseFloat(inv.vat_amount || 0).toFixed(2) }; }
+      }
+      const dateStr = fmtDateTimeEn(inv.created_at);
+      const a4Data = {
+        shopNameAr: s.laundryNameAr || '', shopNameEn: s.laundryNameEn || '',
+        shopAddressAr: arParts.join('، ') || s.locationAr || '',
+        shopAddressEn: enParts.join(', ') || s.locationEn || '',
+        shopPhone: s.phone || '', shopEmail: s.email || '',
+        vatNumber: s.vatNumber || '', commercialRegister: s.commercialRegister || '',
+        logoDataUrl: s.logoDataUrl || null,
+        customFields: Array.isArray(s.customFields) ? s.customFields : [],
+        orderNum: inv.invoice_seq ? String(inv.invoice_seq) : inv.order_number,
+        date: dateStr,
+        payment: paymentLabelConsolidated(inv.payment_method),
+        paidAt: dateStr, cleanedAt: dateStr, deliveredAt: dateStr,
+        paidCash: parseFloat(inv.paid_cash || 0), paidCard: parseFloat(inv.paid_card || 0),
+        custName: inv.customer_name || '', custPhone: inv.customer_phone || '', custVat: inv.customer_tax_number || '',
+        subtotal: parseFloat(inv.subtotal || 0),
+        discount: parseFloat(inv.discount_amount || 0),
+        vatRate, vatAmount: parseFloat(inv.vat_amount || 0),
+        total: parseFloat(inv.total_amount || 0),
+        priceDisplayMode: inv.price_display_mode || 'exclusive',
+        isConsolidated: true,
+        items: groupConsolidatedItems(inv.orderItems || []),
+        qrPayload, autoPrint: false
+      };
+      document.body.classList.add('invtype-a4');
+      fillA4InvoiceModal(a4Data);
+      document.getElementById('invoiceViewModal').style.display = 'flex';
+      document.body.classList.add('printing-invoice');
+      const dialogBody = document.querySelector('.inv-dialog-body');
+      if (dialogBody) dialogBody.scrollTop = 0;
+    } catch(err) {
+      showToast('خطأ في فتح الفاتورة المجمعة: ' + err.message, 'error');
+    }
+  }
+
   window.showInvoiceModal = async function(id) {
     if (!_reportAppSettings) {
       const sres = await window.api.getAppSettings().catch(() => null);
@@ -972,6 +1074,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       const res = await window.api.getOrderById({ id });
       if (!res || !res.success || !res.order) {
         showToast(I18N.t('all-invoices-err-load-invoice'), 'error');
+        return;
+      }
+      if (Number(res.order.is_consolidated || 0) === 1) {
+        await openConsolidatedA4(id);
         return;
       }
       renderInvoiceModal(res.order, res.items, res.subscription || null);

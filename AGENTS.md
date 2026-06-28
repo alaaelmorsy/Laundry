@@ -8,9 +8,9 @@ Laundry management system for Saudi businesses. Node.js/Express backend with MyS
 
 ```
 server/index.js           — Express entry point, middleware, routes
-server/invokeHandlers.js  — All API logic (80+ switch cases)
+server/invokeHandlers.js  — All API logic (159 switch cases)
 database/db.js            — All DB operations + auto-migrations (runs on start)
-assets/web-api.js         — Client-side window.api.* interface (80+ methods)
+assets/web-api.js         — Client-side window.api.* interface (169+ methods)
 screens/{name}/           — Each screen: {name}.html + {name}.js + {name}.css
 server/services/          — branding, email, exports, ZATCA, reportHtml
 ai_context/               — Business rules & feature specs (read before major changes)
@@ -73,4 +73,4 @@ Default login: `admin / admin123` (seeded on first run).
 
 - `ai_context/PROJECT_CONTEXT.md` — Full API method list, DB schema, architecture
 - `ai_context/BUSINESS_RULES.md` — Pricing logic, subscription rules, ZATCA requirements
-- `ai_context/specs/` — Per-feature specifications (feature-01 through feature-16)
+- `ai_context/specs/` — Per-feature specifications (feature-01 through feature-17; feature-17 يغطي: Roles, Hangers, Offers, Custom Prices, Work Orders, Loyalty, Merzam, WhatsApp, Updates, License, Credit Notes)

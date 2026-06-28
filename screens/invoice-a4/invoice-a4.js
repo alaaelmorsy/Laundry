@@ -57,6 +57,8 @@
     if (titleBand) {
       if (data.isRefund) {
         titleBand.innerHTML = '<span style="color:#dc2626">مرتجع / REFUND</span>';
+      } else if (data.isConsolidated && data.custVat) {
+        titleBand.innerHTML = '<span>فاتورة ضريبية</span><span class="a4-title-sep">•</span><span>Tax Invoice</span>';
       } else {
         titleBand.innerHTML = '<span>فاتورة ضريبية مبسطة</span><span class="a4-title-sep">•</span><span>Simplified Tax Invoice</span>';
       }
@@ -286,6 +288,39 @@
     /* ── QR ── */
     if (data.qrPayload) {
       renderQR(data.qrPayload);
+    }
+
+    /* ── Consolidated work orders section ── */
+    var woSection = document.getElementById('a4WorkOrdersSection');
+    if (data.isConsolidated && Array.isArray(data.workOrderLines) && data.workOrderLines.length > 0) {
+      if (!woSection) {
+        woSection = document.createElement('div');
+        woSection.id = 'a4WorkOrdersSection';
+        woSection.style.cssText = 'margin:12px 0;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;page-break-inside:avoid';
+        var paper = document.getElementById('a4Paper');
+        var totals = document.getElementById('a4TotalsSection') || (paper && paper.querySelector('.a4-totals'));
+        if (totals) paper.insertBefore(woSection, totals);
+        else if (paper) paper.appendChild(woSection);
+      }
+      var woHtml = '<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#1e293b">أوامر التشغيل المضمَّنة في هذه الفاتورة</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="border-bottom:1px solid #cbd5e1">' +
+          '<th style="text-align:right;padding:4px 6px;font-weight:700">رقم الأمر</th>' +
+          '<th style="text-align:right;padding:4px 6px;font-weight:700">التاريخ</th>' +
+          '<th style="text-align:left;padding:4px 6px;font-weight:700">الإجمالي</th>' +
+        '</tr></thead><tbody>' +
+        data.workOrderLines.map(function (wo) {
+          return '<tr style="border-bottom:1px dotted #e2e8f0">' +
+            '<td style="padding:3px 6px">' + esc(wo.num) + '</td>' +
+            '<td style="padding:3px 6px">' + esc(wo.date) + '</td>' +
+            '<td style="padding:3px 6px;text-align:left">' + wo.total + ' <span style="font-family:SaudiRiyal"></span></td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+      woSection.innerHTML = woHtml;
+      woSection.style.display = '';
+    } else if (woSection) {
+      woSection.style.display = 'none';
     }
   }
 

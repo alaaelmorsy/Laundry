@@ -146,16 +146,19 @@
   - `removeLogo=true` يمسحه.
 - **ZATCA fields**: `vat_number`, `commercial_register`, `building_number`, `street_name_ar`, `district_ar`, `city_ar`, `postal_code`, `additional_number`.
 
-## 12. ZATCA QR (Phase 1)
+## 12. ZATCA (Phase 1 + Phase 2)
 
-- ترميز TLV (tag, length, value): 
-  - `tag 1` = sellerName
-  - `tag 2` = vatNumber
-  - `tag 3` = timestamp (ISO)
-  - `tag 4` = totalAmount (string, "0.00")
-  - `tag 5` = vatAmount (string, "0.00")
-- Base64 من tlvBuffer ← يُحوَّل إلى SVG عبر `qrcode`:
-  - `errorCorrectionLevel: 'M'`, `margin: 1`, `width: 120`.
+### Phase 1 — QR Code
+- ترميز TLV (tag, length, value):
+  - `tag 1` = sellerName, `tag 2` = vatNumber, `tag 3` = timestamp (ISO), `tag 4` = totalAmount, `tag 5` = vatAmount
+- Base64 من tlvBuffer ← يُحوَّل إلى SVG عبر `qrcode`: `errorCorrectionLevel: 'M'`, `margin: 1`, `width: 120`.
+
+### Phase 2 — Submission
+- Singleton: `LocalZatcaBridge.getInstance()` في `server/services/zatcaBridge.js`.
+- `zatcaSubmitOrder(orderId)` / `zatcaSubmitCreditNote(creditNoteId)` — إرسال للجهة ZATCA.
+- Retry scheduler: كل 15 دقيقة via cron في `server/index.js`.
+- الحالة في `orders.zatca_status` و `credit_notes.zatca_status` — **لا تُعدَّل في الكود غير المتعلق بـ ZATCA**.
+- `zatcaGetUnsentOrders` / `zatcaRetryUnsent` — للإدارة اليدوية.
 
 ## 13. Pagination
 
@@ -182,7 +185,50 @@
 | `PHONE_TOO_LONG` | طول الرقم > 32 بعد التطبيع |
 | `ER_DUP_ENTRY` (من MySQL) | اسم مستخدم مكرر / تكرار price line |
 
-## 17. Business Invariants (اختصار)
+## 17. Roles & Permissions
+
+- جدول `roles` للأدوار المخصصة (إضافة إلى `admin` المدمج).
+- `role_permissions` يربط كل دور بالصلاحيات المسموحة.
+- `admin` يتجاوز كل الفحوصات. باقي الأدوار تعتمد على `role_permissions`.
+- الفحوصات client-side عبر `data-permission` attributes + `auth-guard.js`.
+
+## 18. Hangers (الشماعات)
+
+- `hangers` جدول للأرقام المطبوعة على الشماعات.
+- `batchCreateHangers({ from, to, prefix })` — إنشاء جماعي.
+- `hanger_status`: `available` (افتراضي) أو `in_use`.
+- الطباعة الحرارية عبر `/api/print/hanger-ticket-thermal`.
+
+## 19. Work Orders & Hotels (الفنادق والشركات)
+
+- `work_orders` لأوامر العمل المرتبطة بعملاء `customer_type='corporate'`.
+- `work_order_items` أسطر كل أمر عمل.
+- **Consolidated Invoice**: فاتورة مجمّعة تضم أوامر عمل متعددة (`createConsolidatedInvoice`).
+- `settleConsolidatedInvoice` — تسوية الفاتورة المجمّعة.
+- التقارير: `getCorporateReportStatement` (كشف حساب) + `getCorporateReportSummary` (ملخص).
+
+## 20. Offers & Product Offers
+
+- **Offers** (`offers`): خصم نسبي (%) على الفاتورة الكلية. له `is_active` + `valid_from/to`.
+- **Product Offers** (`product_offers` + `product_offer_lines`): أسعار خاصة لكل منتج × خدمة ضمن العرض.
+- في POS: `getActiveOffers` + `getActiveProductOffersForPos` تُرجع العروض النشطة ضمن تاريخ الصلاحية.
+
+## 21. Loyalty Points
+
+- جدول `loyalty_transactions`: `transaction_type` (earn/redeem) + `points` + `order_id`.
+- **الإعدادات في `app_settings` (id=1)** — أعمدة مضافة: `loyalty_enabled`, `loyalty_points_per_sar` (افتراضي 1), `loyalty_sar_per_point` (افتراضي 0.05), `loyalty_expiry_date`.
+- حقول مضافة على `orders`: `loyalty_points_earned`, `loyalty_points_redeemed`, `loyalty_discount_amount`.
+- `getCustomerLoyaltyBalance` — رصيد النقاط الحالي.
+- `getLoyaltyTransactions` — تاريخ الحركات.
+
+## 22. WhatsApp
+
+- Service: `server/services/whatsappService.js` عبر Baileys.
+- `whatsapp_quota` جدول (صف واحد id=1): عدد الرسائل المُستخدمة والحد الأقصى.
+- `whatsappSendInvoicePdf` / `whatsappSendInvoicePdfFromHtml` — إرسال فاتورة PDF.
+- الاتصال عبر `whatsappConnect`، وجلسة محفوظة في `DATA_ROOT/data/whatsapp_session/`.
+
+## 23. Business Invariants (اختصار)
 
 1. الرصيد `credit_remaining ≥ 0` دائمًا.
 2. فترة واحدة `active` فقط لكل `customer_subscriptions`.
@@ -190,3 +236,5 @@
 4. `orders.total_amount = subtotal - discount + vat_amount`، محسوبًا في الواجهة ومُرسَل كما هو.
 5. فواتير التصدير/التقارير تعتمد على `price_display_mode` الخاص بالفاتورة، ليس الإعداد الحالي.
 6. الخصم من الاشتراك لا يُقلّل `remaining_amount` من الفاتورة — هو استخدام رصيد موازٍ وليس سدادًا نقديًا.
+7. **كل SQL يجب أن يكون متوافقًا مع MySQL 5.7** — ممنوع استخدام window functions أو CTEs أو JSON_TABLE.
+8. `orders.zatca_status` وحقول ZATCA الأخرى على `orders` و `credit_notes` — لا تُعدَّل إلا من كود ZATCA.
