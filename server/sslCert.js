@@ -68,6 +68,7 @@ function ensureCerts() {
     fs.mkdirSync(CERT_DIR, { recursive: true });
   }
 
+  console.log('[SSL] توليد شهادة SSL جديدة... قد يستغرق 15-30 ثانية');
   // Generate RSA key pair
   const keys = forge.pki.rsa.generateKeyPair(2048);
   const cert = forge.pki.createCertificate();

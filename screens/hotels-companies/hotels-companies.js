@@ -43,7 +43,7 @@
     ordersPaginationBar: document.getElementById('ordersPaginationBar'),
     pendingActions:      document.getElementById('pendingActions'),
     thCheckbox:          document.getElementById('thCheckbox'),
-    selectAllOrders:     document.getElementById('selectAllOrders'),
+    selectAllOrders:     null,
     discountValue:       document.getElementById('discountValue'),
     discountType:        document.getElementById('discountType'),
     paymentMethodSelect: document.getElementById('paymentMethodSelect'),
@@ -224,7 +224,7 @@
     state.selectedOrderIds = new Set();
 
     el.selectedCustomerName.textContent = cust.customer_name;
-    el.selectedCustomerVat.textContent = cust.tax_number ? I18N.t('hc-cust-vat-label', 'الرقم الضريبي:') + ' ' + cust.tax_number : I18N.t('hc-cust-no-vat', 'لا يوجد رقم ضريبي');
+    el.selectedCustomerVat.textContent = cust.phone ? cust.phone : '';
     el.ordersSearch.value = '';
     el.ordersDateFrom.value = '';
     el.ordersDateTo.value = '';
@@ -272,6 +272,20 @@
       '<th>' + I18N.t('hc-th-action', 'الإجراء') + '</th>' +
       '</tr>';
     el.thCheckbox = document.getElementById('thCheckbox');
+    el.selectAllOrders = document.getElementById('selectAllOrders2');
+    if (el.selectAllOrders) {
+      el.selectAllOrders.addEventListener('change', function () {
+        var cbs = el.ordersTableBody.querySelectorAll('.wo-check');
+        cbs.forEach(function (cb) {
+          cb.checked = el.selectAllOrders.checked;
+          var id = +cb.dataset.id;
+          if (el.selectAllOrders.checked) state.selectedOrderIds.add(id);
+          else state.selectedOrderIds.delete(id);
+        });
+        updateIssueBtn();
+        updateTotalPreview();
+      });
+    }
   }
 
   async function loadWorkOrders(page) {
@@ -445,6 +459,7 @@
 
   /* ── Select All ── */
   function updateSelectAll() {
+    if (!el.selectAllOrders) return;
     var all = el.ordersTableBody.querySelectorAll('.wo-check');
     var checked = el.ordersTableBody.querySelectorAll('.wo-check:checked');
     el.selectAllOrders.checked = all.length > 0 && checked.length === all.length;
@@ -1230,7 +1245,7 @@
           btnWa.disabled = true;
           var res = await window.api.whatsappSendInvoicePdfFromHtml({
             html: paper.outerHTML, paperType: 'a4',
-            phone: phone, orderNum: modalData.orderNum, zatcaPayload: null
+            phone: phone, orderNum: modalData.orderNum, zatcaPayload: modalData.qrPayload || null
           });
           if (res && res.success) toast(I18N.t('hc-wa-inv-success', 'تم إرسال الفاتورة عبر الواتساب'), 'success');
           else toast((res && res.message) || I18N.t('hc-wa-fail', 'فشل إرسال الواتساب'), 'error');
@@ -1466,18 +1481,6 @@
 
   document.querySelectorAll('.tab-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { setActiveTab(btn.dataset.tab); });
-  });
-
-  el.selectAllOrders.addEventListener('change', function () {
-    var cbs = el.ordersTableBody.querySelectorAll('.wo-check');
-    cbs.forEach(function (cb) {
-      cb.checked = el.selectAllOrders.checked;
-      var id = +cb.dataset.id;
-      if (el.selectAllOrders.checked) state.selectedOrderIds.add(id);
-      else state.selectedOrderIds.delete(id);
-    });
-    updateIssueBtn();
-    updateTotalPreview();
   });
 
   el.discountValue.addEventListener('input', updateTotalPreview);

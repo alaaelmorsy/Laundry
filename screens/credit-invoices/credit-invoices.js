@@ -953,8 +953,8 @@
     setRow(els.invPaidAtRow, order.paid_at, els.invPaidAt);
     setRow(els.invCleanedAtRow, order.cleaning_date, els.invCleanedAt);
     setRow(els.invDeliveredAtRow, order.delivery_date, els.invDeliveredAt);
-    if (els.btnInvMarkCleaned)  els.btnInvMarkCleaned.style.display  = !order.cleaning_date  ? '' : 'none';
-    if (els.btnInvMarkDelivered) els.btnInvMarkDelivered.style.display = !order.delivery_date ? '' : 'none';
+    if (els.btnInvMarkCleaned)  els.btnInvMarkCleaned.style.display  = 'none';
+    if (els.btnInvMarkDelivered) els.btnInvMarkDelivered.style.display = 'none';
 
     const _invThermalCashier = order.cashier_name || order.created_by || '';
     if (_invThermalCashier) { els.invCreatedBy.textContent = _invThermalCashier; els.invCreatedByRow.style.display = ''; }
@@ -1233,8 +1233,8 @@
     setRow(els.cnCleanedAtRow, order && order.cleaning_date, els.cnCleanedAt);
     setRow(els.cnDeliveredAtRow, order && order.delivery_date, els.cnDeliveredAt);
     state.viewingCnOrderId = order ? order.id : null;
-    if (els.btnCnMarkCleaned)  els.btnCnMarkCleaned.style.display  = (order && !order.cleaning_date)  ? '' : 'none';
-    if (els.btnCnMarkDelivered) els.btnCnMarkDelivered.style.display = (order && !order.delivery_date) ? '' : 'none';
+    if (els.btnCnMarkCleaned)  els.btnCnMarkCleaned.style.display  = 'none';
+    if (els.btnCnMarkDelivered) els.btnCnMarkDelivered.style.display = 'none';
 
     const _cnThermalCashier = cn.cashier_name || cn.created_by || (order && (order.cashier_name || order.created_by)) || '';
     if (_cnThermalCashier) { els.cnCreatedBy.textContent = _cnThermalCashier; els.cnCreatedByRow.style.display = ''; }

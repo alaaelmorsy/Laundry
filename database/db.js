@@ -1084,6 +1084,12 @@ async function updateReportEmailLastResult(data = {}) {
  */
 async function backfillSettledCreditPaymentMethod() {
   try {
+    // guard: لا تشغّل إلا إذا فيه فواتير مدفوعة بطريقة 'credit' تحتاج إصلاح
+    const [[{ needsFix }]] = await pool.query(
+      `SELECT COUNT(*) AS needsFix FROM orders WHERE payment_status='paid' AND payment_method='credit' LIMIT 1`
+    );
+    if (!needsFix) return;
+
     // 1) Aggregate cash/card from invoice_payments using CASE on payment_method
     //    (cash / card full value goes to its bucket; mixed uses cash_amount & card_amount)
     await pool.query(`
@@ -1133,6 +1139,15 @@ async function backfillSettledCreditPaymentMethod() {
  */
 async function backfillSubscriptionPaymentMethod() {
   try {
+    // guard: SELECT 1 مع LIMIT 1 يتوقف عند أول صف — لا يحسب COUNT كامل
+    const [guardRows] = await pool.query(`
+      SELECT 1 FROM orders o
+      INNER JOIN subscription_ledger sl ON sl.ref_type = 'order' AND sl.ref_id = o.id AND sl.entry_type = 'consumption'
+      WHERE o.payment_method != 'subscription'
+      LIMIT 1
+    `);
+    if (!guardRows.length) return;
+
     const [result] = await pool.query(`
       UPDATE orders o
       INNER JOIN subscription_ledger sl ON sl.ref_type = 'order' AND sl.ref_id = o.id
@@ -1770,12 +1785,20 @@ async function ensureManualSortOrderColumns() {
 async function backfillSortOrderIfNeeded() {
   async function fillTable(table) {
     const [[stats]] = await pool.query(
-      `SELECT COUNT(*) AS c, MIN(sort_order) AS mn, MAX(sort_order) AS mx FROM ${table}`
+      `SELECT COUNT(*) AS c, MIN(sort_order) AS mn, MAX(sort_order) AS mx FROM \`${table}\``
     );
     if (!stats.c || stats.mn !== 0 || stats.mx !== 0) return;
-    const [rows] = await pool.query(`SELECT id FROM ${table} ORDER BY id ASC`);
-    for (let i = 0; i < rows.length; i++) {
-      await pool.query(`UPDATE ${table} SET sort_order=? WHERE id=?`, [i + 1, rows[i].id]);
+    // connection ثابت لضمان أن SET @r و UPDATE يعملان على نفس الـ session
+    const conn = await pool.getConnection();
+    try {
+      await conn.query(`SET @r = 0`);
+      await conn.query(`
+        UPDATE \`${table}\` SET sort_order = (@r := @r + 1)
+        WHERE sort_order = 0
+        ORDER BY id ASC
+      `);
+    } finally {
+      conn.release();
     }
   }
   try {
@@ -5735,17 +5758,20 @@ async function migrateOrdersDeferredColumns() {
       await pool.query(`ALTER TABLE orders ADD COLUMN delivery_date DATETIME NULL DEFAULT NULL`);
     }
 
-    await pool.query(`
-      UPDATE orders
-      SET payment_status = 'paid',
-          paid_amount = total_amount,
-          remaining_amount = 0,
-          paid_at = COALESCE(paid_at, created_at, NOW()),
-          fully_paid_at = COALESCE(fully_paid_at, paid_at, created_at, NOW()),
-          cleaning_date = COALESCE(cleaning_date, created_at, NOW()),
-          delivery_date = COALESCE(delivery_date, created_at, NOW())
-      WHERE COALESCE(is_consolidated, 0) = 1
-    `);
+    // is_consolidated يُضاف لاحقاً عبر migrateAddConsolidatedFlag — تخطّ هذا الـ UPDATE إن لم يوجد العمود بعد
+    if (colMap.has('is_consolidated')) {
+      await pool.query(`
+        UPDATE orders
+        SET payment_status = 'paid',
+            paid_amount = total_amount,
+            remaining_amount = 0,
+            paid_at = COALESCE(paid_at, created_at, NOW()),
+            fully_paid_at = COALESCE(fully_paid_at, paid_at, created_at, NOW()),
+            cleaning_date = COALESCE(cleaning_date, created_at, NOW()),
+            delivery_date = COALESCE(delivery_date, created_at, NOW())
+        WHERE COALESCE(is_consolidated, 0) = 1
+      `);
+    }
   } catch (e) {
     console.error('migrateOrdersDeferredColumns:', e);
   }
@@ -7924,8 +7950,14 @@ async function getUnsentZatcaOrders(limit = 500) {
 
 async function fixSubscriptionLedgerNotesEncoding() {
   try {
-    // Fix notes that were stored with wrong charset (latin1 connection storing UTF-8 bytes)
-    // Detectable by presence of Ø (U+00D8) or Ù (U+00D9) which are the first bytes of Arabic UTF-8 sequences when misread as latin1
+    // guard: تحقق أن في صفوف تحتاج إصلاح قبل تشغيل الـ UPDATE
+    const [check] = await pool.query(`
+      SELECT 1 FROM subscription_ledger
+      WHERE notes IS NOT NULL
+        AND (notes LIKE '%Ø%' OR notes LIKE '%Ù%' OR notes LIKE '%â€"%')
+      LIMIT 1
+    `);
+    if (!check.length) return;
     await pool.query(`
       UPDATE subscription_ledger
       SET notes = CONVERT(BINARY CONVERT(notes USING latin1) USING utf8mb4)
@@ -8048,28 +8080,30 @@ async function expireLoyaltyPoints() {
         )
     `, [`%انتهاء صلاحية بتاريخ ${expiryDate}%`]);
 
-    for (const row of customers) {
-      const cid = row.customer_id;
-      const toExpire = Number(row.loyalty_points);
-      if (toExpire <= 0) continue;
-      const conn = await pool.getConnection();
-      try {
-        await conn.beginTransaction();
-        const [[custRow]] = await conn.query('SELECT loyalty_points FROM customers WHERE id = ? FOR UPDATE', [cid]);
-        if (!custRow) { await conn.rollback(); continue; }
-        await conn.query('UPDATE customers SET loyalty_points = 0 WHERE id = ?', [cid]);
+    if (!customers.length) return;
+
+    // transaction واحدة لكل العملاء بدلاً من transaction لكل عميل
+    const noteText = `انتهاء صلاحية بتاريخ ${expiryDate}`;
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      for (const row of customers) {
+        const toExpire = Number(row.loyalty_points);
+        if (toExpire <= 0) continue;
+        await conn.query('UPDATE customers SET loyalty_points = 0 WHERE id = ?', [row.customer_id]);
         await conn.query(
           `INSERT INTO loyalty_transactions (customer_id, order_id, type, points, balance_after, note)
            VALUES (?, NULL, 'expire', ?, 0, ?)`,
-          [cid, -toExpire, `انتهاء صلاحية بتاريخ ${expiryDate}`]
+          [row.customer_id, -toExpire, noteText]
         );
-        await conn.commit();
-      } catch (e) {
-        await conn.rollback();
-        console.error('expireLoyaltyPoints error for customer', cid, e);
-      } finally {
-        conn.release();
       }
+      await conn.commit();
+      console.log(`[expireLoyaltyPoints] انتهت صلاحية نقاط ${customers.length} عميل`);
+    } catch (e) {
+      await conn.rollback();
+      console.error('expireLoyaltyPoints transaction error:', e);
+    } finally {
+      conn.release();
     }
   } catch (e) {
     console.error('expireLoyaltyPoints top-level error:', e);

@@ -78,8 +78,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="ordersSearch" class="search-input" data-i18n-placeholder="hc-orders-search-placeholder" placeholder="رقم D-XXX أو رقم فاتورة..." />
             </div>
-            <input type="date" id="ordersDateFrom" class="date-input" data-i18n-title="hc-th-date" title="من تاريخ" />
-            <input type="date" id="ordersDateTo" class="date-input" data-i18n-title="hc-th-date" title="إلى تاريخ" />
+            <div class="dates-row">
+              <input type="date" id="ordersDateFrom" class="date-input" data-i18n-title="hc-th-date" title="من تاريخ" />
+              <input type="date" id="ordersDateTo" class="date-input" data-i18n-title="hc-th-date" title="إلى تاريخ" />
+            </div>
           </div>
         </div>
 
@@ -92,22 +94,21 @@
 
         <!-- Pending tab actions -->
         <div class="pending-actions" id="pendingActions" style="display:none">
-          <label class="select-all-label">
-            <input type="checkbox" id="selectAllOrders" /> <span data-i18n="hc-select-all">تحديد الكل</span>
-          </label>
-          <div class="discount-row">
-            <span class="discount-label" data-i18n="hc-discount-label">خصم:</span>
-            <input type="number" id="discountValue" class="discount-input" min="0" step="0.01" placeholder="0" />
-            <select id="discountType" class="discount-type-select">
-              <option value="fixed" data-i18n="hc-discount-sar">ريال</option>
-              <option value="percent">%</option>
-            </select>
-          </div>
-          <div class="payment-row">
-            <label class="payment-label" for="paymentMethodSelect" data-i18n="hc-payment-method-label">طريقة الدفع:</label>
-            <select id="paymentMethodSelect" class="payment-method-select">
-              <option value="cash" data-i18n="payment-cash">نقدي</option>
-            </select>
+          <div class="pending-actions-top-row">
+            <div class="discount-row">
+              <span class="discount-label" data-i18n="hc-discount-label">خصم:</span>
+              <input type="number" id="discountValue" class="discount-input" min="0" step="0.01" placeholder="0" />
+              <select id="discountType" class="discount-type-select">
+                <option value="fixed" data-i18n="hc-discount-sar">ريال</option>
+                <option value="percent">%</option>
+              </select>
+            </div>
+            <div class="payment-row">
+              <label class="payment-label" for="paymentMethodSelect" data-i18n="hc-payment-method-label">طريقة الدفع:</label>
+              <select id="paymentMethodSelect" class="payment-method-select">
+                <option value="cash" data-i18n="payment-cash">نقدي</option>
+              </select>
+            </div>
           </div>
           <div class="total-preview" id="totalPreview" style="display:none">
             <span data-i18n="hc-total-selected">المجموع المحدد:</span> <strong id="previewSubtotal">0.00</strong>
