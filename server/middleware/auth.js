@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db  = require('../../database/db');
 
 function getJwtSecret() {
   const s = process.env.JWT_SECRET;
@@ -11,14 +12,15 @@ function getJwtSecret() {
   return s;
 }
 
-function signUserToken(user) {
+function signUserToken(user, sessionId) {
   return jwt.sign(
     {
       id: user.id,
       username: user.username,
       role: user.role,
       role_id: user.role_id || null,
-      full_name: user.full_name
+      full_name: user.full_name,
+      session_id: sessionId || null,
     },
     getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -40,6 +42,12 @@ function authMiddleware(req, res, next) {
   }
   const payload = verifyToken(token);
   if (!payload) {
+    try {
+      const expired = jwt.decode(token);
+      if (expired && expired.session_id) {
+        db.closeUserSession(expired.session_id, 'jwt_expired').catch(() => {});
+      }
+    } catch (_) {}
     return res.status(401).json({ success: false, message: 'انتهت الجلسة' });
   }
   req.user = payload;

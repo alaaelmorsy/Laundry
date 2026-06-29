@@ -81,6 +81,21 @@
     }
   }
 
+  // ── Heartbeat: يُحدِّث last_seen_at كل دقيقتين ──────────────────────────
+  let _heartbeatInterval = null;
+
+  function startHeartbeat(sessionId) {
+    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
+    if (!sessionId) return;
+    _heartbeatInterval = setInterval(() => {
+      invoke('heartbeat', { sessionId }).catch(() => {});
+    }, 120000);
+  }
+
+  function stopHeartbeat() {
+    if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+  }
+
   window.api = {
     checkLicense: async () => {
       try {
@@ -153,6 +168,12 @@
 
     navigateBack: () => {
       location.href = '/screens/dashboard/dashboard.html';
+    },
+
+    getMe: async () => {
+      const r = await jsonFetch('/api/auth/me');
+      if (r.status === 401) { location.href = '/screens/login/login.html'; return { success: false }; }
+      return r.json();
     },
 
     pathToFileUrl: (absPath) => absPath || '',
@@ -467,6 +488,13 @@
     getCorporateReportStatement:     (p) => invoke('getCorporateReportStatement', p),
     getCorporateReportSummary:       (p) => invoke('getCorporateReportSummary', p),
     exportHotelsCompaniesReport:     (d) => exportBinary('/api/export/hotels-companies-report', d),
+
+    // User Sessions (032)
+    getUserSessions:    (p) => invoke('getUserSessions', p),
+    reactivateSession:  ()  => invoke('reactivateSession'),
+    heartbeat:          (p) => invoke('heartbeat', p),
+    startHeartbeat,
+    stopHeartbeat,
 
     translateText: async (text, target = 'en', source = 'ar') => {
       const r = await jsonFetch('/api/translate', {

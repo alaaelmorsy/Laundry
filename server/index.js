@@ -59,6 +59,9 @@ const loginLimiter = rateLimit({
 async function start() {
   await db.initialize();
 
+  // إغلاق الجلسات التي بقيت مفتوحة من تشغيل سابق (انقطاع كهرباء، SIGKILL)
+  try { await db.closeAllActiveSessions('abnormal'); } catch (_) {}
+
   // Auto-restore WhatsApp session if session files exist
   try {
     const whatsappService = require('./services/whatsappService');
@@ -307,7 +310,8 @@ async function start() {
       if (!user) {
         return res.json({ success: false, message: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
       }
-      const token = signUserToken(user);
+      const { sessionId } = await db.createUserSession(user.id);
+      const token = signUserToken(user, sessionId);
       const maxAge = 7 * 24 * 60 * 60 * 1000;
       res.cookie('laundry_auth', token, {
         httpOnly: true,
@@ -325,6 +329,7 @@ async function start() {
           full_name: user.full_name,
           role: user.role,
           role_id: user.role_id || null,
+          session_id: sessionId,
           permissions
         }
       });
@@ -334,9 +339,31 @@ async function start() {
     }
   });
 
-  app.post('/api/auth/logout', (_req, res) => {
+  app.post('/api/auth/logout', (req, res) => {
+    try {
+      const token = req.cookies && req.cookies.laundry_auth;
+      if (token) {
+        const decoded = require('jsonwebtoken').decode(token);
+        if (decoded && decoded.session_id) {
+          db.closeUserSession(decoded.session_id, 'manual').catch(() => {});
+        }
+      }
+    } catch (_) {}
     res.clearCookie('laundry_auth', { path: '/' });
     res.json({ success: true });
+  });
+
+  app.post('/api/auth/logout-beacon', (req, res) => {
+    try {
+      const token = req.cookies && req.cookies.laundry_auth;
+      if (token) {
+        const decoded = require('jsonwebtoken').decode(token);
+        if (decoded && decoded.session_id) {
+          db.closeUserSession(decoded.session_id, 'browser_closed').catch(() => {});
+        }
+      }
+    } catch (_) {}
+    res.status(204).end();
   });
 
   app.get('/api/auth/me', authMiddleware, async (req, res) => {
@@ -353,6 +380,7 @@ async function start() {
           full_name: req.user.full_name,
           role: req.user.role,
           role_id: req.user.role_id || null,
+          session_id: req.user.session_id || null,
           permissions
         }
       });
@@ -519,6 +547,22 @@ async function start() {
     try {
       const body = req.body || {};
       const result = await exportsService.exportHotelsCompaniesReport(body.type, body);
+      sendExport(res, result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/api/export/sessions', authMiddleware, async (req, res) => {
+    try {
+      if (req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'غير مصرح' });
+      const { type = 'excel', userId, from, to } = req.query;
+      const filters = {};
+      if (userId) filters.userId = Number(userId);
+      if (from)   filters.from   = from;
+      if (to)     filters.to     = to;
+      const result = await exportsService.exportSessions(type, filters);
       sendExport(res, result);
     } catch (err) {
       console.error(err);
@@ -717,3 +761,12 @@ start().catch((e) => {
   // المستخدم يستطيع قراءة الخطأ من boot.log و service-stderr.log
   setInterval(() => bootLog('[heartbeat] process alive but start() failed — check above for error'), 60000);
 });
+
+// ── Graceful Shutdown: إغلاق الجلسات النشطة قبل توقف السيرفر ──────────────
+async function gracefulShutdown(signal) {
+  bootLog(`[shutdown] ${signal} received — closing active sessions`);
+  try { await db.closeAllActiveSessions('server_shutdown'); } catch (_) {}
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));

@@ -1982,6 +1982,168 @@ thead{display:table-header-group}
   throw new Error('نوع التصدير غير مدعوم');
 }
 
+async function exportSessions(type, filters = {}) {
+  const { sessions } = await db.getUserSessions({ ...filters, pageSize: 100000 });
+  const f        = cairoFonts();
+  const branding = await loadAppBrandingForReceipts().catch(() => ({}));
+
+  const LOGOUT_LABELS = {
+    manual:          'خروج يدوي',
+    browser_closed:  'إغلاق المتصفح',
+    server_shutdown: 'إغلاق السيرفر',
+    abnormal:        'إغلاق غير طبيعي',
+    jwt_expired:     'انتهاء الجلسة',
+  };
+
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function fmt12(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '—';
+    const pad = n => String(n).padStart(2, '0');
+    const day  = pad(dt.getDate());
+    const mon  = pad(dt.getMonth() + 1);
+    const yr   = dt.getFullYear();
+    let   h    = dt.getHours();
+    const min  = pad(dt.getMinutes());
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${day}/${mon}/${yr} ${pad(h)}:${min} ${ampm}`;
+  }
+
+  function calcDur(loginAt, logoutAt, lastSeenAt) {
+    const start = new Date(loginAt);
+    const end   = logoutAt ? new Date(logoutAt) : (lastSeenAt ? new Date(lastSeenAt) : new Date());
+    const mins  = Math.max(0, Math.floor((end - start) / 60000));
+    const h     = Math.floor(mins / 60), m = mins % 60;
+    return h ? `${h}س ${m}د` : `${m}د`;
+  }
+
+  const nameAr    = branding.laundryNameAr || '';
+  const nameEn    = branding.laundryNameEn || '';
+  const phone     = branding.phone || '';
+  const email     = branding.email || '';
+  const vatNumber = branding.vatNumber || '';
+  const cr        = branding.commercialRegister || '';
+  const locationAr = branding.locationAr || '';
+  const addrParts = [branding.buildingNumber, branding.streetNameAr, branding.districtAr, branding.cityAr, branding.postalCode].filter(Boolean);
+  const addrAr    = addrParts.join('، ');
+  const logo      = branding.logoDataUrl || '';
+  const shopName  = nameAr || nameEn || 'نظام المغسلة';
+
+  const now    = new Date();
+  const pad    = n => String(n).padStart(2, '0');
+  const nowStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  if (type === 'excel') {
+    const headers = ['#', 'المستخدم', 'وقت الدخول', 'وقت الخروج', 'المدة', 'نوع الخروج'];
+    const rows = sessions.map((s, i) => [
+      i + 1,
+      s.full_name || s.username || `مستخدم ${s.user_id}`,
+      fmt12(s.login_at),
+      s.logout_at ? fmt12(s.logout_at) : (s.status === 'active' ? 'نشطة' : '—'),
+      calcDur(s.login_at, s.logout_at, s.last_seen_at),
+      LOGOUT_LABELS[s.logout_type] || (s.status === 'active' ? '—' : s.logout_type || '—'),
+    ]);
+
+    const wsData = [
+      [shopName],
+      [`سجل جلسات المستخدمين — ${nowStr}`],
+      vatNumber ? [`الرقم الضريبي: ${vatNumber}`] : [],
+      phone     ? [`جوال: ${phone}`]              : [],
+      [],
+      headers,
+      ...rows,
+    ].filter(r => r.length > 0 || true);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 18 }];
+    if (!ws['!sheetViews']) ws['!sheetViews'] = [{}];
+    ws['!sheetViews'][0].rightToLeft = true;
+    XLSX.utils.book_append_sheet(wb, ws, 'سجل الجلسات');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return { buffer: Buffer.from(buf), filename: `جلسات_${ts()}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+  }
+
+  if (type === 'pdf') {
+    const tableRows = sessions.map((s, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(s.full_name || s.username || `مستخدم ${s.user_id}`)}</td>
+        <td class="ltr">${esc(fmt12(s.login_at))}</td>
+        <td class="ltr">${s.logout_at ? esc(fmt12(s.logout_at)) : (s.status === 'active' ? '<span class="badge-active">نشطة</span>' : '—')}</td>
+        <td>${esc(calcDur(s.login_at, s.logout_at, s.last_seen_at))}</td>
+        <td>${esc(LOGOUT_LABELS[s.logout_type] || (s.status === 'active' ? '—' : s.logout_type || '—'))}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد بيانات</td></tr>';
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"/>
+<style>
+@font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${f.cairoBoldB64}') format('woff2');font-weight:700}
+@font-face{font-family:'Cairo';src:url('data:font/woff2;base64,${f.cairoRegularB64}') format('woff2');font-weight:400}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif;font-size:9pt}
+body{direction:rtl;padding:12mm 10mm;color:#000;background:#fff}
+.header{display:grid;grid-template-columns:1fr 90px 1fr;gap:4mm;align-items:center;margin-bottom:5mm;padding-bottom:4mm;border-bottom:2px solid #6366f1}
+.header-ar{text-align:right}
+.header-en{text-align:left;direction:ltr}
+.header-logo{display:flex;justify-content:center;align-items:center}
+.header-logo img{max-height:60px;max-width:80px;object-fit:contain}
+.brand-name{font-size:12pt;font-weight:700;margin-bottom:1.5mm}
+.brand-sub{font-size:7.5pt;color:#444;margin-bottom:.8mm}
+.report-title{text-align:center;font-size:13pt;font-weight:700;margin-bottom:2mm;color:#1e293b}
+.report-sub{text-align:center;font-size:8pt;color:#64748b;margin-bottom:5mm}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#ede9fe}
+th{padding:5px 8px;border:1px solid #c4b5fd;text-align:right;font-size:8pt;color:#4c1d95;font-weight:700}
+td{padding:5px 8px;border:1px solid #e2e8f0;font-size:8pt;text-align:right}
+tr:nth-child(even) td{background:#faf9ff}
+.ltr{direction:ltr;text-align:left}
+.badge-active{background:#dcfce7;color:#166534;padding:2px 7px;border-radius:10px;font-size:7.5pt}
+.empty{text-align:center;color:#94a3b8;padding:15px}
+.footer{margin-top:6mm;text-align:center;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:3mm}
+@page{size:A4 landscape;margin:10mm}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-ar">
+    ${nameAr   ? `<div class="brand-name">${esc(nameAr)}</div>` : ''}
+    ${locationAr ? `<div class="brand-sub">${esc(locationAr)}</div>` : ''}
+    ${addrAr   ? `<div class="brand-sub">${esc(addrAr)}</div>` : ''}
+    ${phone    ? `<div class="brand-sub">جوال: ${esc(phone)}</div>` : ''}
+    ${vatNumber? `<div class="brand-sub">الرقم الضريبي: ${esc(vatNumber)}</div>` : ''}
+    ${cr       ? `<div class="brand-sub">س.ت: ${esc(cr)}</div>` : ''}
+  </div>
+  <div class="header-logo">
+    ${logo ? `<img src="${logo}" alt="logo"/>` : ''}
+  </div>
+  <div class="header-en">
+    ${nameEn   ? `<div class="brand-name">${esc(nameEn)}</div>` : ''}
+    ${email    ? `<div class="brand-sub">${esc(email)}</div>` : ''}
+    ${vatNumber? `<div class="brand-sub">VAT No: ${esc(vatNumber)}</div>` : ''}
+    ${cr       ? `<div class="brand-sub">CR No: ${esc(cr)}</div>` : ''}
+  </div>
+</div>
+<div class="report-title">سجل جلسات المستخدمين</div>
+<div class="report-sub">تاريخ الطباعة: ${nowStr} — إجمالي الجلسات: ${sessions.length}</div>
+<table>
+  <thead>
+    <tr><th>#</th><th>المستخدم</th><th>وقت الدخول</th><th>وقت الخروج</th><th>المدة</th><th>نوع الخروج</th></tr>
+  </thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<div class="footer">${esc(shopName)} — نظام نقاط البيع PLUS Laundry</div>
+</body></html>`;
+
+    const buffer = await htmlToPdfBuffer(html, { landscape: true });
+    return { buffer, filename: `جلسات_${ts()}.pdf`, mimeType: 'application/pdf' };
+  }
+
+  throw new Error('نوع التصدير غير مدعوم');
+}
+
 module.exports = {
   exportExpenses,
   exportCustomers,
@@ -2005,5 +2167,6 @@ module.exports = {
   MAX_PRODUCT_IMAGE_RAW_BYTES,
   cairoFonts,
   exportConsolidatedWorkOrdersList,
-  exportHotelsCompaniesReport
+  exportHotelsCompaniesReport,
+  exportSessions,
 };

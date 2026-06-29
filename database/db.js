@@ -166,6 +166,102 @@ async function initialize() {
   await migrateCreateWorkOrders();
   await migrateCreateWorkOrderItems();
   await migrateWorkOrderItemsMerzam();
+  await createUserSessionsMigration();
+}
+
+async function createUserSessionsMigration() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        user_id       INT          NOT NULL,
+        login_at      DATETIME     NOT NULL,
+        logout_at     DATETIME     NULL,
+        last_seen_at  DATETIME     NULL,
+        status        ENUM('active','closed') NOT NULL DEFAULT 'active',
+        logout_type   ENUM('manual','browser_closed','server_shutdown','abnormal','jwt_expired') NULL,
+        created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_us_user_id   (user_id),
+        INDEX idx_us_login_at  (login_at),
+        INDEX idx_us_status    (status),
+        INDEX idx_us_user_date (user_id, login_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch (_) {}
+}
+
+async function createUserSession(userId) {
+  const [result] = await pool.query(
+    `INSERT INTO user_sessions (user_id, login_at) VALUES (?, NOW())`,
+    [userId]
+  );
+  return { sessionId: result.insertId };
+}
+
+async function closeUserSession(sessionId, logoutType, logoutAt = null) {
+  if (!sessionId) return;
+  const at = logoutAt ? logoutAt : new Date();
+  await pool.query(
+    `UPDATE user_sessions SET status='closed', logout_type=?, logout_at=? WHERE id=? AND status='active'`,
+    [logoutType, at, sessionId]
+  );
+}
+
+async function heartbeatUserSession(sessionId) {
+  if (!sessionId) return;
+  await pool.query(
+    `UPDATE user_sessions SET last_seen_at=NOW() WHERE id=? AND status='active'`,
+    [sessionId]
+  );
+}
+
+async function reactivateUserSession(sessionId) {
+  if (!sessionId) return;
+  await pool.query(
+    `UPDATE user_sessions SET status='active', logout_type=NULL, logout_at=NULL, last_seen_at=NOW()
+     WHERE id=? AND status='closed' AND logout_type='browser_closed'`,
+    [sessionId]
+  );
+}
+
+async function closeAllActiveSessions(logoutType) {
+  await pool.query(
+    `UPDATE user_sessions SET status='closed', logout_type=?, logout_at=COALESCE(last_seen_at, login_at) WHERE status='active'`,
+    [logoutType]
+  );
+}
+
+async function getUserSessions(filters = {}) {
+  const { userId, from, to, page = 1, pageSize = 20 } = filters;
+  const conditions = [];
+  const params = [];
+
+  if (userId) { conditions.push('us.user_id = ?'); params.push(userId); }
+  if (from)   { conditions.push('us.login_at >= ?'); params.push(from); }
+  if (to)     { conditions.push('us.login_at <= ?'); params.push(to); }
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const offset = (page - 1) * pageSize;
+
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM user_sessions us ${where}`,
+    params
+  );
+
+  const [sessions] = await pool.query(
+    `SELECT us.id, us.user_id, u.full_name, u.username,
+            us.login_at, us.logout_at, us.last_seen_at,
+            us.status, us.logout_type
+     FROM user_sessions us
+     LEFT JOIN users u ON u.id = us.user_id
+     ${where}
+     ORDER BY us.login_at DESC
+     LIMIT ? OFFSET ?`,
+    [...params, pageSize, offset]
+  );
+
+  return { sessions, total: Number(total) };
 }
 
 async function createCustomerCustomPricesTable() {
@@ -9218,6 +9314,8 @@ module.exports = {
   createWorkOrder, getWorkOrders, cancelWorkOrder, getWorkOrderForPrint,
   createConsolidatedInvoice, getConsolidatedInvoiceForPrint, getCorporateCustomers, settleConsolidatedInvoice,
   getCorporateReportStatement, getCorporateReportSummary,
+  // User Sessions
+  createUserSession, closeUserSession, reactivateUserSession, heartbeatUserSession, closeAllActiveSessions, getUserSessions,
 };
 
 // ── System Restore ───────────────────────────────────────────────────────────

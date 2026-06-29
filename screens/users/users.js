@@ -328,4 +328,236 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   loadUsers();
+
+  // ── سجل الجلسات ────────────────────────────────────────────────────────────
+  const btnSessionsLog         = document.getElementById('btnSessionsLog');
+  const sessionsSection        = document.getElementById('sessionsSection');
+  const btnCloseSessions       = document.getElementById('btnCloseSessions');
+  const sessionsTableBody      = document.getElementById('sessionsTableBody');
+  const sessionUserFilter      = document.getElementById('sessionUserFilter');
+  const sessionFromDate        = document.getElementById('sessionFromDate');
+  const sessionToDate          = document.getElementById('sessionToDate');
+  const btnFilterSessions      = document.getElementById('btnFilterSessions');
+  const btnResetSessionFilter  = document.getElementById('btnResetSessionFilter');
+  const sessionsPagination     = document.getElementById('sessionsPagination');
+  const sessionsPageInfo       = document.getElementById('sessionsPageInfo');
+  const btnSessionsFirst       = document.getElementById('btnSessionsFirst');
+  const btnSessionsPrev        = document.getElementById('btnSessionsPrev');
+  const btnSessionsNext        = document.getElementById('btnSessionsNext');
+  const btnSessionsLast        = document.getElementById('btnSessionsLast');
+  const btnExportSessionsExcel = document.getElementById('btnExportSessionsExcel');
+  const btnExportSessionsPdf   = document.getElementById('btnExportSessionsPdf');
+
+  let sessionsPage     = 1;
+  const sessionsPerPage = 20;
+  let sessionsTotalPages = 1;
+  let heartbeatInterval = null;
+
+  const LOGOUT_TYPE_LABELS = {
+    manual:          'خروج يدوي',
+    browser_closed:  'إغلاق المتصفح',
+    server_shutdown: 'إغلاق السيرفر',
+    abnormal:        'إغلاق غير طبيعي',
+    jwt_expired:     'انتهاء الجلسة',
+  };
+
+  function fmt12(dateStr) {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return '—';
+    const pad = n => String(n).padStart(2, '0');
+    const day  = pad(d.getDate());
+    const mon  = pad(d.getMonth() + 1);
+    const yr   = d.getFullYear();
+    let   h    = d.getHours();
+    const min  = pad(d.getMinutes());
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${day}/${mon}/${yr} ${pad(h)}:${min} ${ampm}`;
+  }
+
+  function calcDuration(loginAt, logoutAt, lastSeenAt) {
+    const start = new Date(loginAt);
+    const end   = logoutAt ? new Date(logoutAt) : (lastSeenAt ? new Date(lastSeenAt) : new Date());
+    const diffMs = end - start;
+    if (diffMs < 0) return '—';
+    const mins  = Math.floor(diffMs / 60000);
+    const hours = Math.floor(mins / 60);
+    const rem   = mins % 60;
+    if (hours === 0) return `${rem}د`;
+    return `${hours}س ${rem}د`;
+  }
+
+  function logoutTypeClass(type) {
+    if (type === 'manual')          return 'lt-manual';
+    if (type === 'abnormal')        return 'lt-abnormal';
+    if (type === 'server_shutdown') return 'lt-server';
+    if (type === 'browser_closed')  return 'lt-browser';
+    if (type === 'jwt_expired')     return 'lt-expired';
+    return '';
+  }
+
+  async function loadSessions() {
+    sessionsTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell"><div class="spinner"></div> جارٍ التحميل...</td></tr>';
+    const filters = {
+      page:     sessionsPage,
+      pageSize: sessionsPerPage,
+    };
+    if (sessionUserFilter.value)  filters.userId = Number(sessionUserFilter.value);
+    if (sessionFromDate.value)    filters.from   = sessionFromDate.value.replace('T', ' ') + ':00';
+    if (sessionToDate.value)      filters.to     = sessionToDate.value.replace('T', ' ') + ':00';
+
+    const res = await window.api.getUserSessions(filters);
+    if (!res.success) {
+      sessionsTableBody.innerHTML = `<tr><td colspan="6" class="error-cell">${escHtml(res.message || 'خطأ في جلب البيانات')}</td></tr>`;
+      return;
+    }
+
+    const { sessions, total } = res;
+    sessionsTotalPages = Math.max(1, Math.ceil(total / sessionsPerPage));
+
+    if (!sessions.length) {
+      sessionsTableBody.innerHTML = '<tr><td colspan="6" class="empty-cell">لا توجد جلسات</td></tr>';
+      sessionsPagination.style.display = 'none';
+      return;
+    }
+
+    sessionsTableBody.innerHTML = sessions.map((s, i) => {
+      const idx     = (sessionsPage - 1) * sessionsPerPage + i + 1;
+      const name    = escHtml(s.full_name || s.username || `مستخدم ${s.user_id}`);
+      const login   = fmt12(s.login_at);
+      const logout  = s.logout_at ? fmt12(s.logout_at) : (s.status === 'active' ? '<span class="badge-active">نشطة</span>' : '—');
+      const dur     = calcDuration(s.login_at, s.logout_at, s.last_seen_at);
+      const ltLabel = LOGOUT_TYPE_LABELS[s.logout_type] || (s.status === 'active' ? '—' : s.logout_type || '—');
+      const ltClass = logoutTypeClass(s.logout_type);
+      return `<tr>
+        <td>${idx}</td>
+        <td>${name}</td>
+        <td class="dir-ltr">${login}</td>
+        <td class="dir-ltr">${logout}</td>
+        <td>${dur}</td>
+        <td><span class="logout-type ${ltClass}">${ltLabel}</span></td>
+      </tr>`;
+    }).join('');
+
+    sessionsPageInfo.textContent = `صفحة ${sessionsPage} من ${sessionsTotalPages} (${total} جلسة)`;
+    sessionsPagination.style.display = '';
+    btnSessionsFirst.disabled = sessionsPage === 1;
+    btnSessionsPrev.disabled  = sessionsPage === 1;
+    btnSessionsNext.disabled  = sessionsPage === sessionsTotalPages;
+    btnSessionsLast.disabled  = sessionsPage === sessionsTotalPages;
+  }
+
+  async function populateUserFilter() {
+    const res = await window.api.getUsers();
+    if (!res || !res.users) return;
+    sessionUserFilter.innerHTML = '<option value="">جميع المستخدمين</option>';
+    res.users.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.full_name || u.username;
+      sessionUserFilter.appendChild(opt);
+    });
+  }
+
+  function todayDatetimeLocal(startOfDay) {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const yr  = now.getFullYear();
+    const mon = pad(now.getMonth() + 1);
+    const day = pad(now.getDate());
+    return startOfDay
+      ? `${yr}-${mon}-${day}T00:00`
+      : `${yr}-${mon}-${day}T23:59`;
+  }
+
+  function showSessionsSection() {
+    sessionsSection.style.display = '';
+    document.querySelector('.table-container').style.display = 'none';
+    emptyState.style.display = 'none';
+    document.querySelector('.toolbar').style.display = 'none';
+    sessionFromDate.value = todayDatetimeLocal(true);
+    sessionToDate.value   = todayDatetimeLocal(false);
+    sessionsPage = 1;
+    populateUserFilter();
+    sessionsTableBody.innerHTML = '<tr><td colspan="6" class="empty-cell">حدد الفترة الزمنية واضغط بحث لعرض الجلسات</td></tr>';
+    sessionsPagination.style.display = 'none';
+    startHeartbeat();
+  }
+
+  function hideSessionsSection() {
+    sessionsSection.style.display = 'none';
+    document.querySelector('.table-container').style.display = '';
+    document.querySelector('.toolbar').style.display = '';
+    stopHeartbeat();
+    loadUsers();
+  }
+
+  function startHeartbeat() {
+    window.api.startHeartbeat(window._currentSessionId || null);
+  }
+
+  function stopHeartbeat() {
+    window.api.stopHeartbeat();
+  }
+
+  function exportSessions(type) {
+    const params = new URLSearchParams({ type });
+    if (sessionUserFilter.value)  params.set('userId', sessionUserFilter.value);
+    if (sessionFromDate.value)    params.set('from',   sessionFromDate.value.replace('T', ' ') + ':00');
+    if (sessionToDate.value)      params.set('to',     sessionToDate.value.replace('T', ' ') + ':00');
+    window.location.href = `/api/export/sessions?${params.toString()}`;
+  }
+
+  // أحداث قسم الجلسات
+  if (btnSessionsLog) {
+    btnSessionsLog.addEventListener('click', showSessionsSection);
+  }
+  if (btnCloseSessions) {
+    btnCloseSessions.addEventListener('click', hideSessionsSection);
+  }
+  if (btnFilterSessions) {
+    btnFilterSessions.addEventListener('click', () => { sessionsPage = 1; loadSessions(); });
+  }
+  if (btnResetSessionFilter) {
+    btnResetSessionFilter.addEventListener('click', () => {
+      sessionUserFilter.value = '';
+      sessionFromDate.value = todayDatetimeLocal(true);
+      sessionToDate.value   = todayDatetimeLocal(false);
+      sessionsPage = 1;
+      loadSessions();
+    });
+  }
+  if (btnSessionsFirst) btnSessionsFirst.addEventListener('click', () => { sessionsPage = 1; loadSessions(); });
+  if (btnSessionsPrev)  btnSessionsPrev.addEventListener('click',  () => { if (sessionsPage > 1) { sessionsPage--; loadSessions(); } });
+  if (btnSessionsNext)  btnSessionsNext.addEventListener('click',  () => { if (sessionsPage < sessionsTotalPages) { sessionsPage++; loadSessions(); } });
+  if (btnSessionsLast)  btnSessionsLast.addEventListener('click',  () => { sessionsPage = sessionsTotalPages; loadSessions(); });
+  if (btnExportSessionsExcel) btnExportSessionsExcel.addEventListener('click', () => exportSessions('excel'));
+  if (btnExportSessionsPdf)   btnExportSessionsPdf.addEventListener('click',   () => exportSessions('pdf'));
+
+  // إظهار زر سجل الجلسات للمدير فقط + navigator.sendBeacon عند إغلاق المتصفح
+  window.api.getMe && window.api.getMe().then(r => {
+    if (r && r.user) {
+      window._currentSessionId = r.user.session_id || null;
+      if (r.user.role === 'admin' && btnSessionsLog) {
+        btnSessionsLog.style.display = '';
+      }
+    }
+  }).catch(() => {});
+
+  // تمييز تحديث الصفحة (refresh) عن إغلاق التبويب الحقيقي:
+  // sessionStorage يعيش عبر Refresh لكن يُمسح عند إغلاق التبويب.
+  // → عند beforeunload: نضع علامة + نرسل beacon (لتغطية إغلاق التبويب)
+  // → عند إعادة التحميل: إذا وجدنا العلامة = refresh → نُعيد تفعيل الجلسة فوراً
+  const _SESSION_REFRESH_KEY = '_plus_session_refresh';
+
+  if (sessionStorage.getItem(_SESSION_REFRESH_KEY)) {
+    sessionStorage.removeItem(_SESSION_REFRESH_KEY);
+    window.api.reactivateSession && window.api.reactivateSession().catch(() => {});
+  }
+
+  window.addEventListener('beforeunload', () => {
+    sessionStorage.setItem(_SESSION_REFRESH_KEY, '1');
+    try { navigator.sendBeacon('/api/auth/logout-beacon'); } catch (_) {}
+  });
 });

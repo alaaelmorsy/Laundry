@@ -2116,6 +2116,28 @@ async function invoke(method, payload, reqUser) {
       }
     }
 
+    case 'getUserSessions': {
+      if (!reqUser || reqUser.role !== 'admin') return { success: false, message: 'غير مصرح' };
+      try {
+        const result = await db.getUserSessions(payload || {});
+        return { success: true, ...result };
+      } catch (err) {
+        return { success: false, message: err.message };
+      }
+    }
+
+    case 'reactivateSession': {
+      const sessionId = reqUser && reqUser.session_id;
+      if (sessionId) await db.reactivateUserSession(sessionId);
+      return { success: true };
+    }
+
+    case 'heartbeat': {
+      const sessionId = reqUser && reqUser.session_id;
+      if (sessionId) await db.heartbeatUserSession(sessionId);
+      return { success: true };
+    }
+
     default:
       return { success: false, message: `طريقة غير معروفة: ${m}` };
   }
