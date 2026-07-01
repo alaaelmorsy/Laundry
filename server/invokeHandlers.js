@@ -1543,6 +1543,16 @@ async function invoke(method, payload, reqUser) {
       }
     }
 
+    case 'getZatcaInvoiceStats': {
+      try {
+        const stats = await db.getZatcaInvoiceStats();
+        return { success: true, ...stats };
+      } catch (err) {
+        console.error('[getZatcaInvoiceStats]', err);
+        return { success: false, message: err.message || 'خطأ في الخادم' };
+      }
+    }
+
     case 'zatcaSubmitOrder': {
       try {
         const { orderId } = payload || {};

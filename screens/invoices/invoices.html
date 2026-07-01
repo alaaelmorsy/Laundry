@@ -53,6 +53,20 @@
             data-i18n-placeholder="invoices-search-placeholder"
             placeholder="بحث برقم الفاتورة أو اسم العميل أو الهاتف..." autocomplete="off" />
         </div>
+        <div id="zatcaStatsBar" class="zatca-stats-bar" style="display:none">
+          <div class="zatca-stat-card zatca-stat-sent">
+            <span class="zatca-stat-value" id="zatcaStatSent">0</span>
+            <span class="zatca-stat-label">تم الإرسال</span>
+          </div>
+          <div class="zatca-stat-card zatca-stat-pending">
+            <span class="zatca-stat-value" id="zatcaStatPending">0</span>
+            <span class="zatca-stat-label">قيد الانتظار</span>
+          </div>
+          <div class="zatca-stat-card zatca-stat-failed" id="zatcaStatFailedCard" role="button" tabindex="0">
+            <span class="zatca-stat-value" id="zatcaStatFailed">0</span>
+            <span class="zatca-stat-label">فشل الإرسال</span>
+          </div>
+        </div>
       </div>
 
       <!-- Table -->
@@ -487,6 +501,50 @@
       </div>
       <div style="padding:14px 16px;overflow:auto">
         <pre id="zatcaRespText" style="white-space:pre-wrap;word-break:break-word;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;color:#0f172a"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZATCA Failed Invoices Modal -->
+  <div id="zatcaFailedModal" class="modal-overlay zatca-failed-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="zatca-failed-box">
+      <div class="zatca-failed-header">
+        <div class="zatca-failed-title">
+          <span>الفواتير التي فشل إرسالها لهيئة الزكاة</span>
+          <span class="zatca-failed-count-badge" id="zatcaFailedCount">العدد: 0</span>
+        </div>
+        <button id="btnZatcaFailedClose" class="modal-close-btn" type="button">✕</button>
+      </div>
+      <div class="zatca-failed-body" id="zatcaFailedBody">
+        <div class="zatca-failed-loading" id="zatcaFailedLoading">
+          <div class="spinner"></div>
+          <span>جارٍ التحميل...</span>
+        </div>
+        <div class="zatca-failed-empty" id="zatcaFailedEmpty" style="display:none">
+          <span>لا توجد فواتير فاشلة الإرسال 🎉</span>
+        </div>
+        <table class="zatca-failed-table" id="zatcaFailedTable" style="display:none">
+          <thead>
+            <tr>
+              <th>رقم الفاتورة</th>
+              <th>جوال العميل</th>
+              <th>التاريخ والوقت</th>
+              <th>طريقة الدفع</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="zatcaFailedTbody"></tbody>
+        </table>
+      </div>
+      <div class="zatca-failed-footer">
+        <div class="zatca-failed-pagination" id="zatcaFailedPagination" style="display:none">
+          <button id="zfBtnFirst" class="page-btn" title="أول صفحة">«</button>
+          <button id="zfBtnPrev" class="page-btn" title="السابق">‹</button>
+          <span id="zfPageInfo" class="zatca-failed-page-info"></span>
+          <button id="zfBtnNext" class="page-btn" title="التالي">›</button>
+          <button id="zfBtnLast" class="page-btn" title="آخر صفحة">»</button>
+        </div>
+        <button id="btnZatcaFailedCloseFooter" class="btn-inv-action btn-inv-close" type="button">إغلاق</button>
       </div>
     </div>
   </div>

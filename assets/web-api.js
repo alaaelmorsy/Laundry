@@ -404,6 +404,7 @@
     zatcaSubmitCreditNote:       (data) => invoke('zatcaSubmitCreditNote', data),
     zatcaGetUnsentOrders:        () => invoke('zatcaGetUnsentOrders'),
     zatcaRetryUnsent:            () => invoke('zatcaRetryUnsent'),
+    getZatcaInvoiceStats:        () => invoke('getZatcaInvoiceStats'),
 
     getHangers: (filters) => invoke('getHangers', filters),
     getAvailableHangers: () => invoke('getAvailableHangers'),

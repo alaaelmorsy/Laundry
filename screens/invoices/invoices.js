@@ -446,6 +446,10 @@
       state.appSettings = settingsRes.settings;
     }
 
+    if (state.appSettings && state.appSettings.zatcaEnabled) {
+      loadZatcaStats();
+    }
+
     // ── فتح فاتورة تلقائياً إذا جاء من شاشة الاشتراكات ──
     const pendingViewId = localStorage.getItem('subscriptionViewOrderId');
     const isInIframe = window.self !== window.top;
@@ -499,9 +503,156 @@
     }
   }
 
+  async function loadZatcaStats() {
+    const bar = document.getElementById('zatcaStatsBar');
+    if (!bar) return;
+    try {
+      const res = await window.api.getZatcaInvoiceStats();
+      if (res && res.success) {
+        document.getElementById('zatcaStatSent').textContent = res.sent || 0;
+        document.getElementById('zatcaStatPending').textContent = res.pending || 0;
+        document.getElementById('zatcaStatFailed').textContent = res.failed || 0;
+        bar.style.display = '';
+      }
+    } catch (_) {}
+  }
+
   function showLoading(show) {
     const loadingRow = document.getElementById('loadingRow');
     if (loadingRow) loadingRow.style.display = show ? '' : 'none';
+  }
+
+  /* ========== ZATCA FAILED INVOICES MODAL ========== */
+  const zatcaFailedState = { page: 1, pageSize: 20, total: 0, totalPages: 1, orders: [] };
+
+  function openZatcaFailedModal() {
+    zatcaFailedState.page = 1;
+    document.getElementById('zatcaFailedModal').style.display = '';
+    loadZatcaFailedPage();
+  }
+
+  function closeZatcaFailedModal() {
+    document.getElementById('zatcaFailedModal').style.display = 'none';
+  }
+
+  async function loadZatcaFailedPage() {
+    const loadingEl = document.getElementById('zatcaFailedLoading');
+    const emptyEl = document.getElementById('zatcaFailedEmpty');
+    const tableEl = document.getElementById('zatcaFailedTable');
+    loadingEl.style.display = 'flex';
+    emptyEl.style.display = 'none';
+    tableEl.style.display = 'none';
+
+    try {
+      const res = await window.api.getOrders({
+        page: zatcaFailedState.page,
+        pageSize: zatcaFailedState.pageSize,
+        zatcaStatus: 'rejected',
+      });
+      loadingEl.style.display = 'none';
+
+      if (!res || !res.success) {
+        showToast('حدث خطأ أثناء تحميل الفواتير الفاشلة', 'error');
+        return;
+      }
+
+      zatcaFailedState.orders = res.orders || [];
+      zatcaFailedState.total = res.total || 0;
+      zatcaFailedState.totalPages = Math.ceil(zatcaFailedState.total / zatcaFailedState.pageSize) || 1;
+
+      document.getElementById('zatcaFailedCount').textContent = `العدد: ${zatcaFailedState.total}`;
+
+      if (zatcaFailedState.orders.length === 0) {
+        emptyEl.style.display = 'flex';
+        document.getElementById('zatcaFailedPagination').style.display = 'none';
+        return;
+      }
+
+      renderZatcaFailedTable();
+      renderZatcaFailedPagination();
+      tableEl.style.display = '';
+    } catch (err) {
+      loadingEl.style.display = 'none';
+      showToast('حدث خطأ أثناء تحميل الفواتير الفاشلة', 'error');
+    }
+  }
+
+  function renderZatcaFailedTable() {
+    const tbody = document.getElementById('zatcaFailedTbody');
+    tbody.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    zatcaFailedState.orders.forEach((order) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${order.invoice_seq || order.order_number || '—'}</td>
+        <td>${order.phone ? escHtml(order.phone) : '<span style="color:#94a3b8">—</span>'}</td>
+        <td style="direction:ltr;text-align:right">${escHtml(formatDate(order.created_at))}</td>
+        <td><span class="payment-badge ${paymentClass(order.payment_method)}">${escHtml(paymentLabel(order.payment_method))}</span></td>
+        <td>
+          <div class="zatca-failed-actions">
+            <button class="action-btn zf-btn-view" data-id="${order.id}">عرض الفاتورة</button>
+            <button class="action-btn zf-btn-send" data-id="${order.id}">📤 إرسال يدوي</button>
+            ${(order.zatca_response || order.zatca_rejection_reason) ? `<button class="action-btn zf-btn-resp" data-id="${order.id}">📄 الرد</button>` : ''}
+          </div>
+        </td>
+      `;
+
+      tr.querySelector('.zf-btn-view').addEventListener('click', () => openInvoice(order.id, order.invoice_seq));
+
+      const btnSend = tr.querySelector('.zf-btn-send');
+      btnSend.addEventListener('click', () => submitOrderFromFailedModal(order.id, btnSend));
+
+      const btnResp = tr.querySelector('.zf-btn-resp');
+      if (btnResp) {
+        btnResp.addEventListener('click', () => {
+          const txt = order.zatca_response
+            ? String(order.zatca_response)
+            : (order.zatca_rejection_reason ? String(order.zatca_rejection_reason) : '');
+          openZatcaRespModal(txt);
+        });
+      }
+
+      fragment.appendChild(tr);
+    });
+
+    tbody.appendChild(fragment);
+  }
+
+  function renderZatcaFailedPagination() {
+    const bar = document.getElementById('zatcaFailedPagination');
+    if (zatcaFailedState.totalPages <= 1) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    document.getElementById('zfPageInfo').textContent = `صفحة ${zatcaFailedState.page} من ${zatcaFailedState.totalPages}`;
+    document.getElementById('zfBtnFirst').disabled = zatcaFailedState.page === 1;
+    document.getElementById('zfBtnPrev').disabled = zatcaFailedState.page === 1;
+    document.getElementById('zfBtnNext').disabled = zatcaFailedState.page === zatcaFailedState.totalPages;
+    document.getElementById('zfBtnLast').disabled = zatcaFailedState.page === zatcaFailedState.totalPages;
+  }
+
+  async function submitOrderFromFailedModal(orderId, btnEl) {
+    if (btnEl) btnEl.disabled = true;
+    try {
+      const res = await window.api.zatcaSubmitOrder({ orderId });
+      if (res && res.success) {
+        showToast('تم إرسال الفاتورة بنجاح', 'success');
+      } else {
+        showToast(res?.message || 'فشل إرسال الفاتورة', 'error');
+      }
+      if (res && res.raw) {
+        openZatcaRespModal(String(res.raw));
+      }
+      await loadZatcaFailedPage();
+      await loadOrders();
+      loadZatcaStats();
+    } catch (e) {
+      showToast(e.message || 'فشل إرسال الفاتورة', 'error');
+    } finally {
+      if (btnEl) btnEl.disabled = false;
+    }
   }
 
   function getZatcaBadgeInfo(order) {
@@ -513,12 +664,9 @@
       return { label: 'تم الإرسال', cls: 'zatca-submitted' };
     }
     if (status === 'rejected') {
-      return { label: 'فشل', cls: 'zatca-rejected' };
+      return { label: 'فشل الإرسال', cls: 'zatca-rejected' };
     }
-    if (order.zatca_submitted) {
-      return { label: 'تمت المحاولة', cls: 'zatca-pending' };
-    }
-    return { label: 'لم يُرسل', cls: 'zatca-pending' };
+    return { label: 'قيد الانتظار', cls: 'zatca-pending' };
   }
 
   function openZatcaRespModal(text) {
@@ -547,6 +695,7 @@
         showToast(res?.message || 'فشل إرسال الفاتورة', 'error');
       }
       await loadOrders();
+      loadZatcaStats();
     } catch (e) {
       showToast(e.message || 'فشل إرسال الفاتورة', 'error');
     } finally {
@@ -1577,6 +1726,25 @@
     els.refundModal.addEventListener('click', (e) => {
       if (e.target === els.refundModal) closeRefundModal();
     });
+
+    /* ZATCA failed invoices modal */
+    const zatcaFailedCard = document.getElementById('zatcaStatFailedCard');
+    const zatcaFailedModal = document.getElementById('zatcaFailedModal');
+    if (zatcaFailedCard) {
+      zatcaFailedCard.addEventListener('click', () => openZatcaFailedModal());
+      zatcaFailedCard.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openZatcaFailedModal(); }
+      });
+    }
+    document.getElementById('btnZatcaFailedClose').addEventListener('click', closeZatcaFailedModal);
+    document.getElementById('btnZatcaFailedCloseFooter').addEventListener('click', closeZatcaFailedModal);
+    zatcaFailedModal.addEventListener('click', (e) => {
+      if (e.target === zatcaFailedModal) closeZatcaFailedModal();
+    });
+    document.getElementById('zfBtnFirst').addEventListener('click', () => { zatcaFailedState.page = 1; loadZatcaFailedPage(); });
+    document.getElementById('zfBtnPrev').addEventListener('click', () => { if (zatcaFailedState.page > 1) { zatcaFailedState.page--; loadZatcaFailedPage(); } });
+    document.getElementById('zfBtnNext').addEventListener('click', () => { if (zatcaFailedState.page < zatcaFailedState.totalPages) { zatcaFailedState.page++; loadZatcaFailedPage(); } });
+    document.getElementById('zfBtnLast').addEventListener('click', () => { zatcaFailedState.page = zatcaFailedState.totalPages; loadZatcaFailedPage(); });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && els.invoiceViewModal.style.display !== 'none') {

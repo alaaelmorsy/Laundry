@@ -5597,7 +5597,7 @@ async function getSubscriptionInvoices({ page = 1, pageSize = 50, search = '', d
   return { orders: rows, total, page, pageSize };
 }
 
-async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', dateTo = '' } = {}) {
+async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', dateTo = '', zatcaStatus = '' } = {}) {
   const offset = (page - 1) * pageSize;
   const like = `%${search}%`;
 
@@ -5612,6 +5612,25 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
   if (dateTo) {
     whereClauses += ' AND DATE(o.created_at) <= ?';
     params.push(dateTo);
+  }
+
+  if (zatcaStatus === 'rejected') {
+    whereClauses += ` AND o.zatca_status = 'rejected'`;
+  } else if (zatcaStatus === 'sent') {
+    whereClauses += ` AND COALESCE(o.zatca_status, '') <> 'rejected'
+      AND (o.zatca_status IN ('submitted', 'accepted') OR o.zatca_submitted IS NOT NULL)`;
+  } else if (zatcaStatus === 'not_sent') {
+    whereClauses += ` AND (o.zatca_status IS NULL OR o.zatca_status NOT IN ('rejected', 'submitted', 'accepted'))
+      AND o.zatca_submitted IS NULL`;
+  }
+
+  if (zatcaStatus) {
+    const [[cfg]] = await pool.query('SELECT send_start_date FROM zatca_settings WHERE id = 1');
+    const startDate = cfg && cfg.send_start_date ? toSqlDate(cfg.send_start_date) : null;
+    if (startDate) {
+      whereClauses += ' AND DATE(o.created_at) >= ?';
+      params.push(startDate);
+    }
   }
 
   const [rows] = await pool.query(`
@@ -7936,8 +7955,6 @@ async function getUnsentZatcaOrders(limit = 500) {
   const [rows] = await pool.query(
     `SELECT id FROM orders
      WHERE (zatca_status IS NULL OR zatca_status NOT IN ('submitted', 'accepted'))
-       AND zatca_submitted IS NULL
-       AND (zatca_response IS NULL OR zatca_response NOT LIKE '%NOT_REPORTED%')
        AND COALESCE(is_consumption_only, 0) = 0
        AND invoice_seq IS NOT NULL
        ${dateClause}
@@ -7946,6 +7963,38 @@ async function getUnsentZatcaOrders(limit = 500) {
     params
   );
   return rows.map(r => r.id);
+}
+
+async function getZatcaInvoiceStats() {
+  const [[cfg]] = await pool.query('SELECT send_start_date FROM zatca_settings WHERE id = 1');
+  const startDate = cfg && cfg.send_start_date ? toSqlDate(cfg.send_start_date) : null;
+
+  const params = [];
+  const dateClause = startDate ? `AND DATE(created_at) >= ?` : '';
+  if (startDate) params.push(startDate);
+
+  const [[row]] = await pool.query(
+    `SELECT
+       SUM(CASE WHEN zatca_status = 'rejected' THEN 1 ELSE 0 END) AS failed,
+       SUM(CASE WHEN COALESCE(zatca_status, '') <> 'rejected'
+                AND (zatca_status IN ('submitted', 'accepted') OR zatca_submitted IS NOT NULL)
+           THEN 1 ELSE 0 END) AS sent,
+       COUNT(*) AS total
+     FROM orders
+     WHERE COALESCE(is_consumption_only, 0) = 0
+       ${dateClause}`,
+    params
+  );
+
+  const sent = Number(row?.sent || 0);
+  const failed = Number(row?.failed || 0);
+  const total = Number(row?.total || 0);
+
+  return {
+    sent,
+    failed,
+    pending: Math.max(0, total - sent - failed),
+  };
 }
 
 async function fixSubscriptionLedgerNotesEncoding() {
@@ -9292,6 +9341,7 @@ module.exports = {
   getAppSettings, saveAppSettings, updateReportEmailLastResult,
   getZatcaSettings, saveZatcaSettings,
   updateOrderZatcaStatus, updateCreditNoteZatcaStatus, getUnsentZatcaOrders, getCreditNoteDate,
+  getZatcaInvoiceStats,
   getPosProducts, getPosServices, generateOrderNumber, createOrder, getOrders, getOrderById,
   createConsumptionReceipt, getConsumptionReceipts, getConsumptionReceiptById,
   searchConsumptionReceiptForRefund, refundConsumptionReceipt,
