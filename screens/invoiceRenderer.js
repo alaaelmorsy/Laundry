@@ -13,6 +13,7 @@
       try {
         var type = (settings && settings.invoicePaperType) || 'thermal';
         document.body.classList.toggle('invtype-a4', type === 'a4');
+        document.documentElement.classList.toggle('invtype-a4', type === 'a4');
       } catch (e) {}
     },
 

@@ -221,6 +221,68 @@
 
     pickProductImage: () =>
       new Promise((resolve) => {
+        // تصغير الصور الكبيرة في المتصفح قبل الإرسال — صور المنتجات تُعرض
+        // في مربعات صغيرة، فلا حاجة لتخزين صورة كاميرا بحجم عدة ميجابايت
+        const RESIZE_MAX_PX = 512;        // أكبر بُعد بعد التصغير
+        const RESIZE_MIN_BYTES = 150 * 1024; // لا نعالج الملفات الصغيرة أصلاً
+
+        function readOriginal(f) {
+          const fr = new FileReader();
+          fr.onload = () => {
+            const dataUrl = String(fr.result || '');
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            resolve({
+              success: true,
+              base64,
+              mime: f.type || 'application/octet-stream'
+            });
+          };
+          fr.onerror = () => resolve({ success: false, message: 'تعذر قراءة الملف' });
+          fr.readAsDataURL(f);
+        }
+
+        function tryDownscale(f) {
+          const objUrl = URL.createObjectURL(f);
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const w = img.naturalWidth;
+              const h = img.naturalHeight;
+              if (!w || !h || (w <= RESIZE_MAX_PX && h <= RESIZE_MAX_PX)) {
+                URL.revokeObjectURL(objUrl);
+                readOriginal(f);
+                return;
+              }
+              const scale = RESIZE_MAX_PX / Math.max(w, h);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(w * scale);
+              canvas.height = Math.round(h * scale);
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              // PNG يحافظ على الشفافية، وغيره JPEG مضغوط
+              const isPng = f.type === 'image/png';
+              const outMime = isPng ? 'image/png' : 'image/jpeg';
+              const dataUrl = canvas.toDataURL(outMime, isPng ? undefined : 0.85);
+              URL.revokeObjectURL(objUrl);
+              const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+              if (!base64) { readOriginal(f); return; }
+              // لو التصغير لم يُصغّر فعلاً (نادر) نرسل الأصل
+              if (base64.length * 0.75 >= f.size) { readOriginal(f); return; }
+              resolve({ success: true, base64, mime: outMime });
+            } catch (_) {
+              URL.revokeObjectURL(objUrl);
+              readOriginal(f);
+            }
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objUrl);
+            readOriginal(f);
+          };
+          img.src = objUrl;
+        }
+
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*,.svg';
@@ -234,18 +296,14 @@
             resolve({ success: false, message: 'حجم الملف كبير جداً (الحد 15 ميجابايت)' });
             return;
           }
-          const fr = new FileReader();
-          fr.onload = () => {
-            const dataUrl = String(fr.result || '');
-            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-            resolve({
-              success: true,
-              base64,
-              mime: f.type || 'application/octet-stream'
-            });
-          };
-          fr.onerror = () => resolve({ success: false, message: 'تعذر قراءة الملف' });
-          fr.readAsDataURL(f);
+          const type = String(f.type || '');
+          const isRaster = /^image\/(jpeg|png|webp|bmp)$/i.test(type);
+          // SVG/GIF وغيرها تُرسل كما هي (GIF متحرك يفقد حركته بالتصغير)
+          if (!isRaster || f.size < RESIZE_MIN_BYTES) {
+            readOriginal(f);
+            return;
+          }
+          tryDownscale(f);
         };
         input.click();
       }),

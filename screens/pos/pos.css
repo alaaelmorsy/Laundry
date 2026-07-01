@@ -1455,6 +1455,34 @@ html, body {
   border-inline-color: #22c55e;
 }
 
+/* حقل تعديل سعر الوحدة يدوياً — يظهر فقط عند تفعيل الإعداد */
+.ci-price-edit {
+  width: 62px;
+  height: 34px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Cairo', sans-serif;
+  color: #1e293b;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  outline: none;
+  flex-shrink: 0;
+  cursor: text;
+}
+
+.ci-price-edit:focus {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.ci-price-edit.manual {
+  color: #b45309;
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
 .ci-line-total {
   font-size: 13px;
   font-weight: 700;
@@ -2980,20 +3008,21 @@ html, body {
 .cr-info-cell {
   display: flex;
   flex-direction: column;
-  padding: 1px 4px;
+  padding: 3px 5px;
+  gap: 1px;
   border: 1px solid #000;
 }
 .cr-info-cell--full {
   grid-column: 1 / -1;
 }
 .cr-info-label {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   color: #000;
   line-height: 1.2;
 }
 .cr-info-val {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
   color: #000;
   line-height: 1.2;
@@ -3386,10 +3415,12 @@ html, body {
 /* Print media — show only the paper, hide dialog chrome */
 @page { size: 80mm auto; margin: 0; }
 @media print {
+  * { font-family: 'Tahoma', sans-serif !important; }
+  .sar { font-family: 'SaudiRiyal', 'Tahoma', sans-serif !important; }
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; width: 80mm !important; margin: 0 !important; padding: 0 !important; }
-  body.invtype-a4 { width: 210mm !important; }
+  html.invtype-a4, body.invtype-a4 { width: 210mm !important; }
 
   /* --- طباعة الفاتورة العادية --- */
   body:not(.print-consumption-receipt):not(.printing) > *:not(#invoiceModal) { display: none !important; }
@@ -3404,6 +3435,7 @@ html, body {
     width: 80mm !important;
     margin: 0 !important;
   }
+  body.invtype-a4 #invoiceModal { width: 210mm !important; max-width: none !important; }
 
   /* --- طباعة إيصال الاستهلاك (عبر print zone للتوافق مع الجوال) --- */
   body.print-consumption-receipt > *:not(#consumptionPrintZone) { display: none !important; }
@@ -3425,6 +3457,7 @@ html, body {
     border-radius: 0 !important;
     overflow: visible !important;
     width: 100% !important;
+    max-width: none !important;
     height: auto !important;
   }
   .inv-dialog-body {

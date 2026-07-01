@@ -94,7 +94,7 @@ window.addEventListener('DOMContentLoaded', () => {
     function a4mText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || ''; }
     function a4mHtml(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val || ''; }
     function a4mShow(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; }
-    const sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    const sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     const sarFmt = n => sarSpan + Number(n || 0).toFixed(2);
 
     a4mText('a4mShopNameAr',    data.shopNameAr);

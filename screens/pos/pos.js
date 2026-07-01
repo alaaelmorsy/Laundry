@@ -443,29 +443,10 @@
 
   function getCartThumbHtml(item, product) {
     const hasImage = product && Number(product.has_image) === 1;
-    const cached = imageCache.get(item.productId);
-    if (hasImage && cached) {
-      return `<img src="${cached}" alt="${escHtml(item.productNameAr || item.productNameEn || '')}" draggable="false" />`;
+    if (hasImage) {
+      return `<img src="${productImageUrl(product)}" alt="${escHtml(item.productNameAr || item.productNameEn || '')}" draggable="false" loading="lazy" decoding="async" />`;
     }
     return cartThumbPlaceholderHtml();
-  }
-
-  async function ensureCartThumbImage(item, thumbEl) {
-    if (!item || !thumbEl || imageCache.has(item.productId)) return;
-    const product = state.products.find((p) => p.id === item.productId);
-    if (!product || Number(product.has_image) !== 1) return;
-    try {
-      const res = await window.api.getPosProductImages([item.productId]);
-      const images = (res && res.success && res.images) ? res.images : {};
-      const dataUrl = images[item.productId] || null;
-      imageCache.set(item.productId, dataUrl);
-      if (dataUrl) {
-        persistCacheDebounced();
-        thumbEl.innerHTML = `<img src="${dataUrl}" alt="${escHtml(item.productNameAr || item.productNameEn || '')}" draggable="false" />`;
-      }
-    } catch (_) {
-      imageCache.set(item.productId, null);
-    }
   }
 
   function syncDiscountTypeUi() {
@@ -520,6 +501,9 @@
     }
     I18N.apply();
 
+    // تحميل الأصناف والخدمات بالتوازي مع الإعدادات (لا تنتظر بعضها)
+    const dataPromise = Promise.all([loadServices(), loadProducts(), loadHangers()]);
+
     const [settingsRes, offersRes, loyaltyRes, productOffersRes] = await Promise.all([
       window.api.getAppSettings(),
       window.api.getActiveOffers(),
@@ -555,7 +539,9 @@
     }
 
     updateVatLabel();
-    await Promise.all([loadServices(), loadProducts(), loadHangers()]);
+    await dataPromise;
+    // إعادة رسم أخيرة لضمان تطبيق وضع عرض الأسعار من الإعدادات
+    renderProducts();
 
     if (window.__currentUser) {
       applyPosPermissions();
@@ -640,9 +626,40 @@
     state.services = res.services || [];
   }
 
-  async function loadProducts() {
-    showProductsLoading(true);
+  // كاش محلي لقائمة الأصناف: عرض فوري ثم تحديث صامت من السيرفر (Stale-While-Revalidate)
+  const PRODUCTS_CACHE_KEY = 'pos_products_cache_v1';
 
+  function readProductsCache() {
+    try {
+      const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (!raw) return null;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.length ? arr : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeProductsCache(products) {
+    try {
+      localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(products));
+    } catch (_) {
+      try { localStorage.removeItem(PRODUCTS_CACHE_KEY); } catch (__) {}
+    }
+  }
+
+  async function loadProducts() {
+    // 1) عرض فوري من الكاش المحلي إن وُجد
+    const cached = readProductsCache();
+    if (cached) {
+      state.products = cached;
+      showProductsLoading(false);
+      renderProducts();
+    } else {
+      showProductsLoading(true);
+    }
+
+    // 2) جلب القائمة الحديثة من السيرفر وتحديث العرض
     try {
       const res = await window.api.getProductsForPosNoImages();
 
@@ -652,60 +669,26 @@
       } else {
         state.products = res.products || [];
       }
+      writeProductsCache(state.products);
 
     } catch (e) {
       try {
         const fallback = await window.api.getPosProducts();
         state.products = (fallback && fallback.products) ? fallback.products : [];
+        writeProductsCache(state.products);
       } catch (_) {
-        state.products = [];
+        if (!cached) state.products = [];
       }
     }
 
     showProductsLoading(false);
     renderProducts();
 
-    _loadImagesBackground(state.products.slice());
-
     // تحميل أنواع المزرام
     try {
       const mzRes = await window.api.getMerzamTypes();
       if (mzRes && mzRes.success) state.merzamTypes = mzRes.types || [];
     } catch (_) {}
-  }
-
-  async function _loadImagesBackground(products) {
-    if (!products || !products.length) return;
-
-    const BATCH = 4;
-
-    for (let i = 0; i < products.length; i += BATCH) {
-      const batch = products.slice(i, i + BATCH);
-
-      await Promise.all(batch.map(async (product) => {
-        try {
-          const imgRes = await window.api.getProductImageById(product.id);
-
-          if (imgRes && imgRes.success && imgRes.imageDataUrl) {
-            const idx = state.products.findIndex(p => p.id === product.id);
-            if (idx !== -1) {
-              state.products[idx].imageDataUrl = imgRes.imageDataUrl;
-            }
-
-            const wrap = document.querySelector(`.product-img-wrap-lazy[data-product-id="${product.id}"]`);
-            if (wrap && imgRes.imageDataUrl) {
-              wrap.innerHTML = `<img data-product-id="${product.id}" src="${imgRes.imageDataUrl}" alt="${escHtml(product.name_ar || product.name_en || '')}" loading="lazy" decoding="async" style="opacity:1" />`;
-            }
-          }
-        } catch (_err) {
-          // ignore individual image errors
-        }
-      }));
-
-      if (i + BATCH < products.length) {
-        await new Promise(r => setTimeout(r, 50));
-      }
-    }
   }
 
   function showProductsLoading(show) {
@@ -815,12 +798,10 @@
 
     let imgHtml;
     if (hasImage) {
-      // استخدام Lazy Loading للصور
+      // صورة عبر HTTP مع كاش المتصفح + Lazy Loading أصلي من المتصفح
       imgHtml = `
         <div class="product-img-wrap-lazy" data-product-id="${product.id}">
-          <div class="product-img-placeholder loading">
-            <div class="img-spinner"></div>
-          </div>
+          <img data-product-id="${product.id}" src="${productImageUrl(product)}" alt="${escHtml(nameAr)}" loading="lazy" decoding="async" draggable="false" />
         </div>
       `;
     } else {
@@ -858,59 +839,29 @@
       card.addEventListener('click', () => onProductClick(product));
     }
 
-    // تفعيل Lazy Loading للصورة
+    // عند فشل تحميل الصورة نعرض الأيقونة الافتراضية بدلاً منها
     if (hasImage) {
-      setupLazyLoadImage(card, product.id, nameAr);
+      const img = card.querySelector('.product-img-wrap-lazy img');
+      if (img) {
+        img.addEventListener('error', () => {
+          const wrap = img.parentElement;
+          if (wrap) wrap.innerHTML = PLACEHOLDER_SVG;
+        }, { once: true });
+      }
     }
 
     return card;
   }
 
-  /* ========== LAZY LOAD IMAGE (batched + persistent cache) ========== */
-  const imageCache = new Map(); // productId -> dataUrl|null
-  const pendingWraps = new Map(); // productId -> [wrapEl, ...]
-  let batchQueue = new Set();
-  let batchTimer = null;
-  const BATCH_SIZE = 24;
-  const BATCH_DELAY_MS = 20;
-  const SESSION_CACHE_KEY = 'pos_img_cache_v1';
-
-  // hydrate from sessionStorage once — only positive (non-null) entries,
-  // so that products still get re-fetched if a previous session cached null by mistake.
-  (function hydrateCache() {
-    try {
-      const raw = sessionStorage.getItem(SESSION_CACHE_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      if (obj && typeof obj === 'object') {
-        Object.keys(obj).forEach((k) => {
-          const id = parseInt(k, 10);
-          const val = obj[k];
-          if (id && typeof val === 'string' && val.startsWith('data:')) {
-            imageCache.set(id, val);
-          }
-        });
-      }
-    } catch (_) {}
-  })();
-
-  function persistCacheDebounced() {
-    if (persistCacheDebounced._t) return;
-    persistCacheDebounced._t = setTimeout(() => {
-      persistCacheDebounced._t = null;
-      try {
-        const obj = {};
-        imageCache.forEach((v, k) => {
-          // only persist positive results (actual data URLs)
-          if (typeof v === 'string' && v.startsWith('data:')) obj[k] = v;
-        });
-        sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(obj));
-      } catch (_) {
-        // Quota exceeded: drop cache
-        try { sessionStorage.removeItem(SESSION_CACHE_KEY); } catch (__) {}
-      }
-    }, 600);
+  /* ========== PRODUCT IMAGES (HTTP + browser disk cache) ========== */
+  // الرابط يتضمن نسخة الصورة، فيُخزَّن على قرص المتصفح للأبد
+  // وأي تعديل للصورة يغيّر الرابط فيُحمَّل الجديد فوراً
+  function productImageUrl(product) {
+    return `/api/product-image/${product.id}?v=${product.image_version || 1}`;
   }
+
+  // تنظيف كاش الصور القديم (نظام data URLs السابق)
+  try { sessionStorage.removeItem('pos_img_cache_v1'); } catch (_) {}
 
   const PLACEHOLDER_SVG = `
     <div class="product-img-placeholder">
@@ -921,117 +872,6 @@
       </svg>
     </div>
   `;
-
-  const imageObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        const wrap = entry.target;
-        const productId = parseInt(wrap.dataset.productId, 10);
-        if (productId) {
-          imageObserver.unobserve(wrap);
-          enqueueImage(productId, wrap);
-        }
-      }
-    });
-  }, {
-    rootMargin: '300px 0px',
-    threshold: 0.01
-  });
-
-  function setupLazyLoadImage(card, productId, altText) {
-    const wrap = card.querySelector('.product-img-wrap-lazy');
-    if (!wrap) return;
-    wrap.dataset.alt = altText || '';
-
-    // إذا كانت الصورة محملة مسبقاً في الكاش
-    if (imageCache.has(productId)) {
-      applyImageToWrap(wrap, productId, imageCache.get(productId));
-      return;
-    }
-
-    // مراقبة العنصر لتحميل الصورة عند ظهوره
-    imageObserver.observe(wrap);
-  }
-
-  function applyImageToWrap(wrap, productId, dataUrl) {
-    if (dataUrl) {
-      const altText = wrap.dataset.alt || '';
-      wrap.innerHTML = `<img data-product-id="${productId}" src="${dataUrl}" alt="${escHtml(altText)}" loading="lazy" decoding="async" />`;
-    } else {
-      wrap.innerHTML = PLACEHOLDER_SVG;
-    }
-  }
-
-  function enqueueImage(productId, wrap) {
-    if (imageCache.has(productId)) {
-      applyImageToWrap(wrap, productId, imageCache.get(productId));
-      return;
-    }
-    if (!pendingWraps.has(productId)) pendingWraps.set(productId, []);
-    pendingWraps.get(productId).push(wrap);
-    batchQueue.add(productId);
-
-    if (batchQueue.size >= BATCH_SIZE) {
-      flushBatch();
-    } else if (!batchTimer) {
-      batchTimer = setTimeout(flushBatch, BATCH_DELAY_MS);
-    }
-  }
-
-  async function flushBatch() {
-    if (batchTimer) { clearTimeout(batchTimer); batchTimer = null; }
-    if (!batchQueue.size) return;
-    const ids = Array.from(batchQueue);
-    batchQueue = new Set();
-
-    try {
-      const res = await window.api.getPosProductImages(ids);
-      const images = (res && res.success && res.images) ? res.images : {};
-      ids.forEach((id) => {
-        const url = (id in images) ? images[id] : null;
-        imageCache.set(id, url);
-        const wraps = pendingWraps.get(id) || [];
-        wraps.forEach((w) => applyImageToWrap(w, id, url));
-        pendingWraps.delete(id);
-      });
-      persistCacheDebounced();
-    } catch (_) {
-      ids.forEach((id) => {
-        imageCache.set(id, null);
-        const wraps = pendingWraps.get(id) || [];
-        wraps.forEach((w) => applyImageToWrap(w, id, null));
-        pendingWraps.delete(id);
-      });
-    }
-  }
-
-  // Idle-time background prefetch of remaining product images
-  function schedulePrefetch() {
-    const ric = window.requestIdleCallback || function (cb) { return setTimeout(() => cb({ timeRemaining: () => 10 }), 200); };
-    ric(() => {
-      const remaining = [];
-      for (const p of state.products) {
-        if (Number(p.has_image) === 1 && !imageCache.has(p.id)) {
-          remaining.push(p.id);
-          if (remaining.length >= 48) break;
-        }
-      }
-      if (!remaining.length) return;
-      window.api.getPosProductImages(remaining).then((res) => {
-        const images = (res && res.success && res.images) ? res.images : {};
-        remaining.forEach((id) => {
-          const url = (id in images) ? images[id] : null;
-          imageCache.set(id, url);
-          // update any DOM wraps still waiting
-          const wraps = document.querySelectorAll(`.product-img-wrap-lazy[data-product-id="${id}"]`);
-          wraps.forEach((w) => { if (!w.querySelector('img')) applyImageToWrap(w, id, url); });
-        });
-        persistCacheDebounced();
-        // continue prefetching next chunk if any
-        if (remaining.length === 48) schedulePrefetch();
-      }).catch(() => {});
-    }, { timeout: 2000 });
-  }
 
   /* ========== PRODUCT CLICK → CART ========== */
   function onProductClick(product) {
@@ -1111,6 +951,23 @@
     updateMobileCartBadge();
   }
 
+  /* تعديل سعر الوحدة يدوياً (يتطلب تفعيل الإعداد allowManualPrice) */
+  function setManualPrice(key, price) {
+    const item = state.cart.find((i) => i.key === key);
+    if (!item) return;
+    const v = Math.round(Number(price) * 100) / 100;
+    if (!Number.isFinite(v) || v < 0) return;
+    if (v === item.generalPrice && item.customPrice == null) {
+      item.priceSource = 'general';
+    } else {
+      item.priceSource = 'manual';
+    }
+    item.unitPrice = v;
+    item.lineTotal = item.qty * v;
+    renderCart();
+    updateMobileCartBadge();
+  }
+
   function clearCart() {
     state.cart = [];
     state.discount = 0;
@@ -1140,6 +997,7 @@
 
     if (!isEmpty) {
       const lang = getLang();
+      const allowManualPrice = !!(state.appSettings && state.appSettings.allowManualPrice);
       const fragment = document.createDocumentFragment();
       state.cart.forEach((item) => {
         const product = state.products.find((p) => p.id === item.productId);
@@ -1210,6 +1068,7 @@
                 <input class="qty-display" type="text" inputmode="numeric" pattern="[0-9]*" value="${item.qty}" lang="en" dir="ltr" autocomplete="off" />
                 <button class="qty-btn minus" data-key="${escHtml(item.key)}" type="button">−</button>
               </div>
+              ${allowManualPrice ? `<input class="ci-price-edit${item.priceSource === 'manual' ? ' manual' : ''}" type="text" inputmode="decimal" value="${Number(item.unitPrice).toFixed(2)}" lang="en" dir="ltr" autocomplete="off" title="سعر الوحدة" />` : ''}
               <span class="ci-line-total">${plainMoneyHtml(fmtLtr(item.lineTotal))}</span>
               <button class="ci-remove" data-key="${escHtml(item.key)}" type="button">${t('pos-remove-item')}</button>
             </div>
@@ -1232,6 +1091,20 @@
             if (!/[0-9]|Backspace|Delete|ArrowLeft|ArrowRight|Tab/.test(e.key)) e.preventDefault();
           });
 
+          const priceInput = row.querySelector('.ci-price-edit');
+          if (priceInput) {
+            priceInput.addEventListener('focus', () => priceInput.select());
+            priceInput.addEventListener('blur', () => {
+              const raw = priceInput.value.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[،,]/g, '.');
+              const v = parseFloat(raw);
+              if (!isNaN(v) && v >= 0) setManualPrice(item.key, v);
+              else priceInput.value = Number(item.unitPrice).toFixed(2);
+            });
+            priceInput.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') priceInput.blur();
+            });
+          }
+
           const sel = row.querySelector('.cart-item-service-select');
           if (sel) {
             sel.addEventListener('change', () => changeItemService(item.key, parseInt(sel.value, 10)));
@@ -1249,8 +1122,6 @@
             });
           }
         }
-        ensureCartThumbImage(item, row.querySelector('.ci-thumb'));
-
         fragment.appendChild(row);
       });
       els.cartItemsList.appendChild(fragment);
@@ -2429,6 +2300,7 @@
   function applyInvoiceTypeClass() {
     var type = getEffectiveInvoicePaperType();
     document.body.classList.toggle('invtype-a4', type === 'a4');
+    document.documentElement.classList.toggle('invtype-a4', type === 'a4');
   }
 
   function getEffectiveInvoicePaperType() {
@@ -2449,7 +2321,7 @@
       var el = document.getElementById(id);
       if (el) el.style.display = show ? '' : 'none';
     }
-    var sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    var sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     function sarFmt(n) { return sarSpan + Number(n || 0).toFixed(2); }
 
     a4mText('a4mShopNameAr',    data.shopNameAr);
@@ -4028,6 +3900,7 @@
   function closeInvoiceModal() {
     els.invoiceModal.style.display = 'none';
     document.body.classList.remove('invtype-a4');
+    document.documentElement.classList.remove('invtype-a4');
 
     if (state._creditNoteModalMode) {
       state._creditNoteModalMode = false;

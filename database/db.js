@@ -167,6 +167,13 @@ async function initialize() {
   await migrateCreateWorkOrderItems();
   await migrateWorkOrderItemsMerzam();
   await createUserSessionsMigration();
+  await migrateProductsImageVersion();
+}
+
+async function migrateProductsImageVersion() {
+  try {
+    await pool.query('ALTER TABLE products ADD COLUMN image_version BIGINT NOT NULL DEFAULT 1');
+  } catch (_) {}
 }
 
 async function createUserSessionsMigration() {
@@ -2589,15 +2596,17 @@ async function saveProduct(data) {
 
     if (productId) {
       if (touchImage) {
+        // بصمة نسخة الصورة (لكسر كاش المتصفح عند تغيير الصورة)
+        const imageVersion = Date.now();
         if (clearImage === true) {
           await conn.query(
-            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=NULL, image_mime=NULL WHERE id=?',
-            [nameAr, nameEnVal, active, merzam, productId]
+            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=NULL, image_mime=NULL, image_version=? WHERE id=?',
+            [nameAr, nameEnVal, active, merzam, imageVersion, productId]
           );
         } else {
           await conn.query(
-            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=?, image_mime=? WHERE id=?',
-            [nameAr, nameEnVal, active, merzam, imageGzipBuffer, imageMime || 'application/octet-stream', productId]
+            'UPDATE products SET name_ar=?, name_en=?, is_active=?, merzam_enabled=?, image_blob=?, image_mime=?, image_version=? WHERE id=?',
+            [nameAr, nameEnVal, active, merzam, imageGzipBuffer, imageMime || 'application/octet-stream', imageVersion, productId]
           );
         }
       } else {
@@ -3872,6 +3881,7 @@ async function migrateAppSettings() {
       require_hanger TINYINT(1) NOT NULL DEFAULT 0,
       require_customer_phone TINYINT(1) NOT NULL DEFAULT 0,
       allow_subscription_debt TINYINT(1) NOT NULL DEFAULT 0,
+      allow_manual_price TINYINT(1) NOT NULL DEFAULT 0,
       barcode_auto_action VARCHAR(50) DEFAULT NULL,
       show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 1,
       report_email_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -3917,6 +3927,9 @@ async function migrateAppSettings() {
   ).catch(() => {});
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN barcode_auto_action VARCHAR(50) DEFAULT NULL AFTER allow_subscription_debt"
+  ).catch(() => {});
+  await pool.query(
+    "ALTER TABLE app_settings ADD COLUMN allow_manual_price TINYINT(1) NOT NULL DEFAULT 0 AFTER allow_subscription_debt"
   ).catch(() => {});
   await pool.query(
     "ALTER TABLE app_settings ADD COLUMN show_barcode_in_invoice TINYINT(1) NOT NULL DEFAULT 1 AFTER barcode_auto_action"
@@ -4025,7 +4038,7 @@ async function getAppSettings() {
             building_number, street_name_ar, district_ar, city_ar, postal_code, additional_number,
             price_display_mode, invoice_paper_type, logo_width, logo_height, print_copies,
             enabled_payment_methods, default_payment_method, require_hanger, require_customer_phone, allow_subscription_debt,
-            barcode_auto_action, show_barcode_in_invoice,
+            allow_manual_price, barcode_auto_action, show_barcode_in_invoice,
             report_email_enabled, report_email_to, report_email_from, report_email_app_password_enc, report_email_send_time,
             report_email_last_status, report_email_last_error, report_email_last_sent_at,
             zatca_enabled,
@@ -4099,6 +4112,7 @@ async function getAppSettings() {
     requireHanger: row.require_hanger === 1,
     requireCustomerPhone: row.require_customer_phone === 1,
     allowSubscriptionDebt: row.allow_subscription_debt === 1,
+    allowManualPrice: row.allow_manual_price === 1,
     barcodeAutoAction: row.barcode_auto_action || 'none',
     showBarcodeInInvoice: row.show_barcode_in_invoice === 1,
     reportEmailEnabled: row.report_email_enabled === 1,
@@ -4215,6 +4229,7 @@ async function saveAppSettings(data) {
   const requireHanger        = data.requireHanger        !== undefined ? (data.requireHanger === true ? 1 : 0)        : (existing.require_hanger || 0);
   const requireCustomerPhone = data.requireCustomerPhone !== undefined ? (data.requireCustomerPhone === true ? 1 : 0) : (existing.require_customer_phone || 0);
   const allowSubscriptionDebt= data.allowSubscriptionDebt!== undefined ? (data.allowSubscriptionDebt === true ? 1 : 0): (existing.allow_subscription_debt || 0);
+  const allowManualPrice     = data.allowManualPrice     !== undefined ? (data.allowManualPrice === true ? 1 : 0)     : (existing.allow_manual_price || 0);
 
   const barcodeAutoAction = (() => {
     const raw = data.barcodeAutoAction !== undefined ? data.barcodeAutoAction : (existing.barcode_auto_action || 'none');
@@ -4294,7 +4309,7 @@ async function saveAppSettings(data) {
         custom_fields_json = CAST(? AS JSON), vat_rate = ?, vat_number = ?, commercial_register = ?,
         building_number = ?, street_name_ar = ?, district_ar = ?, city_ar = ?, postal_code = ?, additional_number = ?,
         price_display_mode = ?, invoice_paper_type = ?, logo_width = ?, logo_height = ?, print_copies = ?, thermal_margin_left = ?, thermal_margin_right = ?,
-        enabled_payment_methods = CAST(? AS JSON), default_payment_method = ?, require_hanger = ?, require_customer_phone = ?, allow_subscription_debt = ?,
+        enabled_payment_methods = CAST(? AS JSON), default_payment_method = ?, require_hanger = ?, require_customer_phone = ?, allow_subscription_debt = ?, allow_manual_price = ?,
         barcode_auto_action = ?, show_barcode_in_invoice = ?, show_email_in_invoice = ?,
         report_email_enabled = ?, report_email_from = ?, report_email_app_password_enc = ?, report_email_send_time = ?,
         zatca_enabled = ?,
@@ -4333,6 +4348,7 @@ async function saveAppSettings(data) {
         requireHanger,
         requireCustomerPhone,
         allowSubscriptionDebt,
+        allowManualPrice,
         barcodeAutoAction,
         showBarcodeInInvoice,
         showEmailInInvoice,
@@ -4488,7 +4504,7 @@ async function generateOrderNumber() {
 
 async function getPosProducts() {
   const [products] = await pool.query(`
-    SELECT p.id, p.name_ar, p.name_en, p.sort_order, p.image_mime,
+    SELECT p.id, p.name_ar, p.name_en, p.sort_order, p.image_mime, p.image_version,
            (p.image_blob IS NOT NULL AND LENGTH(p.image_blob) > 0) AS has_image,
            p.merzam_enabled
     FROM products p
@@ -5617,11 +5633,9 @@ async function getOrders({ page = 1, pageSize = 50, search = '', dateFrom = '', 
   if (zatcaStatus === 'rejected') {
     whereClauses += ` AND o.zatca_status = 'rejected'`;
   } else if (zatcaStatus === 'sent') {
-    whereClauses += ` AND COALESCE(o.zatca_status, '') <> 'rejected'
-      AND (o.zatca_status IN ('submitted', 'accepted') OR o.zatca_submitted IS NOT NULL)`;
+    whereClauses += ` AND o.zatca_status IN ('submitted', 'accepted')`;
   } else if (zatcaStatus === 'not_sent') {
-    whereClauses += ` AND (o.zatca_status IS NULL OR o.zatca_status NOT IN ('rejected', 'submitted', 'accepted'))
-      AND o.zatca_submitted IS NULL`;
+    whereClauses += ` AND (o.zatca_status IS NULL OR o.zatca_status NOT IN ('rejected', 'submitted', 'accepted'))`;
   }
 
   if (zatcaStatus) {
@@ -7976,9 +7990,7 @@ async function getZatcaInvoiceStats() {
   const [[row]] = await pool.query(
     `SELECT
        SUM(CASE WHEN zatca_status = 'rejected' THEN 1 ELSE 0 END) AS failed,
-       SUM(CASE WHEN COALESCE(zatca_status, '') <> 'rejected'
-                AND (zatca_status IN ('submitted', 'accepted') OR zatca_submitted IS NOT NULL)
-           THEN 1 ELSE 0 END) AS sent,
+       SUM(CASE WHEN zatca_status IN ('submitted', 'accepted') THEN 1 ELSE 0 END) AS sent,
        COUNT(*) AS total
      FROM orders
      WHERE COALESCE(is_consumption_only, 0) = 0

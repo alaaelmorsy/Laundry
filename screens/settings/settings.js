@@ -112,6 +112,7 @@ window.addEventListener('DOMContentLoaded', () => {
     requireHanger: document.getElementById('requireHanger'),
     requireCustomerPhone: document.getElementById('requireCustomerPhone'),
     allowSubscriptionDebt: document.getElementById('allowSubscriptionDebt'),
+    allowManualPrice: document.getElementById('allowManualPrice'),
     barcodeAutoAction: document.getElementById('barcodeAutoAction'),
     barcodeAutoPay: document.getElementById('barcodeAutoPay'),
     barcodeAutoClean: document.getElementById('barcodeAutoClean'),
@@ -280,6 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (fields.requireHanger) fields.requireHanger.checked = s.requireHanger === true;
     if (fields.requireCustomerPhone) fields.requireCustomerPhone.checked = s.requireCustomerPhone === true;
     if (fields.allowSubscriptionDebt) fields.allowSubscriptionDebt.checked = s.allowSubscriptionDebt === true;
+    if (fields.allowManualPrice) fields.allowManualPrice.checked = s.allowManualPrice === true;
     if (fields.showBarcodeInInvoice) fields.showBarcodeInInvoice.checked = s.showBarcodeInInvoice !== false;
     if (fields.showEmailInInvoice) fields.showEmailInInvoice.checked = s.showEmailInInvoice !== false;
     if (fields.zatcaEnabled) fields.zatcaEnabled.checked = s.zatcaEnabled === true;
@@ -412,6 +414,7 @@ window.addEventListener('DOMContentLoaded', () => {
       requireHanger: fields.requireHanger ? fields.requireHanger.checked : false,
       requireCustomerPhone: fields.requireCustomerPhone ? fields.requireCustomerPhone.checked : false,
       allowSubscriptionDebt: fields.allowSubscriptionDebt ? fields.allowSubscriptionDebt.checked : false,
+      allowManualPrice: fields.allowManualPrice ? fields.allowManualPrice.checked : false,
       showBarcodeInInvoice: fields.showBarcodeInInvoice ? fields.showBarcodeInInvoice.checked : true,
       showEmailInInvoice: fields.showEmailInInvoice ? fields.showEmailInInvoice.checked : true,
       barcodeAutoAction: (() => {

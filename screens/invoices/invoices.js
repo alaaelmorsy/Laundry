@@ -189,6 +189,7 @@
   function applyInvoiceTypeClass() {
     const type = getEffectivePaperType();
     document.body.classList.toggle('invtype-a4', type === 'a4');
+    document.documentElement.classList.toggle('invtype-a4', type === 'a4');
   }
 
   function getEffectivePaperType() {
@@ -200,7 +201,7 @@
     function a4mText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || ''; }
     function a4mHtml(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val || ''; }
     function a4mShow(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; }
-    const sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    const sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     const sarFmt = n => sarSpan + Number(n || 0).toFixed(2);
 
     /* Title row — hide when no VAT */
@@ -679,6 +680,31 @@
     const close = () => { modal.style.display = 'none'; };
     btnClose.onclick = close;
     modal.onclick = (e) => { if (e.target === modal) close(); };
+    const btnCopy = document.getElementById('btnZatcaRespCopy');
+    if (btnCopy) {
+      btnCopy.onclick = () => copyZatcaRespText(pre.textContent || '');
+    }
+  }
+
+  async function copyZatcaRespText(text) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      showToast('تم نسخ الرد', 'success');
+    } catch (_) {
+      showToast('تعذر نسخ الرد', 'error');
+    }
   }
 
   async function submitOrderToZatca(orderId, btnEl) {
@@ -960,6 +986,7 @@
       };
       state.viewingIsConsolidated = true;
       document.body.classList.add('invtype-a4');
+      document.documentElement.classList.add('invtype-a4');
       fillA4InvoiceModal(a4Data);
       state.lastA4Data = a4Data;
       els.invoiceViewModal.style.display = 'flex';
@@ -1595,13 +1622,14 @@
       ? 'body{margin:0;padding:0;background:#fff}'
       : 'body{margin:0;padding:0;background:#fff;width:80mm}';
     const shiftCss = (shift !== 0 && paperType !== 'a4') ? `@media print{.inv-paper{transform:translateX(${shift}mm)!important}}` : '';
-    const overrideCss = '@media print{html,body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal{display:block!important;width:80mm!important;margin:0!important;padding:0!important;position:static!important;background:none!important}body>#invoiceModal .inv-dialog{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal .inv-dialog-body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}.inv-paper{width:72mm!important;max-width:72mm!important;margin:0 4mm!important;padding:2mm 3mm!important;box-shadow:none!important;border-radius:0!important;height:auto!important;max-height:none!important;overflow:visible!important}}';
+    const overrideCss = paperType === 'a4'
+      ? '@media print{html,body{display:block!important;width:210mm!important;margin:0!important;padding:0!important;overflow:visible!important;height:auto!important;max-height:none!important}body>#invoiceModal{display:block!important;width:210mm!important;max-width:none!important;margin:0!important;padding:0!important;position:static!important;background:none!important}body>#invoiceModal .inv-dialog{display:block!important;width:210mm!important;max-width:none!important;margin:0!important;padding:0!important}body>#invoiceModal .inv-dialog-body{display:block!important;width:210mm!important;max-width:none!important;margin:0!important;padding:0!important}body>#invoiceModal .inv-paper-a4m{display:block!important;width:210mm!important;max-width:210mm!important;margin:0!important;padding:8mm 10mm 20mm!important;box-shadow:none!important;height:auto!important;max-height:none!important;overflow:visible!important}}'
+      : '@media print{html,body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal{display:block!important;width:80mm!important;margin:0!important;padding:0!important;position:static!important;background:none!important}body>#invoiceModal .inv-dialog{display:block!important;width:80mm!important;margin:0!important;padding:0!important}body>#invoiceModal .inv-dialog-body{display:block!important;width:80mm!important;margin:0!important;padding:0!important}.inv-paper{width:72mm!important;max-width:72mm!important;margin:0 4mm!important;padding:2mm 3mm!important;box-shadow:none!important;border-radius:0!important;height:auto!important;max-height:none!important;overflow:visible!important}}';
 
-    const bodyContent = paperType === 'a4'
-      ? paperEl.outerHTML
-      : `<div id="invoiceModal"><div class="inv-dialog"><div class="inv-dialog-body">${paperEl.outerHTML}</div></div></div>`;
+    const bodyContent = `<div id="invoiceModal"><div class="inv-dialog"><div class="inv-dialog-body">${paperEl.outerHTML}</div></div></div>`;
 
-    const iframeHtml = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><style>${allCss}${pageSize}${bodyCss}${shiftCss}${overrideCss}</style></head><body>${bodyContent}</body></html>`;
+    const rootClass = paperType === 'a4' ? ' class="invtype-a4"' : '';
+    const iframeHtml = `<!DOCTYPE html><html lang="ar" dir="rtl"${rootClass}><head><meta charset="UTF-8"/><style>${allCss}${pageSize}${bodyCss}${shiftCss}${overrideCss}</style></head><body${rootClass}>${bodyContent}</body></html>`;
 
     let currentCopy = 0;
 
@@ -1624,13 +1652,27 @@
       if (srcQr && dstQr) dstQr.innerHTML = srcQr.innerHTML;
 
       iframe.contentWindow.focus();
-      setTimeout(() => {
+      // نحمّل خط رمز الريال قسرياً داخل الـ iframe (الـ @font-face المستنسخ قد لا يُحمَّل تلقائياً)
+      let riyalFontReady = Promise.resolve();
+      try {
+        const FF = iframe.contentWindow.FontFace;
+        if (FF && iframe.contentDocument.fonts) {
+          const ff = new FF('SaudiRiyal', "url('" + location.origin + "/assets/fonts/saudi-riyal.woff') format('woff'), url('" + location.origin + "/assets/fonts/saudi-riyal.ttf') format('truetype')");
+          riyalFontReady = ff.load().then(f => { iframe.contentDocument.fonts.add(f); }).catch(() => {});
+        }
+      } catch (_) {}
+      // ننتظر تحميل الخطوط (خصوصاً SaudiRiyal لرمز الريال) قبل الطباعة، مع حد أقصى 2000ms
+      const fontsReady = (iframe.contentDocument.fonts && iframe.contentDocument.fonts.ready)
+        ? Promise.all([riyalFontReady, iframe.contentDocument.fonts.ready])
+        : riyalFontReady;
+      const timeout = new Promise(res => setTimeout(res, 2000));
+      Promise.race([fontsReady, timeout]).then(() => setTimeout(() => {
         try { iframe.contentWindow.print(); } catch (_) {}
         setTimeout(() => {
           iframe.remove();
           if (currentCopy < copies) setTimeout(printNextCopy, 300);
         }, 2000);
-      }, 300);
+      }, 100));
     }
 
     printNextCopy();
@@ -1756,6 +1798,7 @@
   function closeInvoiceModal() {
     els.invoiceViewModal.style.display = 'none';
     document.body.classList.remove('invtype-a4');
+    document.documentElement.classList.remove('invtype-a4');
     state.viewingOrderId = null;
     state.viewingIsConsolidated = false;
     if (window.self !== window.top) {

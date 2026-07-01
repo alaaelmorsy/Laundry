@@ -504,13 +504,13 @@ body {
 #invPrintZone .cr-info-label {
   color: #000 !important;
   font-weight: 700 !important;
-  font-size: 8px !important;
+  font-size: 9px !important;
 }
 #receiptViewModal .cr-info-val,
 #invPrintZone .cr-info-val {
   color: #000 !important;
   font-weight: 900 !important;
-  font-size: 9px !important;
+  font-size: 10px !important;
 }
 
 /* ------------------------------
@@ -519,6 +519,8 @@ body {
 ------------------------------ */
 @page { size: 80mm auto; margin: 0; }
 @media print {
+  * { font-family: 'Tahoma', sans-serif !important; }
+  .sar { font-family: 'SaudiRiyal', 'Tahoma', sans-serif !important; }
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; }
@@ -569,9 +571,9 @@ body {
 .inv-meta-label{color:#000;flex-shrink:0;font-weight:700}
 .inv-meta-val{font-weight:700;text-align:left;color:#000;word-break:break-all}
 .cr-info-grid{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid #000;margin:2px 0;border-collapse:collapse}
-.cr-info-cell{display:flex;flex-direction:column;padding:1px 4px;border:1px solid #000}
-.cr-info-label{font-size:8px;font-weight:700;color:#000;line-height:1.2}
-.cr-info-val{font-size:9px;font-weight:900;color:#000;line-height:1.2;word-break:break-word}
+.cr-info-cell{display:flex;flex-direction:column;padding:3px 5px;gap:1px;border:1px solid #000}
+.cr-info-label{font-size:9px;font-weight:700;color:#000;line-height:1.2}
+.cr-info-val{font-size:10px;font-weight:900;color:#000;line-height:1.2;word-break:break-word}
 .cr-receipt-title{font-size:13px!important;font-weight:900!important;text-align:center}
 .inv-table{width:100%;border-collapse:collapse;font-size:12px;font-weight:700;margin-top:4px;border:3px solid #000}
 .inv-table thead tr{background:transparent}

@@ -376,8 +376,27 @@ class LocalZatcaBridge {
     // بناء الجسم
     const { body, uuid } = await this.buildBodyFromOrder(orderId);
 
-    // إرسال
-    const result = await this.sendWithFallback(body);
+    // إرسال — عند الفشل: سجّل الحالة "rejected" وأعد رسالة مختصرة (التفاصيل تُحفظ في zatca_response)
+    let result;
+    try {
+      result = await this.sendWithFallback(body);
+    } catch (err) {
+      const full = String(err && err.message ? err.message : err);
+      const isNetwork = /ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|انتهت مهلة|socket hang up|Network ERR/i.test(full);
+      try {
+        await db.updateOrderZatcaStatus(orderId, {
+          uuid,
+          hash: orderData.order.zatca_hash || null,
+          qr: orderData.order.zatca_qr || null,
+          status: 'rejected',
+          rejectionReason: isNetwork ? 'NETWORK_ERROR' : 'SEND_FAILED',
+          response: full.slice(0, 50000),
+        });
+      } catch (_) {}
+      throw new Error(isNetwork
+        ? 'تعذر الاتصال بخادم الإرسال — تحقق من الشبكة وإعدادات الربط'
+        : 'فشل إرسال الفاتورة — يمكن مراجعة التفاصيل من زر «الرد»');
+    }
 
     // معالجة الرد
     return this._processResponse(orderId, uuid, result);
@@ -393,7 +412,28 @@ class LocalZatcaBridge {
     }
 
     const { body, uuid } = await this.buildBodyFromCreditNote(cnId);
-    const result = await this.sendWithFallback(body);
+    let result;
+    try {
+      result = await this.sendWithFallback(body);
+    } catch (err) {
+      const full = String(err && err.message ? err.message : err);
+      const isNetwork = /ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|انتهت مهلة|socket hang up|Network ERR/i.test(full);
+      try {
+        const cnData = await db.getCreditNoteById(cnId);
+        const cn = (cnData && cnData.creditNote) || {};
+        await db.updateCreditNoteZatcaStatus(cnId, {
+          uuid,
+          hash: cn.zatca_hash || null,
+          qr: cn.zatca_qr || null,
+          status: 'rejected',
+          rejectionReason: isNetwork ? 'NETWORK_ERROR' : 'SEND_FAILED',
+          response: full.slice(0, 50000),
+        });
+      } catch (_) {}
+      throw new Error(isNetwork
+        ? 'تعذر الاتصال بخادم الإرسال — تحقق من الشبكة وإعدادات الربط'
+        : 'فشل إرسال الإشعار الدائن — يمكن مراجعة التفاصيل من زر «الرد»');
+    }
     return this._processCreditNoteResponse(cnId, uuid, result);
   }
 

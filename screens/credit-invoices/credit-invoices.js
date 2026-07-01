@@ -229,7 +229,7 @@
     function a4t(id, val) { const el = document.getElementById(id); if (el) el.textContent = val || ''; }
     function a4h(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val || ''; }
     function a4s(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; }
-    const sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    const sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     const sf = n => sarSpan + Number(n || 0).toFixed(2);
 
     a4t('a4mShopNameAr',    data.shopNameAr);
@@ -418,7 +418,7 @@
     function a4t(id, val) { const el = document.getElementById('cnA4m' + id); if (el) el.textContent = val || ''; }
     function a4h(id, val) { const el = document.getElementById('cnA4m' + id); if (el) el.innerHTML = val || ''; }
     function a4s(id, show) { const el = document.getElementById('cnA4m' + id); if (el) el.style.display = show ? '' : 'none'; }
-    const sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    const sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     const sf = n => sarSpan + Number(n || 0).toFixed(2);
 
     a4t('ShopNameAr',    data.shopNameAr);
@@ -712,6 +712,31 @@
     const close = () => { modal.style.display = 'none'; };
     btnClose.onclick = close;
     modal.onclick = (e) => { if (e.target === modal) close(); };
+    const btnCopy = document.getElementById('btnZatcaRespCopy');
+    if (btnCopy) {
+      btnCopy.onclick = () => copyZatcaRespText(pre.textContent || '');
+    }
+  }
+
+  async function copyZatcaRespText(text) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      showToast('تم نسخ الرد', 'success');
+    } catch (_) {
+      showToast('تعذر نسخ الرد', 'error');
+    }
   }
 
   async function submitCreditNoteToZatca(cnId, btnEl) {

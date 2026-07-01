@@ -328,6 +328,8 @@ input.filter-input[type="datetime-local"]{min-width:185px}
 
 /* ── Print ── */
 @media print{
+  * { font-family: 'Tahoma', sans-serif !important; }
+  .sar { font-family: 'SaudiRiyal', 'Tahoma', sans-serif !important; }
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   .no-print{display:none!important}

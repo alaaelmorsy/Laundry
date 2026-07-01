@@ -441,7 +441,7 @@ ${htmlContent}
 </body>
 </html>`;
   
-  const buffer = await htmlToPdfBuffer(html, { landscape: false });
+  const buffer = await htmlToPdfBuffer(html, { landscape: false, margin: { top: '0', bottom: '0', left: '0', right: '0' } });
   const safeNum = String(orderNum || '0').replace(/[^\w\u0600-\u06FF\s\-]/g, '').trim();
   return { buffer, filename: `فاتورة رقم ${safeNum}.pdf`, mimeType: 'application/pdf' };
 }

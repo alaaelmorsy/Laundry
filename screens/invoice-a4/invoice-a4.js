@@ -190,7 +190,7 @@
     }
 
     /* ── Items ── */
-    var sarSpan = '<span style="font-family:SaudiRiyal;">\uE900</span>';
+    var sarSpan = '<span class="sar" style="font-family:SaudiRiyal;">\uE900</span>';
     var vatRate   = data.vatRate || 0;
     var priceMode = data.priceDisplayMode || 'exclusive';
     var tbody = document.getElementById('a4ItemsTbody');
@@ -313,7 +313,7 @@
           return '<tr style="border-bottom:1px dotted #e2e8f0">' +
             '<td style="padding:3px 6px">' + esc(wo.num) + '</td>' +
             '<td style="padding:3px 6px">' + esc(wo.date) + '</td>' +
-            '<td style="padding:3px 6px;text-align:left">' + wo.total + ' <span style="font-family:SaudiRiyal"></span></td>' +
+            '<td style="padding:3px 6px;text-align:left">' + wo.total + ' <span class="sar" style="font-family:SaudiRiyal"></span></td>' +
             '</tr>';
         }).join('') +
         '</tbody></table>';

@@ -142,6 +142,7 @@ async function invoke(method, payload, reqUser) {
         requireHanger: data.requireHanger,
         requireCustomerPhone: data.requireCustomerPhone,
         allowSubscriptionDebt: data.allowSubscriptionDebt,
+        allowManualPrice: data.allowManualPrice,
         barcodeAutoAction: data.barcodeAutoAction,
         showBarcodeInInvoice: data.showBarcodeInInvoice,
         showEmailInInvoice: data.showEmailInInvoice,

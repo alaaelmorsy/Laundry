@@ -554,6 +554,37 @@ async function start() {
     }
   });
 
+  // صورة المنتج عبر HTTP مع كاش المتصفح — الرابط يتضمن ?v=<image_version>
+  // لذا يمكن اعتباره immutable: أي تعديل للصورة يغيّر الرابط نفسه
+  app.get('/api/product-image/:id', authMiddleware, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!id || id < 1) return res.status(400).end();
+
+      const etag = `"p${id}-v${String(req.query.v || '1').replace(/[^0-9a-zA-Z]/g, '')}"`;
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
+      const rows = await db.getProductImageRowsByIds([id]);
+      if (!rows || rows.length === 0 || !rows[0].image_blob) {
+        return res.status(404).end();
+      }
+      const zlib = require('zlib');
+      const raw = zlib.gunzipSync(rows[0].image_blob);
+      res.set({
+        'Content-Type': rows[0].image_mime || 'image/jpeg',
+        'Content-Length': raw.length,
+        'Cache-Control': 'private, max-age=31536000, immutable',
+        'ETag': etag
+      });
+      res.end(raw);
+    } catch (err) {
+      console.error('product-image:', err.message);
+      res.status(500).end();
+    }
+  });
+
   app.get('/api/export/sessions', authMiddleware, async (req, res) => {
     try {
       if (req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'غير مصرح' });

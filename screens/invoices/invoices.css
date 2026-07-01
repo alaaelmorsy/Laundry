@@ -177,9 +177,9 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 .inv-shop-contact-row{display:flex;align-items:center;justify-content:center;gap:4px;direction:ltr}
 .inv-contact-icon{width:11px;height:11px;min-width:11px;min-height:11px;max-width:11px;max-height:11px;flex-shrink:0;display:inline-block;overflow:hidden}
 .cr-info-grid{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid #000;margin:2px 0}
-.cr-info-cell{display:flex;flex-direction:column;padding:1px 4px;border:1px solid #000}
-.cr-info-label{font-size:8px;font-weight:700;color:#000;line-height:1.2}
-.cr-info-val{font-size:9px;font-weight:900;color:#000;line-height:1.2;word-break:break-word}
+.cr-info-cell{display:flex;flex-direction:column;padding:3px 5px;gap:1px;border:1px solid #000}
+.cr-info-label{font-size:9px;font-weight:700;color:#000;line-height:1.2}
+.cr-info-val{font-size:10px;font-weight:900;color:#000;line-height:1.2;word-break:break-word}
 .inv-table{width:100%;border-collapse:collapse;font-size:12px;font-weight:700;margin-top:4px;border:3px solid #000}
 .inv-table thead tr{background:transparent}
 .inv-table th{font-weight:700;font-size:11px;padding:4px 5px;color:#000;border-bottom:3px solid #000;border-left:3px solid #000}
@@ -299,9 +299,12 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
 /* Print */
 @page { size: 80mm auto; margin: 0; }
 @media print {
+  * { font-family: 'Tahoma', sans-serif !important; }
+  .sar { font-family: 'SaudiRiyal', 'Tahoma', sans-serif !important; }
   html,body{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color:#000 !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   html, body { overflow: visible !important; height: auto !important; max-height: none !important; display: flex !important; flex-direction: column !important; align-items: center !important; width: 80mm !important; margin: 0 !important; padding: 0 !important; }
+  html.invtype-a4, body.invtype-a4 { width: 210mm !important; }
   body > *:not(#invoiceViewModal) { display: none !important; }
   #invoiceViewModal { position: static !important; background: none !important; padding: 0 !important; display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; width: 76mm !important; margin: 0 auto !important; }
   .inv-dialog { max-height: none !important; box-shadow: none !important; background: none !important; border-radius: 0 !important; overflow: visible !important; width: 76mm !important; height: auto !important; }
@@ -309,6 +312,9 @@ body{width:100%;max-width:100%;height:100%;max-height:100dvh;min-height:100%;ove
   .inv-dialog-footer { display: none !important; }
   .inv-paper { box-shadow: none !important; border-radius: 0 !important; width: 76mm !important; max-width: 76mm !important; margin: 0 !important; padding: 2mm 3mm !important; height: auto !important; max-height: none !important; overflow: visible !important; }
   .no-print { display: none !important; }
+  body.invtype-a4 #invoiceViewModal,
+  body.invtype-a4 .inv-dialog,
+  body.invtype-a4 .inv-dialog-body { width: 210mm !important; max-width: none !important; }
   body.invtype-a4 .inv-paper { display: none !important; }
   body.invtype-a4 .inv-paper-a4m { display: block !important; width: 210mm !important; max-width: 210mm !important; padding: 8mm 10mm 20mm !important; }
   body.invtype-a4 .a4m-items tbody td { background: #fff !important; }

@@ -904,7 +904,7 @@
 
   function fillHcA4Modal(data) {
     var s = data.settings || {};
-    var sar = '<span style="font-family:SaudiRiyal"></span>';
+    var sar = '<span class="sar" style="font-family:SaudiRiyal"></span>';
 
     /* بيانات المتجر */
     hca4Set('hca4ShopNameAr',    s.laundryNameAr || '');

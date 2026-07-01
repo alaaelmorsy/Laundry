@@ -563,11 +563,19 @@ html, body {
 
 /* ===== Print ===== */
 @media print {
+  * { font-family: 'Tahoma', sans-serif !important; }
+  .sar { font-family: 'SaudiRiyal', 'Tahoma', sans-serif !important; }
   @page { size: A4 portrait; margin: 0; }
-  html, body { background: #fff !important; }
+  html, body {
+    background: #fff !important;
+    max-width: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
   .no-print { display: none !important; }
   .a4-paper {
-    width: 210mm !important;
+    width: 100% !important;
+    max-width: 210mm !important;
     min-height: 297mm !important;
     margin: 0 !important;
     box-shadow: none !important;

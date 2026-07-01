@@ -62,10 +62,11 @@ async function getBrowser() {
 
 /**
  * @param {string} html
- * @param {{ landscape?: boolean }} opts
+ * @param {{ landscape?: boolean, margin?: { top?: string, bottom?: string, left?: string, right?: string } }} opts
  * @returns {Promise<Buffer>}
  */
 async function htmlToPdfBuffer(html, opts = {}) {
+  const margin = opts.margin || { top: '0.4cm', bottom: '0.4cm', left: '0.4cm', right: '0.4cm' };
   let browser;
   try {
     browser = await getBrowser();
@@ -79,7 +80,7 @@ async function htmlToPdfBuffer(html, opts = {}) {
       format: 'A4',
       landscape: !!opts.landscape,
       printBackground: true,
-      margin: { top: '0.4cm', bottom: '0.4cm', left: '0.4cm', right: '0.4cm' }
+      margin
     });
     return Buffer.from(buf);
   } catch (err) {
@@ -93,7 +94,7 @@ async function htmlToPdfBuffer(html, opts = {}) {
         format: 'A4',
         landscape: !!opts.landscape,
         printBackground: true,
-        margin: { top: '0.4cm', bottom: '0.4cm', left: '0.4cm', right: '0.4cm' }
+        margin
       });
       return Buffer.from(buf);
     } finally {
